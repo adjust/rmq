@@ -41,6 +41,7 @@ func (connection *Connection) GetOpenQueues() []string {
 func (connection *Connection) CloseQueue(name string) bool {
 	result := connection.redisClient.SRem(queuesKey, name)
 	if result.Err() != nil {
+		log.Printf("queue connection failed to close queue %s %s", name, result.Err())
 		return false
 	}
 	return result.Val() > 0
@@ -50,6 +51,7 @@ func (connection *Connection) CloseQueue(name string) bool {
 func (connection *Connection) CloseAllQueues() int {
 	result := connection.redisClient.Del(queuesKey)
 	if result.Err() != nil {
+		log.Printf("queue connection failed to close all queue %s", result.Err())
 		return 0
 	}
 	return int(result.Val())
