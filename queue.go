@@ -5,16 +5,15 @@ import (
 	"log"
 	"strings"
 
-	"github.com/adjust/redis"
+	redis "github.com/adjust/redis-latest-head" // TODO: update
 	"github.com/adjust/uniuri"
 )
 
 const (
-	queueKeyTemplate    = "rmq::queue::{queue}::deliveries" // List of deliveries in that queue (right is first and oldest, left is last and youngest)
-	consumerKeyTemplate = "rmq::queue::{queue}::consumers"  // Set of consumer names
+	queueKeyTemplate    = "rmq::queue::{queue}::deliveries" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
+	consumerKeyTemplate = "rmq::queue::{queue}::consumers"  // Set of consumer names connected to that {queue}
 
-	consumersKey          = "rmq::consumers"                       // Set of all consumers
-	consumersHeartbeatKey = "rmq::consumer::{consumer}::heartbeat" // expires after consumer became died
+	consumersKey = "rmq::consumers" // Set of all consumers
 
 	phQueue    = "{queue}"    // queue name
 	phConsumer = "{consumer}" // consumer name (consisting of tag and token)

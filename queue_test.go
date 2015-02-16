@@ -30,8 +30,12 @@ func (suite *QueueSuite) TestConnections(c *C) {
 
 	conn1 := OpenConnection("test1", host, port, db)
 	c.Check(connection.GetConnections(), DeepEquals, []string{conn1.Name})
+	c.Check(connection.CheckConnection("nope"), Equals, false)
+	c.Check(connection.CheckConnection(conn1.Name), Equals, true)
 	conn2 := OpenConnection("test2", host, port, db)
 	c.Check(connection.GetConnections(), HasLen, 2)
+	c.Check(connection.CheckConnection(conn1.Name), Equals, true)
+	c.Check(connection.CheckConnection(conn2.Name), Equals, true)
 
 	c.Check(connection.CloseConnection("nope"), Equals, false)
 	c.Check(connection.CloseConnection(conn1.Name), Equals, true)

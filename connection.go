@@ -3,34 +3,48 @@ package queue
 import (
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
-	"github.com/adjust/redis"
+	redis "github.com/adjust/redis-latest-head" // TODO: update
 	"github.com/adjust/uniuri"
 )
 
 const (
-	queuesKey      = "rmq::queues"      // Set of all open queues
-	connectionsKey = "rmq::connections" // Set of connection names
+	queuesKey            = "rmq::queues"                              // Set of all open queues
+	connectionsKey       = "rmq::connections"                         // Set of connection names
+	heartbeatKeyTemplate = "rmq::connection::{connection}::heartbeat" // expires after {connection} died
+
+	phConnection = "{connection}"
 )
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type Connection struct {
-	Name        string
-	redisClient *redis.Client
+	Name         string
+	heartbeatKey string
+	redisClient  *redis.Client
 }
 
 // OpenConnection opens and returns a new connection
 func OpenConnection(tag, host, port string, db int) *Connection {
+	redisClient := redis.NewTCPClient(&redis.Options{
+		Addr: host + ":" + port,
+		DB:   int64(db)},
+	)
+
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
-	redisClient := redis.NewTCPClient(host+":"+port, "", int64(db))
 	redisClient.SAdd(connectionsKey, name)
 
-	log.Printf("queue connection connected to %s %s:%s %d", name, host, port, db)
-	return &Connection{
-		Name:        name,
-		redisClient: redisClient,
+	connection := &Connection{
+		Name:         name,
+		heartbeatKey: strings.Replace(heartbeatKeyTemplate, phConnection, name, -1),
+		redisClient:  redisClient,
 	}
+
+	go connection.heartbeat()
+	log.Printf("queue connection connected to %s %s:%s %d", name, host, port, db)
+	return connection
 }
 
 // GetConnections returns a list of all open connections
@@ -41,6 +55,16 @@ func (connection *Connection) GetConnections() []string {
 		return []string{}
 	}
 	return result.Val()
+}
+
+// CheckConnection retuns true if the named connection is currently active in terms of heartbeat
+func (connection *Connection) CheckConnection(name string) bool {
+	heartbeatKey := strings.Replace(heartbeatKeyTemplate, phConnection, name, -1)
+	result := connection.redisClient.TTL(heartbeatKey)
+	if result.Err() != nil {
+		return false
+	}
+	return result.Val() > 0
 }
 
 // CloseConnection removes the connection with the given name from the connections set
@@ -100,4 +124,12 @@ func (connection *Connection) CloseAllQueues() int {
 		return 0
 	}
 	return int(result.Val())
+}
+
+// heartbeat keeps the heartbeat key alive
+func (connection *Connection) heartbeat() {
+	for {
+		connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1")
+		time.Sleep(time.Second)
+	}
 }
