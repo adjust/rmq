@@ -39,7 +39,7 @@ func (suite *QueueSuite) TestConnection(c *C) {
 	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"things"})
 
 	c.Check(connection.CloseQueue("things"), Equals, true)
-	c.Check(connection.GetOpenQueues(), DeepEquals, []string{})
+	c.Check(connection.GetOpenQueues(), HasLen, 0)
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
@@ -53,4 +53,16 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(queue.Length(), Equals, 1)
 	c.Check(queue.Publish("test"), IsNil)
 	c.Check(queue.Length(), Equals, 2)
+
+	queue.RemoveAllConsumers()
+	c.Check(queue.GetConsumers(), HasLen, 0)
+	nameTest := queue.AddConsumer("test", nil)
+	c.Check(queue.GetConsumers(), DeepEquals, []string{nameTest})
+	nameFoo := queue.AddConsumer("foo", nil)
+	c.Check(queue.GetConsumers(), HasLen, 2)
+	c.Check(queue.RemoveConsumer("nope"), Equals, false)
+	c.Check(queue.RemoveConsumer(nameTest), Equals, true)
+	c.Check(queue.GetConsumers(), DeepEquals, []string{nameFoo})
+	c.Check(queue.RemoveConsumer(nameFoo), Equals, true)
+	c.Check(queue.GetConsumers(), HasLen, 0)
 }
