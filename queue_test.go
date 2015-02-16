@@ -20,8 +20,31 @@ func (suite *QueueSuite) SetUpSuite(c *C) {
 	suite.goenv = goenv.TestGoenv()
 }
 
-func (suite *QueueSuite) TestConnection(c *C) {
-	connection := NewConnection(suite.goenv.GetRedis())
+func (suite *QueueSuite) TestConnections(c *C) {
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("test", host, port, db)
+	c.Assert(connection, NotNil)
+
+	connection.CloseAllConnections()
+	c.Check(connection.GetConnections(), HasLen, 0)
+
+	conn1 := OpenConnection("test1", host, port, db)
+	c.Check(connection.GetConnections(), DeepEquals, []string{conn1.Name})
+	conn2 := OpenConnection("test2", host, port, db)
+	c.Check(connection.GetConnections(), HasLen, 2)
+
+	c.Check(connection.CloseConnection("nope"), Equals, false)
+	c.Check(connection.CloseConnection(conn1.Name), Equals, true)
+	c.Check(connection.CloseConnection(conn1.Name), Equals, false)
+	c.Check(connection.GetConnections(), DeepEquals, []string{conn2.Name})
+
+	c.Check(connection.CloseConnection(conn2.Name), Equals, true)
+	c.Check(connection.GetConnections(), HasLen, 0)
+}
+
+func (suite *QueueSuite) TestConnectionQueues(c *C) {
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("test", host, port, db)
 	c.Assert(connection, NotNil)
 
 	connection.CloseAllQueues()
@@ -43,10 +66,12 @@ func (suite *QueueSuite) TestConnection(c *C) {
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
-	connection := NewConnection(suite.goenv.GetRedis())
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("test", host, port, db)
 	c.Assert(connection, NotNil)
 
 	queue := connection.OpenQueue("things")
+	c.Assert(queue, NotNil)
 	queue.Clear()
 	c.Check(queue.Length(), Equals, 0)
 	c.Check(queue.Publish("test"), IsNil)
@@ -65,4 +90,19 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(queue.GetConsumers(), DeepEquals, []string{nameFoo})
 	c.Check(queue.RemoveConsumer(nameFoo), Equals, true)
 	c.Check(queue.GetConsumers(), HasLen, 0)
+}
+
+func (suite *QueueSuite) TestConsumer(c *C) {
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("test", host, port, db)
+	c.Assert(connection, NotNil)
+
+	queue := connection.OpenQueue("things")
+	c.Assert(queue, NotNil)
+	queue.Clear()
+	c.Check(queue.Publish("1"), IsNil)
+	c.Check(queue.Publish("2"), IsNil)
+	c.Check(queue.Publish("3"), IsNil)
+
+	queue.AddConsumer("test", NewTestConsumer())
 }

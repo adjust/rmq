@@ -10,12 +10,14 @@ import (
 )
 
 const (
-	queueKeyTemplate    = "rmq::queue::{name}::packages"  // List of packages in that queue (right is first and oldest, left is last and youngest)
-	consumerKeyTemplate = "rmq::queue::{name}::consumers" // Set of consumer names
+	queueKeyTemplate    = "rmq::queue::{queue}::deliveries" // List of deliveries in that queue (right is first and oldest, left is last and youngest)
+	consumerKeyTemplate = "rmq::queue::{queue}::consumers"  // Set of consumer names
 
-	consumersKey = "rmq::consumers" // Set of all consumers
+	consumersKey          = "rmq::consumers"                       // Set of all consumers
+	consumersHeartbeatKey = "rmq::consumer::{consumer}::heartbeat" // expires after consumer became died
 
-	phName = "{name}"
+	phQueue    = "{queue}"    // queue name
+	phConsumer = "{consumer}" // consumer name (consisting of tag and token)
 )
 
 type Queue struct {
@@ -27,7 +29,7 @@ type Queue struct {
 func newQueue(name string, redisClient *redis.Client) *Queue {
 	queue := &Queue{
 		name:        name,
-		queueKey:    strings.Replace(queueKeyTemplate, phName, name, -1),
+		queueKey:    strings.Replace(queueKeyTemplate, phQueue, name, -1),
 		redisClient: redisClient,
 	}
 	return queue
@@ -55,6 +57,7 @@ func (queue *Queue) Clear() int {
 	return int(result.Val())
 }
 
+// AddConsumer adds a consumer to the queue and returns its internal name
 func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 	result := queue.redisClient.SAdd(consumersKey, name)
