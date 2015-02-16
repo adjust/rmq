@@ -1,8 +1,9 @@
 package queue
 
 import (
-	"github.com/adjust/redis"
 	"log"
+
+	"github.com/adjust/redis"
 )
 
 const queuesKey = "rmq::queues" // Set of all open queues
@@ -23,7 +24,7 @@ func (connection *Connection) OpenQueue(name string) *Queue {
 	if result.Err() != nil {
 		log.Printf("queue connection failed to open queue %s %s", name, result.Err())
 	}
-	return newQueue(name, connection)
+	return newQueue(name, connection.redisClient)
 }
 
 // GetOpenQueues returns a list of all open queues
