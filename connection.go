@@ -30,7 +30,7 @@ func OpenConnection(tag, host, port string, db int) *Connection {
 
 	connection := &Connection{
 		Name:         name,
-		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, -1),
+		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		redisClient:  redisClient,
 	}
 
@@ -51,7 +51,7 @@ func (connection *Connection) GetConnections() []string {
 
 // CheckConnection retuns true if the named connection is currently active in terms of heartbeat
 func (connection *Connection) CheckConnection(name string) bool {
-	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, name, -1)
+	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1)
 	result := connection.redisClient.TTL(heartbeatKey)
 	if result.Err() != nil {
 		return false
