@@ -136,6 +136,7 @@ func (queue *Queue) startConsuming() {
 	}
 	queue.deliveryChan = make(chan Delivery, consumeChannelSize)
 	queue.redisClient.LPush(queue.queuesKey, queue.name)
+	log.Printf("queue started consuming %s", queue)
 	go queue.consume()
 }
 

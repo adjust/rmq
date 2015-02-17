@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -132,4 +133,35 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 0)
 
 	c.Check(consumer.LastDeliveries[0].Ack(), Equals, false)
+}
+
+func (suite *QueueSuite) BenchmarkQueue(c *C) {
+	// open queue
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("test", host, port, db)
+	queue := connection.OpenQueue("things")
+
+	// add some consumers
+	numConsumers := 10
+	for i := 0; i < numConsumers; i++ {
+		consumer := NewTestConsumer()
+		consumer.AutoAck = true
+		queue.AddConsumer("test", consumer)
+	}
+
+	// publish deliveries
+	for i := 0; i < c.N; i++ {
+		queue.Publish("foo")
+	}
+
+	// wait until all are consumed
+	for {
+		ready := queue.ReadyCount()
+		unacked := queue.UnackedCount()
+		fmt.Printf("%d unacked %d %d\n", c.N, ready, unacked)
+		if ready == 0 && unacked == 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
