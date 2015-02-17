@@ -2,6 +2,7 @@ package queue
 
 import (
 	"testing"
+	"time"
 
 	"github.com/adjust/goenv"
 
@@ -104,9 +105,16 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	queue := connection.OpenQueue("things")
 	c.Assert(queue, NotNil)
 	queue.Clear()
-	c.Check(queue.Publish("1"), IsNil)
-	c.Check(queue.Publish("2"), IsNil)
-	c.Check(queue.Publish("3"), IsNil)
 
-	queue.AddConsumer("test", NewTestConsumer())
+	consumer := NewTestConsumer()
+	queue.AddConsumer("test", consumer)
+	c.Check(consumer.LastDelivery, IsNil)
+
+	c.Check(queue.Publish("1"), IsNil)
+	time.Sleep(time.Microsecond)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "1")
+
+	c.Check(queue.Publish("2"), IsNil)
+	time.Sleep(time.Microsecond)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "2")
 }

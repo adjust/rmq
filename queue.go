@@ -10,36 +10,54 @@ import (
 )
 
 const (
-	queueKeyTemplate    = "rmq::queue::{queue}::deliveries" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
-	consumerKeyTemplate = "rmq::queue::{queue}::consumers"  // Set of consumer names connected to that {queue}
+	connectionsKey                    = "rmq::connections"                                          // Set of connection names
+	connectionHeartbeatTemplate       = "rmq::connection::{connection}::heartbeat"                  // expires after {connection} died
+	connectionQueuesTemplate          = "rmq::connection::{connection}::queues"                     // Set of queues consumers of {connection} are consuming
+	connectionQueueDeliveriesTemplate = "rmq::connection::{connection}::queue::{queue}::deliveries" // List of deliveries consumers of {connection} are currently consuming (unacked)
 
-	consumersKey = "rmq::consumers" // Set of all consumers
+	queuesKey               = "rmq::queues"                     // Set of all open queues
+	queueDeliveriesTemplate = "rmq::queue::{queue}::deliveries" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
 
-	phQueue    = "{queue}"    // queue name
-	phConsumer = "{consumer}" // consumer name (consisting of tag and token)
+	consumersKey          = "rmq::consumers"                   // Set of all consumers
+	consumerQueueTemplate = "rmq::consumer::{consumer}::queue" // queue name that {consumer} is consuming from
+
+	phConnection = "{connection}" // connection name
+	phQueue      = "{queue}"      // queue name
+	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
+
+	consumeChannelSize = 10 // TODO: make a setting? increase?
 )
 
 type Queue struct {
-	name        string
-	queueKey    string
-	redisClient *redis.Client
+	name           string
+	connectionName string // TODO: remove?
+	deliveriesKey  string // key to list of ready deliveries
+	workingKey     string // key to list of currently consuming deliveries
+	redisClient    *redis.Client
+	deliveryChan   chan Delivery // nil for publish channels, not nil for consuming channels
 }
 
-func newQueue(name string, redisClient *redis.Client) *Queue {
+func newQueue(name, connectionName string, redisClient *redis.Client) *Queue {
+	workingKey := connectionQueueDeliveriesTemplate
+	workingKey = strings.Replace(workingKey, phConnection, connectionName, -1)
+	workingKey = strings.Replace(workingKey, phQueue, name, -1)
+
 	queue := &Queue{
-		name:        name,
-		queueKey:    strings.Replace(queueKeyTemplate, phQueue, name, -1),
-		redisClient: redisClient,
+		name:           name,
+		connectionName: connectionName,
+		deliveriesKey:  strings.Replace(queueDeliveriesTemplate, phQueue, name, -1),
+		workingKey:     workingKey,
+		redisClient:    redisClient,
 	}
 	return queue
 }
 
 func (queue *Queue) Publish(payload string) error {
-	return queue.redisClient.LPush(queue.queueKey, payload).Err()
+	return queue.redisClient.LPush(queue.deliveriesKey, payload).Err()
 }
 
 func (queue *Queue) Length() int {
-	result := queue.redisClient.LLen(queue.queueKey)
+	result := queue.redisClient.LLen(queue.deliveriesKey)
 	if result.Err() != nil {
 		log.Printf("queue failed to get length %s %s", queue, result.Err())
 		return 0
@@ -48,7 +66,7 @@ func (queue *Queue) Length() int {
 }
 
 func (queue *Queue) Clear() int {
-	result := queue.redisClient.Del(queue.queueKey)
+	result := queue.redisClient.Del(queue.deliveriesKey)
 	if result.Err() != nil {
 		log.Printf("queue failed to clear %s %s", queue, result.Err())
 		return 0
@@ -63,6 +81,9 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	if result.Err() != nil {
 		log.Printf("queue failed to add consumer %s %s", name, result.Err())
 	}
+
+	queue.startConsuming()
+	go queue.addConsumer(consumer)
 	log.Printf("queue added consumer %s %s", queue, name)
 	return name
 }
@@ -92,4 +113,31 @@ func (queue *Queue) RemoveAllConsumers() int {
 		return 0
 	}
 	return int(result.Val())
+}
+
+func (queue *Queue) startConsuming() {
+	if queue.deliveryChan != nil {
+		return
+	}
+	queue.deliveryChan = make(chan Delivery, consumeChannelSize)
+	queuesKey := strings.Replace(connectionQueuesTemplate, phConnection, queue.connectionName, -1)
+	queue.redisClient.LPush(queuesKey, queue.name)
+	go queue.consume()
+}
+
+func (queue *Queue) consume() {
+	for {
+		result := queue.redisClient.BRPopLPush(queue.deliveriesKey, queue.workingKey, 0)
+		if result.Err() != nil {
+			log.Printf("queue failed to consume %s %s", queue, result.Err())
+			continue
+		}
+		queue.deliveryChan <- newDelivery(result.Val())
+	}
+}
+
+func (queue *Queue) addConsumer(consumer Consumer) {
+	for delivery := range queue.deliveryChan {
+		consumer.Consume(delivery)
+	}
 }

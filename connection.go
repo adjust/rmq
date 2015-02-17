@@ -10,14 +10,6 @@ import (
 	"github.com/adjust/uniuri"
 )
 
-const (
-	queuesKey            = "rmq::queues"                              // Set of all open queues
-	connectionsKey       = "rmq::connections"                         // Set of connection names
-	heartbeatKeyTemplate = "rmq::connection::{connection}::heartbeat" // expires after {connection} died
-
-	phConnection = "{connection}"
-)
-
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type Connection struct {
@@ -38,7 +30,7 @@ func OpenConnection(tag, host, port string, db int) *Connection {
 
 	connection := &Connection{
 		Name:         name,
-		heartbeatKey: strings.Replace(heartbeatKeyTemplate, phConnection, name, -1),
+		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, -1),
 		redisClient:  redisClient,
 	}
 
@@ -59,7 +51,7 @@ func (connection *Connection) GetConnections() []string {
 
 // CheckConnection retuns true if the named connection is currently active in terms of heartbeat
 func (connection *Connection) CheckConnection(name string) bool {
-	heartbeatKey := strings.Replace(heartbeatKeyTemplate, phConnection, name, -1)
+	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, name, -1)
 	result := connection.redisClient.TTL(heartbeatKey)
 	if result.Err() != nil {
 		return false
@@ -93,7 +85,7 @@ func (connection *Connection) OpenQueue(name string) *Queue {
 	if result.Err() != nil {
 		log.Printf("queue connection failed to open queue %s %s", name, result.Err())
 	}
-	return newQueue(name, connection.redisClient)
+	return newQueue(name, connection.Name, connection.redisClient)
 }
 
 // GetOpenQueues returns a list of all open queues

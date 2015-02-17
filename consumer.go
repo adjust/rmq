@@ -1,3 +1,5 @@
 package queue
 
-type Consumer interface{}
+type Consumer interface {
+	Consume(delivery Delivery)
+}
