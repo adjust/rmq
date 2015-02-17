@@ -58,6 +58,10 @@ func newQueue(name, connectionName string, redisClient *redis.Client) *Queue {
 	return queue
 }
 
+func (queue *Queue) String() string {
+	return queue.name
+}
+
 func (queue *Queue) Publish(payload string) error {
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
