@@ -141,7 +141,7 @@ func (queue *Queue) consume() {
 			log.Printf("queue failed to consume %s %s", queue, result.Err())
 			continue
 		}
-		queue.deliveryChan <- newDelivery(result.Val())
+		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
 	}
 }
 

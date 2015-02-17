@@ -111,14 +111,25 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(consumer.LastDelivery, IsNil)
 
 	c.Check(queue.Publish("1"), IsNil)
-	time.Sleep(time.Microsecond)
+	time.Sleep(time.Millisecond)
+	c.Assert(consumer.LastDelivery, NotNil)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "1")
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 
 	c.Check(queue.Publish("2"), IsNil)
-	time.Sleep(time.Microsecond)
+	time.Sleep(time.Millisecond)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "2")
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 2)
+
+	c.Check(consumer.LastDeliveries[0].Ack(), Equals, true)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)
+
+	c.Check(consumer.LastDeliveries[1].Ack(), Equals, true)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 0)
+
+	c.Check(consumer.LastDeliveries[0].Ack(), Equals, false)
 }
