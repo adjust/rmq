@@ -87,9 +87,9 @@ func (suite *QueueSuite) TestQueue(c *C) {
 
 	queue.RemoveAllConsumers()
 	c.Check(queue.GetConsumers(), HasLen, 0)
-	nameTest := queue.AddConsumer("test", nil)
+	nameTest := queue.AddConsumer("test", NewTestConsumer())
 	c.Check(queue.GetConsumers(), DeepEquals, []string{nameTest})
-	nameFoo := queue.AddConsumer("foo", nil)
+	nameFoo := queue.AddConsumer("foo", NewTestConsumer())
 	c.Check(queue.GetConsumers(), HasLen, 2)
 	c.Check(queue.RemoveConsumer("nope"), Equals, false)
 	c.Check(queue.RemoveConsumer(nameTest), Equals, true)
@@ -103,7 +103,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	connection := OpenConnection("test", host, port, db)
 	c.Assert(connection, NotNil)
 
-	queue := connection.OpenQueue("things")
+	queue := connection.OpenQueue("things3")
 	c.Assert(queue, NotNil)
 	queue.Clear()
 
@@ -139,13 +139,16 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
 	host, port, db := suite.goenv.GetRedis()
 	connection := OpenConnection("test", host, port, db)
-	queue := connection.OpenQueue("things")
+	queueName := fmt.Sprintf("things-%d", c.N)
+	queue := connection.OpenQueue(queueName)
 
 	// add some consumers
 	numConsumers := 10
+	var consumers []*TestConsumer
 	for i := 0; i < numConsumers; i++ {
 		consumer := NewTestConsumer()
 		consumer.AutoAck = true
+		consumers = append(consumers, consumer)
 		queue.AddConsumer("test", consumer)
 	}
 
@@ -160,8 +163,16 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		unacked := queue.UnackedCount()
 		fmt.Printf("%d unacked %d %d\n", c.N, ready, unacked)
 		if ready == 0 && unacked == 0 {
-			return
+			break
 		}
 		time.Sleep(time.Millisecond)
 	}
+
+	time.Sleep(time.Millisecond)
+
+	sum := 0
+	for _, consumer := range consumers {
+		sum += len(consumer.LastDeliveries)
+	}
+	fmt.Printf("consumed %d\n", sum)
 }

@@ -99,6 +99,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	result := queue.redisClient.SAdd(queue.consumersKey, name)
 	if result.Err() != nil {
 		log.Printf("queue failed to add consumer %s %s", name, result.Err())
+		return ""
 	}
 
 	queue.startConsuming()
