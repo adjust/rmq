@@ -78,11 +78,11 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	queue := connection.OpenQueue("things")
 	c.Assert(queue, NotNil)
 	queue.Clear()
-	c.Check(queue.Length(), Equals, 0)
+	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.Publish("test"), IsNil)
-	c.Check(queue.Length(), Equals, 1)
+	c.Check(queue.ReadyCount(), Equals, 1)
 	c.Check(queue.Publish("test"), IsNil)
-	c.Check(queue.Length(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 2)
 
 	queue.RemoveAllConsumers()
 	c.Check(queue.GetConsumers(), HasLen, 0)
@@ -113,8 +113,12 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(queue.Publish("1"), IsNil)
 	time.Sleep(time.Microsecond)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "1")
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)
 
 	c.Check(queue.Publish("2"), IsNil)
 	time.Sleep(time.Microsecond)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "2")
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 2)
 }

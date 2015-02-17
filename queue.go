@@ -10,13 +10,13 @@ import (
 )
 
 const (
-	connectionsKey                    = "rmq::connections"                                          // Set of connection names
-	connectionHeartbeatTemplate       = "rmq::connection::{connection}::heartbeat"                  // expires after {connection} died
-	connectionQueuesTemplate          = "rmq::connection::{connection}::queues"                     // Set of queues consumers of {connection} are consuming
-	connectionQueueDeliveriesTemplate = "rmq::connection::{connection}::queue::{queue}::deliveries" // List of deliveries consumers of {connection} are currently consuming (unacked)
+	connectionsKey                 = "rmq::connections"                                       // Set of connection names
+	connectionHeartbeatTemplate    = "rmq::connection::{connection}::heartbeat"               // expires after {connection} died
+	connectionQueuesTemplate       = "rmq::connection::{connection}::queues"                  // Set of queues consumers of {connection} are consuming
+	connectionQueueUnackedTemplate = "rmq::connection::{connection}::queue::{queue}::unacked" // List of deliveries consumers of {connection} are currently consuming
 
-	queuesKey               = "rmq::queues"                     // Set of all open queues
-	queueDeliveriesTemplate = "rmq::queue::{queue}::deliveries" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
+	queuesKey          = "rmq::queues"                // Set of all open queues
+	queueReadyTemplate = "rmq::queue::{queue}::ready" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
 
 	consumersKey          = "rmq::consumers"                   // Set of all consumers
 	consumerQueueTemplate = "rmq::consumer::{consumer}::queue" // queue name that {consumer} is consuming from
@@ -31,42 +31,51 @@ const (
 type Queue struct {
 	name           string
 	connectionName string // TODO: remove?
-	deliveriesKey  string // key to list of ready deliveries
-	workingKey     string // key to list of currently consuming deliveries
+	readyKey       string // key to list of ready deliveries
+	unackedKey     string // key to list of currently consuming deliveries
 	redisClient    *redis.Client
 	deliveryChan   chan Delivery // nil for publish channels, not nil for consuming channels
 }
 
 func newQueue(name, connectionName string, redisClient *redis.Client) *Queue {
-	workingKey := connectionQueueDeliveriesTemplate
-	workingKey = strings.Replace(workingKey, phConnection, connectionName, -1)
-	workingKey = strings.Replace(workingKey, phQueue, name, -1)
+	unackedKey := connectionQueueUnackedTemplate
+	unackedKey = strings.Replace(unackedKey, phConnection, connectionName, -1)
+	unackedKey = strings.Replace(unackedKey, phQueue, name, -1)
 
 	queue := &Queue{
 		name:           name,
 		connectionName: connectionName,
-		deliveriesKey:  strings.Replace(queueDeliveriesTemplate, phQueue, name, -1),
-		workingKey:     workingKey,
+		readyKey:       strings.Replace(queueReadyTemplate, phQueue, name, -1),
+		unackedKey:     unackedKey,
 		redisClient:    redisClient,
 	}
 	return queue
 }
 
 func (queue *Queue) Publish(payload string) error {
-	return queue.redisClient.LPush(queue.deliveriesKey, payload).Err()
+	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
-func (queue *Queue) Length() int {
-	result := queue.redisClient.LLen(queue.deliveriesKey)
+func (queue *Queue) ReadyCount() int {
+	result := queue.redisClient.LLen(queue.readyKey)
 	if result.Err() != nil {
-		log.Printf("queue failed to get length %s %s", queue, result.Err())
+		log.Printf("queue failed to get ready count %s %s", queue, result.Err())
+		return 0
+	}
+	return int(result.Val())
+}
+
+func (queue *Queue) UnackedCount() int {
+	result := queue.redisClient.LLen(queue.unackedKey)
+	if result.Err() != nil {
+		log.Printf("queue failed to get unacked count %s %s", queue, result.Err())
 		return 0
 	}
 	return int(result.Val())
 }
 
 func (queue *Queue) Clear() int {
-	result := queue.redisClient.Del(queue.deliveriesKey)
+	result := queue.redisClient.Del(queue.readyKey)
 	if result.Err() != nil {
 		log.Printf("queue failed to clear %s %s", queue, result.Err())
 		return 0
@@ -127,7 +136,7 @@ func (queue *Queue) startConsuming() {
 
 func (queue *Queue) consume() {
 	for {
-		result := queue.redisClient.BRPopLPush(queue.deliveriesKey, queue.workingKey, 0)
+		result := queue.redisClient.BRPopLPush(queue.readyKey, queue.unackedKey, 0)
 		if result.Err() != nil {
 			log.Printf("queue failed to consume %s %s", queue, result.Err())
 			continue
