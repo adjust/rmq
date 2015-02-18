@@ -66,18 +66,12 @@ func (connection *Connection) Check() bool {
 	return result.Val() > 0
 }
 
-// Close closes the connection by stopping the heartbeat and removing it from the list
-func (connection *Connection) Close() bool {
-	result := connection.redisClient.SRem(connectionsKey, connection.Name)
-	if result.Err() != nil {
-		log.Printf("queue connection failed to close connection %s %s", connection, result.Err())
-		return false
-	}
-
-	connection.redisClient.Del(connection.heartbeatKey)
+// Close closes the connection by stopping the heartbeat
+// it does not remove it from the list of connections so it can later be found by the cleaner
+func (connection *Connection) Close() {
 	connection.closed = true
+	connection.redisClient.Del(connection.heartbeatKey)
 	log.Printf("queue connection closed %s", connection)
-	return result.Val() > 0
 }
 
 // CloseAllConnections removes all connections from the connection set

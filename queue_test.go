@@ -39,18 +39,16 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	c.Check(conn1.Check(), Equals, true)
 	c.Check(conn2.Check(), Equals, true)
 
-	c.Check(connection.openNamedConnection("nope").Close(), Equals, false)
-	c.Check(conn1.Close(), Equals, true)
+	connection.openNamedConnection("nope").Close()
+	conn1.Close()
 	c.Check(conn1.Check(), Equals, false)
 	c.Check(conn2.Check(), Equals, true)
-	c.Check(connection.GetConnections(), DeepEquals, []string{conn2.Name})
+	c.Check(connection.GetConnections(), HasLen, 2)
 
-	c.Check(conn1.Close(), Equals, false)
-
-	c.Check(conn2.Close(), Equals, true)
+	conn2.Close()
 	c.Check(conn1.Check(), Equals, false)
 	c.Check(conn2.Check(), Equals, false)
-	c.Check(connection.GetConnections(), HasLen, 0)
+	c.Check(connection.GetConnections(), HasLen, 2)
 }
 
 func (suite *QueueSuite) TestConnectionQueues(c *C) {
