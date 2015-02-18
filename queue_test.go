@@ -39,13 +39,13 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	c.Check(conn1.Check(), Equals, true)
 	c.Check(conn2.Check(), Equals, true)
 
-	connection.hijackConnection("nope").Close()
-	conn1.Close()
+	connection.hijackConnection("nope").StopHeartbeat()
+	conn1.StopHeartbeat()
 	c.Check(conn1.Check(), Equals, false)
 	c.Check(conn2.Check(), Equals, true)
 	c.Check(connection.GetConnections(), HasLen, 2)
 
-	conn2.Close()
+	conn2.StopHeartbeat()
 	c.Check(conn1.Check(), Equals, false)
 	c.Check(conn2.Check(), Equals, false)
 	c.Check(connection.GetConnections(), HasLen, 2)

@@ -13,11 +13,11 @@ import (
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type Connection struct {
-	Name         string
-	heartbeatKey string // key to keep alive
-	queuesKey    string // key to list of queues consumed by this connection
-	redisClient  *redis.Client
-	closed       bool
+	Name             string
+	heartbeatKey     string // key to keep alive
+	queuesKey        string // key to list of queues consumed by this connection
+	redisClient      *redis.Client
+	heartbeatStopped bool
 }
 
 // OpenConnection opens and returns a new connection
@@ -66,15 +66,19 @@ func (connection *Connection) Check() bool {
 	return result.Val() > 0
 }
 
-// Close closes the connection by stopping the heartbeat
+// StopHeartbeat stopps the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *Connection) Close() {
-	connection.closed = true
-	connection.redisClient.Del(connection.heartbeatKey)
-	log.Printf("queue connection closed %s", connection)
+func (connection *Connection) StopHeartbeat() error {
+	connection.heartbeatStopped = true
+	return connection.redisClient.Del(connection.heartbeatKey).Err()
+}
+
+func (connection *Connection) Close() error {
+	return connection.redisClient.SRem(connectionsKey, connection.Name).Err()
 }
 
 // CloseAllConnections removes all connections from the connection set
+// TODO: remove? only makes it impossible to clean them up
 func (connection *Connection) CloseAllConnections() int {
 	result := connection.redisClient.Del(connectionsKey)
 	if result.Err() != nil {
@@ -140,7 +144,7 @@ func (connection *Connection) heartbeat() {
 		connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1")
 		time.Sleep(time.Second)
 
-		if connection.closed {
+		if connection.heartbeatStopped {
 			log.Printf("queue connection stopped heartbeat %s", connection)
 			return
 		}

@@ -90,6 +90,38 @@ func (queue *Queue) UnackedCount() int {
 	return int(result.Val())
 }
 
+// ReturnUnackedDeliveries moves all unacked deliveries back to the ready queue and deletes the unacked key afterwards
+func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
+	result := queue.redisClient.LLen(queue.unackedKey)
+	if result.Err() != nil {
+		return 0, fmt.Errorf("queue failed to get unacked count before returning %s %s", queue, result.Err())
+	}
+
+	unackedCount := int(result.Val())
+	for i := 0; i < unackedCount; i++ {
+		result := queue.redisClient.BRPopLPush(queue.unackedKey, queue.readyKey, 0)
+		if result.Err() != nil {
+			return 0, fmt.Errorf("queue failed to return unacked package %s", result.Err())
+		}
+	}
+
+	result = queue.redisClient.LLen(queue.unackedKey)
+	if result.Err() != nil {
+		return 0, fmt.Errorf("queue failed to get unacked count after returning %s %s", queue, result.Err())
+	}
+
+	if result.Val() != 0 {
+		return 0, fmt.Errorf("queue found new unacked packages after returning %s %d", queue, result.Val())
+	}
+
+	return unackedCount, nil
+}
+
+// CloseInConnection closes the queue in the associated connection by removing all related keys
+func (queue *Queue) CloseInConnection() error {
+	return queue.redisClient.Del(queue.unackedKey).Err()
+}
+
 func (queue *Queue) Clear() int {
 	result := queue.redisClient.Del(queue.readyKey)
 	if result.Err() != nil {
