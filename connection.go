@@ -14,7 +14,8 @@ import (
 // Each connection has a single heartbeat shared among all consumers
 type Connection struct {
 	Name         string
-	heartbeatKey string
+	heartbeatKey string // key to keep alive
+	queuesKey    string // key to list of queues consumed by this connection
 	redisClient  *redis.Client
 }
 
@@ -31,12 +32,17 @@ func OpenConnection(tag, host, port string, db int) *Connection {
 	connection := &Connection{
 		Name:         name,
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
+		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:  redisClient,
 	}
 
 	go connection.heartbeat()
 	log.Printf("queue connection connected to %s %s:%s %d", name, host, port, db)
 	return connection
+}
+
+func (connection *Connection) String() string {
+	return connection.Name
 }
 
 // GetConnections returns a list of all open connections
@@ -49,9 +55,9 @@ func (connection *Connection) GetConnections() []string {
 	return result.Val()
 }
 
-// CheckConnection retuns true if the named connection is currently active in terms of heartbeat
-func (connection *Connection) CheckConnection(name string) bool {
-	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1)
+// Check retuns true if the connection is currently active in terms of heartbeat
+func (connection *Connection) Check() bool {
+	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
 	result := connection.redisClient.TTL(heartbeatKey)
 	if result.Err() != nil {
 		return false
@@ -79,13 +85,14 @@ func (connection *Connection) CloseAllConnections() int {
 	return int(result.Val())
 }
 
-// OpenQueue opens and returns the Queue with a given name
+// OpenQueue opens and returns the queue with a given name
 func (connection *Connection) OpenQueue(name string) *Queue {
 	result := connection.redisClient.SAdd(queuesKey, name)
 	if result.Err() != nil {
 		log.Printf("queue connection failed to open queue %s %s", name, result.Err())
 	}
-	return newQueue(name, connection.Name, connection.redisClient)
+	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
+	return queue
 }
 
 // GetOpenQueues returns a list of all open queues
@@ -118,10 +125,35 @@ func (connection *Connection) CloseAllQueues() int {
 	return int(result.Val())
 }
 
+// GetConsumingQueues returns a list of all queues consumed by this connection
+func (connection *Connection) GetConsumingQueues() []string {
+	result := connection.redisClient.SMembers(connection.queuesKey)
+	if result.Err() != nil {
+		log.Printf("queue connection failed to get open queues %s", result.Err())
+		return []string{}
+	}
+	return result.Val()
+}
+
 // heartbeat keeps the heartbeat key alive
 func (connection *Connection) heartbeat() {
 	for {
 		connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1")
 		time.Sleep(time.Second)
 	}
+}
+
+// openNamedConnection reopens an existing connection for inspection purposes
+func (connection *Connection) openNamedConnection(name string) *Connection {
+	return &Connection{
+		Name:         name,
+		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
+		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
+		redisClient:  connection.redisClient,
+	}
+}
+
+// openQueue opens a queue without adding it to the set of queues
+func (connection *Connection) openQueue(name string) *Queue {
+	return newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 }

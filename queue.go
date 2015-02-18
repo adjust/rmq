@@ -27,18 +27,17 @@ const (
 )
 
 type Queue struct {
-	name         string
-	queuesKey    string // key to list of queues consumed by this connection
-	consumersKey string // key to set of consumers using this connection
-	readyKey     string // key to list of ready deliveries
-	unackedKey   string // key to list of currently consuming deliveries
-	redisClient  *redis.Client
-	deliveryChan chan Delivery // nil for publish channels, not nil for consuming channels
+	name           string
+	connectionName string
+	queuesKey      string // key to list of queues consumed by this connection
+	consumersKey   string // key to set of consumers using this connection
+	readyKey       string // key to list of ready deliveries
+	unackedKey     string // key to list of currently consuming deliveries
+	redisClient    *redis.Client
+	deliveryChan   chan Delivery // nil for publish channels, not nil for consuming channels
 }
 
-func newQueue(name, connectionName string, redisClient *redis.Client) *Queue {
-	queuesKey := strings.Replace(connectionQueuesTemplate, phConnection, connectionName, 1)
-
+func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *Queue {
 	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
@@ -48,18 +47,19 @@ func newQueue(name, connectionName string, redisClient *redis.Client) *Queue {
 	readyKey := strings.Replace(queueReadyTemplate, phQueue, name, 1)
 
 	queue := &Queue{
-		name:         name,
-		queuesKey:    queuesKey,
-		consumersKey: consumersKey,
-		readyKey:     readyKey,
-		unackedKey:   unackedKey,
-		redisClient:  redisClient,
+		name:           name,
+		connectionName: connectionName,
+		queuesKey:      queuesKey,
+		consumersKey:   consumersKey,
+		readyKey:       readyKey,
+		unackedKey:     unackedKey,
+		redisClient:    redisClient,
 	}
 	return queue
 }
 
 func (queue *Queue) String() string {
-	return queue.name
+	return fmt.Sprintf("[%s conn:%s]", queue.name, queue.connectionName)
 }
 
 func (queue *Queue) Publish(payload string) error {
@@ -96,6 +96,8 @@ func (queue *Queue) Clear() int {
 // AddConsumer adds a consumer to the queue and returns its internal name
 func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+
+	// add consumer to list of consumers of this queue
 	result := queue.redisClient.SAdd(queue.consumersKey, name)
 	if result.Err() != nil {
 		log.Printf("queue failed to add consumer %s %s", name, result.Err())
@@ -104,7 +106,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 
 	queue.startConsuming()
 	go queue.addConsumer(consumer)
-	log.Printf("queue added consumer %s %s", queue, name)
+	log.Printf("queue added consumer %s %s %s", queue, name, queue.consumersKey)
 	return name
 }
 
@@ -139,6 +141,14 @@ func (queue *Queue) startConsuming() {
 	if queue.deliveryChan != nil {
 		return
 	}
+
+	// add queue to list of queues consumed on this connection
+	result := queue.redisClient.SAdd(queue.queuesKey, queue.name)
+	if result.Err() != nil {
+		log.Printf("queue failed to add itself %s %s", queue.name, result.Err())
+		return
+	}
+
 	queue.deliveryChan = make(chan Delivery, consumeChannelSize)
 	queue.redisClient.LPush(queue.queuesKey, queue.name)
 	log.Printf("queue started consuming %s", queue)
