@@ -84,6 +84,8 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 1)
 	c.Check(queue.Publish("test"), IsNil)
 	c.Check(queue.ReadyCount(), Equals, 2)
+	c.Check(queue.Purge(), Equals, true)
+	c.Check(queue.ReadyCount(), Equals, 0)
 
 	queue.RemoveAllConsumers()
 	c.Check(queue.GetConsumers(), HasLen, 0)

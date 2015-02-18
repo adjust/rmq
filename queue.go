@@ -66,6 +66,14 @@ func (queue *Queue) Publish(payload string) error {
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
+func (queue *Queue) Purge() bool {
+	result := queue.redisClient.Del(queue.readyKey)
+	if result.Err() != nil {
+		return false
+	}
+	return result.Val() > 0
+}
+
 func (queue *Queue) ReadyCount() int {
 	result := queue.redisClient.LLen(queue.readyKey)
 	if result.Err() != nil {
