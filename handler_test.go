@@ -52,7 +52,8 @@ func (suite *HandlerSuite) TestConnections(c *C) {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 
-	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*.*q1.*1.*0.*0.*")
+	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
+	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*.*")
 	/*
 		<html><body><table style="font-family:monospace">
 		<tr><td>queue</td><td></td><td>ready</td><td></td><td style="color:lightgrey">connection</td><td></td><td>unacked</td><td></td><td>consumers</td><td></td></tr>

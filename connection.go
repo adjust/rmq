@@ -17,6 +17,7 @@ type Connection struct {
 	heartbeatKey string // key to keep alive
 	queuesKey    string // key to list of queues consumed by this connection
 	redisClient  *redis.Client
+	closed       bool
 }
 
 // OpenConnection opens and returns a new connection
@@ -65,13 +66,17 @@ func (connection *Connection) Check() bool {
 	return result.Val() > 0
 }
 
-// CloseConnection removes the connection with the given name from the connections set
-func (connection *Connection) CloseConnection(name string) bool {
-	result := connection.redisClient.SRem(connectionsKey, name)
+// Close closes the connection by stopping the heartbeat and removing it from the list
+func (connection *Connection) Close() bool {
+	result := connection.redisClient.SRem(connectionsKey, connection.Name)
 	if result.Err() != nil {
-		log.Printf("queue connection failed to close connection %s %s", name, result.Err())
+		log.Printf("queue connection failed to close connection %s %s", connection, result.Err())
 		return false
 	}
+
+	connection.redisClient.Del(connection.heartbeatKey)
+	connection.closed = true
+	log.Printf("queue connection closed %s", connection)
 	return result.Val() > 0
 }
 
@@ -140,6 +145,11 @@ func (connection *Connection) heartbeat() {
 	for {
 		connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1")
 		time.Sleep(time.Second)
+
+		if connection.closed {
+			log.Printf("queue connection stopped heartbeat %s", connection)
+			return
+		}
 	}
 }
 
