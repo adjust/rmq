@@ -34,16 +34,18 @@ func (suite *HandlerSuite) TestConnections(c *C) {
 
 	OpenConnection("conn1", host, port, db)
 	conn2 := OpenConnection("conn2", host, port, db)
-	conn2.OpenQueue("q1")
+	q1 := conn2.OpenQueue("q1")
+	q1.Publish("d1")
 	q2 := conn2.OpenQueue("q2")
 	consumer := NewTestConsumer()
 	q2.AddConsumer("cons1", consumer)
-	q2.Publish("d1")
 	q2.Publish("d2")
+	q2.Publish("d3")
+	time.Sleep(time.Millisecond)
 	consumer.LastDelivery.Ack()
 	q2.AddConsumer("cons2", NewTestConsumer())
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 
 	handler := NewHandler(connection)
 	request, err := http.NewRequest("GET", "https://app.adjust.com/redis_queue", nil)

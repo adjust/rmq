@@ -18,20 +18,27 @@ func NewHandler(connection *Connection) *Handler {
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
 	log.Printf("\n\n")
 
-	connectionNames := handler.connection.GetConnections()
-	queues := handler.connection.GetOpenQueues()
-	log.Printf("queues %s", queues)
+	queueStats := QueueStats{}
+	for _, queueName := range handler.connection.GetOpenQueues() {
+		queue := handler.connection.openQueue(queueName)
+		queueStats[queueName] = NewQueueStat(queue.ReadyCount())
+	}
 
+	connectionNames := handler.connection.GetConnections()
 	for _, connectionName := range connectionNames {
 		connection := handler.connection.openNamedConnection(connectionName)
-		log.Printf("connection %s %t", connection, connection.Check())
 		queueNames := connection.GetConsumingQueues()
 
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
 			consumers := queue.GetConsumers()
 
-			log.Printf(" queue %s %d %d %s", queue, queue.ReadyCount(), queue.UnackedCount(), consumers)
+			queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
+				UnackedCount: queue.UnackedCount(),
+				Consumers:    consumers,
+			}
 		}
 	}
+
+	log.Printf("queues %s", queueStats)
 }
