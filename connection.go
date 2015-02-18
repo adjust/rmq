@@ -147,8 +147,8 @@ func (connection *Connection) heartbeat() {
 	}
 }
 
-// openNamedConnection reopens an existing connection for inspection purposes
-func (connection *Connection) openNamedConnection(name string) *Connection {
+// hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
+func (connection *Connection) hijackConnection(name string) *Connection {
 	return &Connection{
 		Name:         name,
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),

@@ -32,14 +32,14 @@ func (suite *QueueSuite) TestConnections(c *C) {
 
 	conn1 := OpenConnection("test1", host, port, db)
 	c.Check(connection.GetConnections(), DeepEquals, []string{conn1.Name})
-	c.Check(connection.openNamedConnection("nope").Check(), Equals, false)
+	c.Check(connection.hijackConnection("nope").Check(), Equals, false)
 	c.Check(conn1.Check(), Equals, true)
 	conn2 := OpenConnection("test2", host, port, db)
 	c.Check(connection.GetConnections(), HasLen, 2)
 	c.Check(conn1.Check(), Equals, true)
 	c.Check(conn2.Check(), Equals, true)
 
-	connection.openNamedConnection("nope").Close()
+	connection.hijackConnection("nope").Close()
 	conn1.Close()
 	c.Check(conn1.Check(), Equals, false)
 	c.Check(conn2.Check(), Equals, true)

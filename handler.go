@@ -25,7 +25,7 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.
 
 	connectionNames := handler.connection.GetConnections()
 	for _, connectionName := range connectionNames {
-		connection := handler.connection.openNamedConnection(connectionName)
+		connection := handler.connection.hijackConnection(connectionName)
 		queueNames := connection.GetConsumingQueues()
 
 		for _, queueName := range queueNames {
