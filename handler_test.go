@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,8 +24,6 @@ func (suite *HandlerSuite) SetUpSuite(c *C) {
 }
 
 func (suite *HandlerSuite) TestConnections(c *C) {
-	log.Printf("\n\n")
-
 	host, port, db := suite.goenv.GetRedis()
 	connection := OpenConnection("test", host, port, db)
 	connection.CloseAllConnections()
@@ -35,8 +32,10 @@ func (suite *HandlerSuite) TestConnections(c *C) {
 	OpenConnection("conn1", host, port, db)
 	conn2 := OpenConnection("conn2", host, port, db)
 	q1 := conn2.OpenQueue("q1")
+	q1.Purge()
 	q1.Publish("d1")
 	q2 := conn2.OpenQueue("q2")
+	q2.Purge()
 	consumer := NewTestConsumer()
 	q2.AddConsumer("cons1", consumer)
 	q2.Publish("d2")
@@ -52,4 +51,14 @@ func (suite *HandlerSuite) TestConnections(c *C) {
 	c.Assert(err, IsNil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
+
+	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*.*q1.*1.*0.*0.*")
+	/*
+		<html><body><table style="font-family:monospace">
+		<tr><td>queue</td><td></td><td>ready</td><td></td><td style="color:lightgrey">connection</td><td></td><td>unacked</td><td></td><td>consumers</td><td></td></tr>
+		<tr><td>q2</td><td></td><td>0</td><td></td><td></td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
+		<tr style="color:lightgrey"><td></td><td></td><td></td><td></td><td>conn2-jUS3Ow</td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
+		<tr><td>q1</td><td></td><td>1</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		</table></body></html>
+	*/
 }
