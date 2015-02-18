@@ -40,5 +40,20 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.
 		}
 	}
 
-	log.Printf("queues %s", queueStats)
+	for queueName, queueStat := range queueStats {
+		log.Printf(" queue:%s ready:%d unacked:%d consumers:%d",
+			queueName,
+			queueStat.ReadyCount,
+			queueStat.UnackedCount(),
+			queueStat.ConsumerCount(),
+		)
+
+		for connectionName, connectionStat := range queueStat.ConnectionStats {
+			log.Printf("  connection:%s unacked:%d consumers:%d",
+				connectionName,
+				connectionStat.UnackedCount,
+				len(connectionStat.Consumers),
+			)
+		}
+	}
 }
