@@ -95,6 +95,8 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	queue.RemoveAllConsumers()
 	c.Check(queue.GetConsumers(), HasLen, 0)
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
+	c.Check(queue.PrepareConsumption(10), Equals, true)
+	c.Check(queue.PrepareConsumption(10), Equals, false)
 	nameTest := queue.AddConsumer("test", NewTestConsumer())
 	time.Sleep(time.Millisecond)
 	c.Check(connection.GetConsumingQueues(), HasLen, 1)
@@ -118,6 +120,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	queue.Clear()
 
 	consumer := NewTestConsumer()
+	queue.PrepareConsumption(10)
 	queue.AddConsumer("test", consumer)
 	c.Check(consumer.LastDelivery, IsNil)
 
@@ -159,6 +162,7 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		consumer := NewTestConsumer()
 		consumer.AutoAck = true
 		consumers = append(consumers, consumer)
+		queue.PrepareConsumption(10)
 		queue.AddConsumer("test", consumer)
 	}
 

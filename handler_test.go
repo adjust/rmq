@@ -37,6 +37,7 @@ func (suite *HandlerSuite) TestConnections(c *C) {
 	q2 := conn2.OpenQueue("q2")
 	q2.Purge()
 	consumer := NewTestConsumer()
+	q2.PrepareConsumption(10)
 	q2.AddConsumer("cons1", consumer)
 	q2.Publish("d2")
 	q2.Publish("d3")

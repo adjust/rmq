@@ -22,8 +22,6 @@ const (
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
-
-	consumeChannelSize = 10 // TODO: make a setting? increase?
 )
 
 type Queue struct {
@@ -101,8 +99,34 @@ func (queue *Queue) Clear() int {
 	return int(result.Val())
 }
 
+// PrepareConsumption starts consuming into a channel of size bufferSize
+// must be called before consumers can be added!
+func (queue *Queue) PrepareConsumption(bufferSize int) bool {
+	if queue.deliveryChan != nil {
+		return false
+	}
+
+	// add queue to list of queues consumed on this connection
+	result := queue.redisClient.SAdd(queue.queuesKey, queue.name)
+	if result.Err() != nil {
+		log.Printf("queue failed to add itself %s %s", queue.name, result.Err())
+		return false
+	}
+
+	queue.deliveryChan = make(chan Delivery, bufferSize)
+	queue.redisClient.LPush(queue.queuesKey, queue.name)
+	log.Printf("queue started consuming %s", queue)
+	go queue.consume()
+	return true
+}
+
 // AddConsumer adds a consumer to the queue and returns its internal name
+// panics if PrepareConsumption wasn't called before!
 func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
+	if queue.deliveryChan == nil {
+		log.Panicf("queue failed to add consumer, call PrepareConsumption first! %s", queue)
+	}
+
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
@@ -112,7 +136,6 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 		return ""
 	}
 
-	queue.startConsuming()
 	go queue.addConsumer(consumer)
 	log.Printf("queue added consumer %s %s %s", queue, name, queue.consumersKey)
 	return name
@@ -143,24 +166,6 @@ func (queue *Queue) RemoveAllConsumers() int {
 		return 0
 	}
 	return int(result.Val())
-}
-
-func (queue *Queue) startConsuming() {
-	if queue.deliveryChan != nil {
-		return
-	}
-
-	// add queue to list of queues consumed on this connection
-	result := queue.redisClient.SAdd(queue.queuesKey, queue.name)
-	if result.Err() != nil {
-		log.Printf("queue failed to add itself %s %s", queue.name, result.Err())
-		return
-	}
-
-	queue.deliveryChan = make(chan Delivery, consumeChannelSize)
-	queue.redisClient.LPush(queue.queuesKey, queue.name)
-	log.Printf("queue started consuming %s", queue)
-	go queue.consume()
 }
 
 func (queue *Queue) consume() {
