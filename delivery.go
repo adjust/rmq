@@ -23,6 +23,10 @@ func newDelivery(payload, unackedKey string, redisClient *redis.Client) *wrapDel
 	}
 }
 
+func (delivery *wrapDelivery) String() string {
+	return delivery.payload
+}
+
 func (delivery *wrapDelivery) Payload() string {
 	return delivery.payload
 }

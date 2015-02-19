@@ -130,7 +130,10 @@ func (connection *Connection) GetConsumingQueues() []string {
 // heartbeat keeps the heartbeat key alive
 func (connection *Connection) heartbeat() {
 	for {
-		connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1")
+		if err := connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1").Err(); err != nil {
+			log.Printf("redis connection failed to setex heartbeat %s %s", connection, err)
+		}
+
 		time.Sleep(time.Second)
 
 		if connection.heartbeatStopped {

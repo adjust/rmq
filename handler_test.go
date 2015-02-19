@@ -25,26 +25,26 @@ func (suite *HandlerSuite) SetUpSuite(c *C) {
 
 func (suite *HandlerSuite) TestHandler(c *C) {
 	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("test", host, port, db)
+	connection := OpenConnection("handler-conn", host, port, db)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
-	OpenConnection("conn1", host, port, db)
-	conn2 := OpenConnection("conn2", host, port, db)
-	q1 := conn2.OpenQueue("q1")
+	conn1 := OpenConnection("handler-conn1", host, port, db)
+	conn2 := OpenConnection("handler-conn2", host, port, db)
+	q1 := conn2.OpenQueue("handler-q1")
 	q1.Purge()
-	q1.Publish("d1")
-	q2 := conn2.OpenQueue("q2")
+	q1.Publish("handler-d1")
+	q2 := conn2.OpenQueue("handler-q2")
 	q2.Purge()
 	consumer := NewTestConsumer()
-	q2.PrepareConsumption(10)
-	q2.AddConsumer("cons1", consumer)
-	q2.Publish("d2")
-	q2.Publish("d3")
-	time.Sleep(time.Millisecond)
+	q2.StartConsuming(10)
+	q2.AddConsumer("handler-cons1", consumer)
+	q2.Publish("handler-d2")
+	q2.Publish("handler-d3")
+	time.Sleep(2 * time.Millisecond)
 	consumer.LastDelivery.Ack()
-	q2.AddConsumer("cons2", NewTestConsumer())
+	q2.AddConsumer("handler-cons2", NewTestConsumer())
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 
 	handler := NewHandler(connection)
 	request, err := http.NewRequest("GET", "https://app.adjust.com/redis_queue", nil)
@@ -53,13 +53,19 @@ func (suite *HandlerSuite) TestHandler(c *C) {
 	handler.ServeHTTP(recorder, request)
 
 	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
-	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*.*")
+	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*")
 	/*
 		<html><body><table style="font-family:monospace">
 		<tr><td>queue</td><td></td><td>ready</td><td></td><td style="color:lightgrey">connection</td><td></td><td>unacked</td><td></td><td>consumers</td><td></td></tr>
-		<tr><td>q2</td><td></td><td>0</td><td></td><td></td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
-		<tr style="color:lightgrey"><td></td><td></td><td></td><td></td><td>conn2-jUS3Ow</td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
-		<tr><td>q1</td><td></td><td>1</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		<tr><td>handler-q2</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>2</td><td></td></tr>
+		<tr style="color:lightgrey"><td></td><td></td><td></td><td></td><td>handler-conn2-x7M8CP</td><td></td><td>0</td><td></td><td>2</td><td></td></tr>
+		<tr><td>handler-q1</td><td></td><td>1</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		<tr><td>cleaner-queue1</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
 		</table></body></html>
 	*/
+
+	q2.StopConsuming()
+	connection.StopHeartbeat()
+	conn1.StopHeartbeat()
+	conn2.StopHeartbeat()
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	redis "github.com/adjust/redis-latest-head" // TODO: update
 	"github.com/adjust/uniuri"
@@ -25,14 +26,15 @@ const (
 )
 
 type Queue struct {
-	name           string
-	connectionName string
-	queuesKey      string // key to list of queues consumed by this connection
-	consumersKey   string // key to set of consumers using this connection
-	readyKey       string // key to list of ready deliveries
-	unackedKey     string // key to list of currently consuming deliveries
-	redisClient    *redis.Client
-	deliveryChan   chan Delivery // nil for publish channels, not nil for consuming channels
+	name             string
+	connectionName   string
+	queuesKey        string // key to list of queues consumed by this connection
+	consumersKey     string // key to set of consumers using this connection
+	readyKey         string // key to list of ready deliveries
+	unackedKey       string // key to list of currently consuming deliveries
+	redisClient      *redis.Client
+	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
+	consumingStopped bool
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *Queue {
@@ -99,10 +101,11 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 
 	unackedCount := int(result.Val())
 	for i := 0; i < unackedCount; i++ {
-		result := queue.redisClient.BRPopLPush(queue.unackedKey, queue.readyKey, 0)
+		result := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)
 		if result.Err() != nil {
 			return 0, fmt.Errorf("queue failed to return unacked package %s", result.Err())
 		}
+		log.Printf("queue returned delivery %s", result.Val())
 	}
 
 	result = queue.redisClient.LLen(queue.unackedKey)
@@ -131,9 +134,9 @@ func (queue *Queue) Clear() int {
 	return int(result.Val())
 }
 
-// PrepareConsumption starts consuming into a channel of size bufferSize
+// StartConsuming starts consuming into a channel of size bufferSize
 // must be called before consumers can be added!
-func (queue *Queue) PrepareConsumption(bufferSize int) bool {
+func (queue *Queue) StartConsuming(bufferSize int) bool {
 	if queue.deliveryChan != nil {
 		return false
 	}
@@ -146,17 +149,20 @@ func (queue *Queue) PrepareConsumption(bufferSize int) bool {
 	}
 
 	queue.deliveryChan = make(chan Delivery, bufferSize)
-	queue.redisClient.LPush(queue.queuesKey, queue.name)
 	log.Printf("queue started consuming %s", queue)
 	go queue.consume()
 	return true
 }
 
+func (queue *Queue) StopConsuming() {
+	queue.consumingStopped = true
+}
+
 // AddConsumer adds a consumer to the queue and returns its internal name
-// panics if PrepareConsumption wasn't called before!
+// panics if StartConsuming wasn't called before!
 func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	if queue.deliveryChan == nil {
-		log.Panicf("queue failed to add consumer, call PrepareConsumption first! %s", queue)
+		log.Panicf("queue failed to add consumer, call StartConsuming first! %s", queue)
 	}
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
@@ -169,7 +175,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	}
 
 	go queue.addConsumer(consumer)
-	log.Printf("queue added consumer %s %s %s", queue, name, queue.consumersKey)
+	log.Printf("queue added consumer %s %s", queue, name)
 	return name
 }
 
@@ -202,12 +208,30 @@ func (queue *Queue) RemoveAllConsumers() int {
 
 func (queue *Queue) consume() {
 	for {
-		result := queue.redisClient.BRPopLPush(queue.readyKey, queue.unackedKey, 0)
-		if result.Err() != nil {
-			log.Printf("queue failed to consume %s %s", queue, result.Err())
-			continue
+		readyCount := queue.ReadyCount()
+		for i := 0; i < readyCount; i++ {
+			result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+			if result.Err() == redis.Nil {
+				readyCount = 0 // tried to consume more than available
+				break
+			}
+
+			if result.Err() != nil {
+				log.Printf("queue failed to consume %s %s", queue, result.Err())
+				break
+			}
+
+			queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
 		}
-		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
+
+		if readyCount == 0 {
+			time.Sleep(time.Millisecond)
+		}
+
+		if queue.consumingStopped {
+			log.Printf("queue stopped consuming %s", queue)
+			return
+		}
 	}
 }
 
