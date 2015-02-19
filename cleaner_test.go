@@ -26,7 +26,6 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	conn1 := OpenConnection("cleaner-conn1", host, port, db)
 	conn1.OpenQueue("cleaner-queue1")
-	conn1.StopHeartbeat()
 
 	cleaner := NewCleaner(connection)
 	cleaner.Clean()

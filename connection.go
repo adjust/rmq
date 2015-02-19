@@ -24,8 +24,8 @@ type Connection struct {
 func OpenConnection(tag, host, port string, db int) *Connection {
 	redisClient := redis.NewTCPClient(&redis.Options{
 		Addr: host + ":" + port,
-		DB:   int64(db)},
-	)
+		DB:   int64(db),
+	})
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 	redisClient.SAdd(connectionsKey, name)
@@ -35,6 +35,10 @@ func OpenConnection(tag, host, port string, db int) *Connection {
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:  redisClient,
+	}
+
+	if err := connection.updateHeartbeat(); err != nil {
+		log.Panicf("queue connection failed to update heartbeat %s %s", connection, err)
 	}
 
 	go connection.heartbeat()
@@ -130,7 +134,7 @@ func (connection *Connection) GetConsumingQueues() []string {
 // heartbeat keeps the heartbeat key alive
 func (connection *Connection) heartbeat() {
 	for {
-		if err := connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1").Err(); err != nil {
+		if err := connection.updateHeartbeat(); err != nil {
 			log.Printf("redis connection failed to setex heartbeat %s %s", connection, err)
 		}
 
@@ -141,6 +145,10 @@ func (connection *Connection) heartbeat() {
 			return
 		}
 	}
+}
+
+func (connection *Connection) updateHeartbeat() error {
+	return connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1").Err()
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
