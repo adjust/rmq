@@ -97,19 +97,19 @@ func (connection *Connection) GetOpenQueues() []string {
 	return result.Val()
 }
 
-// CloseQueue removes a queue from the list of open queues
-func (connection *Connection) CloseQueue(name string) bool {
-	result := connection.redisClient.SRem(queuesKey, name)
-	if result.Err() != nil {
-		log.Printf("queue connection failed to close queue %s %s", name, result.Err())
-		return false
-	}
-	return result.Val() > 0
-}
-
-// CloseAllQueues clears the list of open queues
+// CloseAllQueues closes all queues by removing them from the global list
 func (connection *Connection) CloseAllQueues() int {
 	result := connection.redisClient.Del(queuesKey)
+	if result.Err() != nil {
+		log.Printf("queue connection failed to close all queue %s", result.Err())
+		return 0
+	}
+	return int(result.Val())
+}
+
+// CloseAllQueuesInConnection closes all queues in the associated connection by removing all related keys
+func (connection *Connection) CloseAllQueuesInConnection() int {
+	result := connection.redisClient.Del(connection.queuesKey)
 	if result.Err() != nil {
 		log.Printf("queue connection failed to close all queue %s", result.Err())
 		return 0

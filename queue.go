@@ -62,10 +62,12 @@ func (queue *Queue) String() string {
 	return fmt.Sprintf("[%s conn:%s]", queue.name, queue.connectionName)
 }
 
+// Publish adds a delivery with the given payload to the queue
 func (queue *Queue) Publish(payload string) error {
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
+// Purge removes all ready deliveries from the queue
 func (queue *Queue) Purge() bool {
 	result := queue.redisClient.Del(queue.readyKey)
 	if result.Err() != nil {
@@ -103,7 +105,7 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 	for i := 0; i < unackedCount; i++ {
 		result := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)
 		if result.Err() != nil {
-			return 0, fmt.Errorf("queue failed to return unacked package %s", result.Err())
+			return 0, fmt.Errorf("queue failed to return unacked delivery %s", result.Err())
 		}
 		log.Printf("queue returned delivery %s", result.Val())
 	}
@@ -114,7 +116,7 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 	}
 
 	if result.Val() != 0 {
-		return 0, fmt.Errorf("queue found new unacked packages after returning %s %d", queue, result.Val())
+		return 0, fmt.Errorf("queue found new unacked deliverys after returning %s %d", queue, result.Val())
 	}
 
 	return unackedCount, nil
@@ -122,7 +124,19 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
 func (queue *Queue) CloseInConnection() error {
-	return queue.redisClient.Del(queue.unackedKey).Err()
+	if err := queue.redisClient.Del(queue.unackedKey).Err(); err != nil {
+		log.Printf("queue failed to delete unacked key %s %s", queue, err)
+		return err
+	}
+	if err := queue.redisClient.Del(queue.consumersKey).Err(); err != nil {
+		log.Printf("queue failed to delete consumers key %s %s", queue, err)
+		return err
+	}
+	if err := queue.redisClient.SRem(queuesKey, queue.name).Err(); err != nil {
+		log.Printf("queue failed to delete queues key %s %s", queue, err)
+		return err
+	}
+	return nil
 }
 
 func (queue *Queue) Clear() int {

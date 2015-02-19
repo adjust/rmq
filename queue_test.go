@@ -67,12 +67,10 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Assert(connection.OpenQueue("conn-q-q2"), NotNil)
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
 
-	c.Check(connection.CloseQueue("conn-q-q3"), Equals, false)
-
-	c.Check(connection.CloseQueue("conn-q-q2"), Equals, true)
+	c.Check(connection.OpenQueue("conn-q-q2").CloseInConnection(), IsNil)
 	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q1"})
 
-	c.Check(connection.CloseQueue("conn-q-q1"), Equals, true)
+	c.Check(connection.OpenQueue("conn-q-q1").CloseInConnection(), IsNil)
 	c.Check(connection.GetOpenQueues(), HasLen, 0)
 
 	connection.StopHeartbeat()
