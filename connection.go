@@ -77,17 +77,6 @@ func (connection *Connection) Close() error {
 	return connection.redisClient.SRem(connectionsKey, connection.Name).Err()
 }
 
-// CloseAllConnections removes all connections from the connection set
-// TODO: remove? only makes it impossible to clean them up
-func (connection *Connection) CloseAllConnections() int {
-	result := connection.redisClient.Del(connectionsKey)
-	if result.Err() != nil {
-		log.Printf("queue connection failed to close all consumer %s", result.Err())
-		return 0
-	}
-	return int(result.Val())
-}
-
 // OpenQueue opens and returns the queue with a given name
 func (connection *Connection) OpenQueue(name string) *Queue {
 	result := connection.redisClient.SAdd(queuesKey, name)

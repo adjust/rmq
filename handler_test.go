@@ -23,11 +23,10 @@ func (suite *HandlerSuite) SetUpSuite(c *C) {
 	suite.goenv = goenv.TestGoenv()
 }
 
-func (suite *HandlerSuite) TestConnections(c *C) {
+func (suite *HandlerSuite) TestHandler(c *C) {
 	host, port, db := suite.goenv.GetRedis()
 	connection := OpenConnection("test", host, port, db)
-	connection.CloseAllConnections()
-	connection.CloseAllQueues()
+	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
 	OpenConnection("conn1", host, port, db)
 	conn2 := OpenConnection("conn2", host, port, db)
