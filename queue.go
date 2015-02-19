@@ -209,22 +209,9 @@ func (queue *Queue) RemoveAllConsumers() int {
 func (queue *Queue) consume() {
 	for {
 		readyCount := queue.ReadyCount()
-		for i := 0; i < readyCount; i++ {
-			result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
-			if result.Err() == redis.Nil {
-				readyCount = 0 // tried to consume more than available
-				break
-			}
+		wantMore := queue.consumeBatch(readyCount)
 
-			if result.Err() != nil {
-				log.Printf("queue failed to consume %s %s", queue, result.Err())
-				break
-			}
-
-			queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
-		}
-
-		if readyCount == 0 {
+		if !wantMore {
 			time.Sleep(time.Millisecond)
 		}
 
@@ -233,6 +220,29 @@ func (queue *Queue) consume() {
 			return
 		}
 	}
+}
+
+// consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
+func (queue *Queue) consumeBatch(batchSize int) bool {
+	if batchSize == 0 {
+		return false
+	}
+
+	for i := 0; i < batchSize; i++ {
+		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		if result.Err() == redis.Nil {
+			return false
+		}
+
+		if result.Err() != nil {
+			log.Printf("queue failed to consume %s %s", queue, result.Err())
+			return false
+		}
+
+		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
+	}
+
+	return true
 }
 
 func (queue *Queue) addConsumer(consumer Consumer) {
