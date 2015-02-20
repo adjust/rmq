@@ -41,8 +41,10 @@ func (suite *HandlerSuite) TestHandler(c *C) {
 	q2.AddConsumer("handler-cons1", consumer)
 	q2.Publish("handler-d2")
 	q2.Publish("handler-d3")
+	q2.Publish("handler-d4")
 	time.Sleep(2 * time.Millisecond)
-	consumer.LastDelivery.Ack()
+	consumer.LastDeliveries[0].Ack()
+	consumer.LastDeliveries[1].Reject()
 	q2.AddConsumer("handler-cons2", NewTestConsumer("hand-B"))
 
 	time.Sleep(5 * time.Millisecond)
@@ -54,14 +56,15 @@ func (suite *HandlerSuite) TestHandler(c *C) {
 	handler.ServeHTTP(recorder, request)
 
 	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
-	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*2.*conn2.*1.*2.*")
+	c.Check(recorder.Body.String(), Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*1.*2.*conn2.*1.*2.*")
 	/*
 		<html><body><table style="font-family:monospace">
-		<tr><td>queue</td><td></td><td>ready</td><td></td><td style="color:lightgrey">connection</td><td></td><td>unacked</td><td></td><td>consumers</td><td></td></tr>
-		<tr><td>handler-q2</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>2</td><td></td></tr>
-		<tr style="color:lightgrey"><td></td><td></td><td></td><td></td><td>handler-conn2-x7M8CP</td><td></td><td>0</td><td></td><td>2</td><td></td></tr>
-		<tr><td>handler-q1</td><td></td><td>1</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
-		<tr><td>cleaner-queue1</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		<tr><td>queue</td><td></td><td>ready</td><td></td><td>rejected</td><td></td><td style="color:lightgrey">connection</td><td></td><td>unacked</td><td></td><td>consumers</td><td></td></tr>
+		<tr><td>handler-q2</td><td></td><td>0</td><td></td><td>1</td><td></td><td></td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
+		<tr style="color:lightgrey"><td></td><td></td><td></td><td></td><td></td><td></td><td>handler-conn2-vY5ZPz</td><td></td><td>1</td><td></td><td>2</td><td></td></tr>
+		<tr><td>handler-q1</td><td></td><td>1</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		<tr><td>q2</td><td></td><td>0</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
+		<tr><td>q1</td><td></td><td>0</td><td></td><td>0</td><td></td><td></td><td></td><td>0</td><td></td><td>0</td><td></td></tr>
 		</table></body></html>
 	*/
 
