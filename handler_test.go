@@ -35,14 +35,15 @@ func (suite *HandlerSuite) TestHandler(c *C) {
 	q1.Publish("handler-d1")
 	q2 := conn2.OpenQueue("handler-q2")
 	q2.Purge()
-	consumer := NewTestConsumer()
+	consumer := NewTestConsumer("hand-A")
+	consumer.AutoAck = false
 	q2.StartConsuming(10)
 	q2.AddConsumer("handler-cons1", consumer)
 	q2.Publish("handler-d2")
 	q2.Publish("handler-d3")
 	time.Sleep(2 * time.Millisecond)
 	consumer.LastDelivery.Ack()
-	q2.AddConsumer("handler-cons2", NewTestConsumer())
+	q2.AddConsumer("handler-cons2", NewTestConsumer("hand-B"))
 
 	time.Sleep(5 * time.Millisecond)
 

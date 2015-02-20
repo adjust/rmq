@@ -61,17 +61,27 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	connection.CloseAllQueues()
 	c.Check(connection.GetOpenQueues(), HasLen, 0)
 
-	c.Assert(connection.OpenQueue("conn-q-q1"), NotNil)
+	queue1 := connection.OpenQueue("conn-q-q1")
+	c.Assert(queue1, NotNil)
 	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q1"})
+	c.Check(connection.GetConsumingQueues(), HasLen, 0)
+	queue1.StartConsuming(1)
+	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
 
-	c.Assert(connection.OpenQueue("conn-q-q2"), NotNil)
+	queue2 := connection.OpenQueue("conn-q-q2")
+	c.Assert(queue2, NotNil)
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
+	c.Check(connection.GetConsumingQueues(), HasLen, 1)
+	queue2.StartConsuming(1)
+	c.Check(connection.GetConsumingQueues(), HasLen, 2)
 
-	c.Check(connection.OpenQueue("conn-q-q2").CloseInConnection(), IsNil)
-	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q1"})
+	c.Check(queue2.CloseInConnection(), IsNil)
+	c.Check(connection.GetOpenQueues(), HasLen, 2)
+	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
 
-	c.Check(connection.OpenQueue("conn-q-q1").CloseInConnection(), IsNil)
-	c.Check(connection.GetOpenQueues(), HasLen, 0)
+	c.Check(queue1.CloseInConnection(), IsNil)
+	c.Check(connection.GetOpenQueues(), HasLen, 2)
+	c.Check(connection.GetConsumingQueues(), HasLen, 0)
 
 	connection.StopHeartbeat()
 }
@@ -83,13 +93,13 @@ func (suite *QueueSuite) TestQueue(c *C) {
 
 	queue := connection.OpenQueue("queue-q")
 	c.Assert(queue, NotNil)
-	queue.Clear()
+	queue.Purge()
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.Publish("queue-d1"), IsNil)
 	c.Check(queue.ReadyCount(), Equals, 1)
 	c.Check(queue.Publish("queue-d2"), IsNil)
 	c.Check(queue.ReadyCount(), Equals, 2)
-	c.Check(queue.Purge(), Equals, true)
+	c.Check(queue.Purge(), Equals, 1)
 	c.Check(queue.ReadyCount(), Equals, 0)
 
 	queue.RemoveAllConsumers()
@@ -97,11 +107,11 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
 	c.Check(queue.StartConsuming(10), Equals, true)
 	c.Check(queue.StartConsuming(10), Equals, false)
-	cons1name := queue.AddConsumer("queue-cons1", NewTestConsumer())
+	cons1name := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
 	time.Sleep(time.Millisecond)
 	c.Check(connection.GetConsumingQueues(), HasLen, 1)
 	c.Check(queue.GetConsumers(), DeepEquals, []string{cons1name})
-	cons2name := queue.AddConsumer("queue-cons2", NewTestConsumer())
+	cons2name := queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
 	c.Check(queue.GetConsumers(), HasLen, 2)
 	c.Check(queue.RemoveConsumer("queue-cons3"), Equals, false)
 	c.Check(queue.RemoveConsumer(cons1name), Equals, true)
@@ -120,9 +130,10 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	queue := connection.OpenQueue("cons-q")
 	c.Assert(queue, NotNil)
-	queue.Clear()
+	queue.Purge()
 
-	consumer := NewTestConsumer()
+	consumer := NewTestConsumer("cons-A")
+	consumer.AutoAck = false
 	queue.StartConsuming(10)
 	queue.AddConsumer("cons-cons", consumer)
 	c.Check(consumer.LastDelivery, IsNil)
@@ -165,8 +176,7 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	numConsumers := 10
 	var consumers []*TestConsumer
 	for i := 0; i < numConsumers; i++ {
-		consumer := NewTestConsumer()
-		consumer.AutoAck = true
+		consumer := NewTestConsumer("bench-A")
 		consumers = append(consumers, consumer)
 		queue.StartConsuming(10)
 		queue.AddConsumer("bench-cons", consumer)

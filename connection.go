@@ -112,13 +112,13 @@ func (connection *Connection) CloseAllQueues() int {
 }
 
 // CloseAllQueuesInConnection closes all queues in the associated connection by removing all related keys
-func (connection *Connection) CloseAllQueuesInConnection() int {
+func (connection *Connection) CloseAllQueuesInConnection() error {
 	result := connection.redisClient.Del(connection.queuesKey)
 	if result.Err() != nil {
-		log.Printf("queue connection failed to close all queue %s", result.Err())
-		return 0
+		return fmt.Errorf("queue connection failed to close all queues %s", result.Err())
 	}
-	return int(result.Val())
+	debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey))
+	return nil
 }
 
 // GetConsumingQueues returns a list of all queues consumed by this connection
@@ -164,4 +164,9 @@ func (connection *Connection) hijackConnection(name string) *Connection {
 // openQueue opens a queue without adding it to the set of queues
 func (connection *Connection) openQueue(name string) *Queue {
 	return newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
+}
+
+// flushDb flushes the redis database to reset everything, used in tests
+func (connection *Connection) flushDb() {
+	connection.redisClient.FlushDb()
 }

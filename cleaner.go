@@ -42,9 +42,8 @@ func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
 		return fmt.Errorf("queue cleaner failed to close connection %s %s", connection, err)
 	}
 
-	closedQueues := connection.CloseAllQueuesInConnection()
-	if closedQueues != len(queueNames) {
-		return fmt.Errorf("queue cleaner closed unexpected number of queues %d %s", closedQueues, queueNames)
+	if err := connection.CloseAllQueuesInConnection(); err != nil {
+		return fmt.Errorf("queue cleaner failed to close all queues %d %s", connection, err)
 	}
 
 	log.Printf("queue cleaner cleaned connection %s", connection)

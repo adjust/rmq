@@ -64,16 +64,17 @@ func (queue *Queue) String() string {
 
 // Publish adds a delivery with the given payload to the queue
 func (queue *Queue) Publish(payload string) error {
+	debug(fmt.Sprintf("publish %s %s", payload, queue))
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
 // Purge removes all ready deliveries from the queue
-func (queue *Queue) Purge() bool {
+func (queue *Queue) Purge() int {
 	result := queue.redisClient.Del(queue.readyKey)
 	if result.Err() != nil {
-		return false
+		return 0
 	}
-	return result.Val() > 0
+	return int(result.Val())
 }
 
 func (queue *Queue) ReadyCount() int {
@@ -107,7 +108,7 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 		if result.Err() != nil {
 			return 0, fmt.Errorf("queue failed to return unacked delivery %s", result.Err())
 		}
-		log.Printf("queue returned delivery %s", result.Val())
+		log.Printf("queue returned delivery %s %s", result.Val(), queue.readyKey)
 	}
 
 	result = queue.redisClient.LLen(queue.unackedKey)
@@ -132,20 +133,11 @@ func (queue *Queue) CloseInConnection() error {
 		log.Printf("queue failed to delete consumers key %s %s", queue, err)
 		return err
 	}
-	if err := queue.redisClient.SRem(queuesKey, queue.name).Err(); err != nil {
+	if err := queue.redisClient.SRem(queue.queuesKey, queue.name).Err(); err != nil {
 		log.Printf("queue failed to delete queues key %s %s", queue, err)
 		return err
 	}
 	return nil
-}
-
-func (queue *Queue) Clear() int {
-	result := queue.redisClient.Del(queue.readyKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to clear %s %s", queue, result.Err())
-		return 0
-	}
-	return int(result.Val())
 }
 
 // StartConsuming starts consuming into a channel of size bufferSize
@@ -253,6 +245,7 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 			return false
 		}
 
+		debug(fmt.Sprintf("consume %s %s", result.Val(), queue))
 		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
 	}
 
@@ -261,6 +254,12 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 
 func (queue *Queue) addConsumer(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
+		debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer))
 		consumer.Consume(delivery)
 	}
+}
+
+// TODO: comment out calls
+func debug(message string) {
+	log.Printf("queue.debug: %s", message)
 }

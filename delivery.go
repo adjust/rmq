@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"fmt"
 	redis "github.com/adjust/redis-latest-head" // TODO: update
 )
 
@@ -32,6 +33,7 @@ func (delivery *wrapDelivery) Payload() string {
 }
 
 func (delivery *wrapDelivery) Ack() bool {
+	debug(fmt.Sprintf("delivery ack %s %s", delivery, delivery.unackedKey))
 	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if result.Err() != nil {
 		return false

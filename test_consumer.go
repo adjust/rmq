@@ -1,13 +1,27 @@
 package queue
 
 type TestConsumer struct {
-	AutoAck        bool
+	name       string
+	AutoAck    bool
+	AutoFinish bool
+
 	LastDelivery   Delivery
 	LastDeliveries []Delivery
+
+	finish chan int
 }
 
-func NewTestConsumer() *TestConsumer {
-	return &TestConsumer{}
+func NewTestConsumer(name string) *TestConsumer {
+	return &TestConsumer{
+		name:       name,
+		AutoAck:    true,
+		AutoFinish: true,
+		finish:     make(chan int),
+	}
+}
+
+func (consumer *TestConsumer) String() string {
+	return consumer.name
 }
 
 func (consumer *TestConsumer) Consume(delivery Delivery) {
@@ -17,4 +31,11 @@ func (consumer *TestConsumer) Consume(delivery Delivery) {
 	if consumer.AutoAck {
 		delivery.Ack()
 	}
+	if !consumer.AutoFinish {
+		<-consumer.finish
+	}
+}
+
+func (consumer *TestConsumer) Finish() {
+	consumer.finish <- 1
 }
