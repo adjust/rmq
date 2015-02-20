@@ -99,6 +99,15 @@ func (queue *Queue) UnackedCount() int {
 	return int(result.Val())
 }
 
+func (queue *Queue) RejectedCount() int {
+	result := queue.redisClient.LLen(queue.rejectedKey)
+	if result.Err() != nil {
+		log.Printf("queue failed to get rejected count %s %s", queue, result.Err())
+		return 0
+	}
+	return int(result.Val())
+}
+
 // ReturnUnackedDeliveries moves all unacked deliveries back to the ready queue and deletes the unacked key afterwards
 func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 	result := queue.redisClient.LLen(queue.unackedKey)

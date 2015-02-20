@@ -161,6 +161,28 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	c.Check(consumer.LastDeliveries[0].Ack(), Equals, false)
 
+	c.Check(queue.Publish("cons-d3"), IsNil)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)
+	c.Check(queue.RejectedCount(), Equals, 0)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d3")
+	c.Check(consumer.LastDelivery.Reject(), Equals, true)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 0)
+	c.Check(queue.RejectedCount(), Equals, 1)
+
+	c.Check(queue.Publish("cons-d4"), IsNil)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)
+	c.Check(queue.RejectedCount(), Equals, 1)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d4")
+	c.Check(consumer.LastDelivery.Reject(), Equals, true)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 0)
+	c.Check(queue.RejectedCount(), Equals, 2)
+
 	queue.StopConsuming()
 	connection.StopHeartbeat()
 }
