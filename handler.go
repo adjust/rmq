@@ -18,27 +18,7 @@ func NewHandler(connection *Connection) *Handler {
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
-	queueStats := QueueStats{}
-	for _, queueName := range handler.connection.GetOpenQueues() {
-		queue := handler.connection.openQueue(queueName)
-		queueStats[queueName] = NewQueueStat(queue.ReadyCount())
-	}
-
-	connectionNames := handler.connection.GetConnections()
-	for _, connectionName := range connectionNames {
-		connection := handler.connection.hijackConnection(connectionName)
-		queueNames := connection.GetConsumingQueues()
-
-		for _, queueName := range queueNames {
-			queue := connection.openQueue(queueName)
-			consumers := queue.GetConsumers()
-
-			queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
-				UnackedCount: queue.UnackedCount(),
-				Consumers:    consumers,
-			}
-		}
-	}
+	queueStats := CollectStats(handler.connection)
 
 	var htmlBuffer, logBuffer bytes.Buffer
 	htmlBuffer.WriteString(`<html><body><table style="font-family:monospace">`)

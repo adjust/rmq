@@ -52,3 +52,29 @@ func (stat QueueStat) ConsumerCount() int {
 }
 
 type QueueStats map[string]QueueStat
+
+func CollectStats(mainConnection *Connection) QueueStats {
+	queueStats := QueueStats{}
+	for _, queueName := range mainConnection.GetOpenQueues() {
+		queue := mainConnection.openQueue(queueName)
+		queueStats[queueName] = NewQueueStat(queue.ReadyCount())
+	}
+
+	connectionNames := mainConnection.GetConnections()
+	for _, connectionName := range connectionNames {
+		connection := mainConnection.hijackConnection(connectionName)
+		queueNames := connection.GetConsumingQueues()
+
+		for _, queueName := range queueNames {
+			queue := connection.openQueue(queueName)
+			consumers := queue.GetConsumers()
+
+			queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
+				UnackedCount: queue.UnackedCount(),
+				Consumers:    consumers,
+			}
+		}
+	}
+
+	return queueStats
+}
