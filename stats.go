@@ -1,6 +1,9 @@
 package queue
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 type ConnectionStat struct {
 	UnackedCount int
@@ -77,4 +80,45 @@ func CollectStats(mainConnection *Connection) QueueStats {
 	}
 
 	return queueStats
+}
+
+func (stats QueueStats) String() string {
+	var buffer bytes.Buffer
+
+	for queueName, queueStat := range stats {
+		buffer.WriteString(fmt.Sprintf("    queue:%s ready:%d unacked:%d consumers:%d\n",
+			queueName, queueStat.ReadyCount, queueStat.UnackedCount(), queueStat.ConsumerCount(),
+		))
+
+		for connectionName, connectionStat := range queueStat.ConnectionStats {
+			buffer.WriteString(fmt.Sprintf("        connection:%s unacked:%d consumers:%d\n",
+				connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+			))
+		}
+	}
+
+	return buffer.String()
+}
+
+func (stats QueueStats) GetHtml() string {
+	var buffer bytes.Buffer
+	buffer.WriteString(`<html><body><table style="font-family:monospace">`)
+	buffer.WriteString(fmt.Sprintf(`<tr><td>%s</td><td></td><td>%s</td><td></td><td style="color:lightgrey">%s</td><td></td><td>%s</td><td></td><td>%s</td><td></td></tr>`,
+		"queue", "ready", "connection", "unacked", "consumers",
+	))
+
+	for queueName, queueStat := range stats {
+		buffer.WriteString(fmt.Sprintf(`<tr><td>%s</td><td></td><td>%d</td><td></td><td>%s</td><td></td><td>%d</td><td></td><td>%d</td><td></td></tr>`,
+			queueName, queueStat.ReadyCount, "", queueStat.UnackedCount(), queueStat.ConsumerCount(),
+		))
+
+		for connectionName, connectionStat := range queueStat.ConnectionStats {
+			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>%s</td><td></td><td>%s</td><td></td><td>%s</td><td></td><td>%d</td><td></td><td>%d</td><td></td></tr>`,
+				"", "", connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+			))
+		}
+	}
+
+	buffer.WriteString(`</table></body></html>`)
+	return buffer.String()
 }
