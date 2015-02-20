@@ -72,13 +72,21 @@ func (queue *Queue) Publish(payload string) error {
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
-// Purge removes all ready deliveries from the queue
+// Purge removes all ready and rejected deliveries from the queue
 func (queue *Queue) Purge() int {
-	result := queue.redisClient.Del(queue.readyKey)
-	if result.Err() != nil {
+	readyResult := queue.redisClient.Del(queue.readyKey)
+	if readyResult.Err() != nil {
+		log.Printf("queue failed to purge ready deliveries %s %s", queue, readyResult.Err())
 		return 0
 	}
-	return int(result.Val())
+
+	rejectedResult := queue.redisClient.Del(queue.rejectedKey)
+	if rejectedResult.Err() != nil {
+		log.Printf("queue failed to purge rejected deliveries %s %s", queue, readyResult.Err())
+		return 0
+	}
+
+	return int(readyResult.Val() + rejectedResult.Val())
 }
 
 func (queue *Queue) ReadyCount() int {
