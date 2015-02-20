@@ -17,8 +17,9 @@ const (
 	connectionQueueConsumersTemplate = "rmq::connection::{connection}::queue::{queue}::consumers" // Set of all consumers from {connection} consuming from {queue}
 	connectionQueueUnackedTemplate   = "rmq::connection::{connection}::queue::{queue}::unacked"   // List of deliveries consumers of {connection} are currently consuming
 
-	queuesKey          = "rmq::queues"                // Set of all open queues
-	queueReadyTemplate = "rmq::queue::{queue}::ready" // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
+	queuesKey             = "rmq::queues"                   // Set of all open queues
+	queueReadyTemplate    = "rmq::queue::{queue}::ready"    // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
+	queueRejectedTemplate = "rmq::queue::{queue}::rejected" // List of rejected deliveries from that {queue}
 
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
@@ -31,6 +32,7 @@ type Queue struct {
 	queuesKey        string // key to list of queues consumed by this connection
 	consumersKey     string // key to set of consumers using this connection
 	readyKey         string // key to list of ready deliveries
+	rejectedKey      string // key to list of rejected deliveries
 	unackedKey       string // key to list of currently consuming deliveries
 	redisClient      *redis.Client
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
@@ -38,13 +40,14 @@ type Queue struct {
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *Queue {
-	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
-	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
-
 	consumersKey := strings.Replace(connectionQueueConsumersTemplate, phConnection, connectionName, 1)
 	consumersKey = strings.Replace(consumersKey, phQueue, name, 1)
 
 	readyKey := strings.Replace(queueReadyTemplate, phQueue, name, 1)
+	rejectedKey := strings.Replace(queueRejectedTemplate, phQueue, name, 1)
+
+	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
+	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
 	queue := &Queue{
 		name:           name,
@@ -52,6 +55,7 @@ func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client)
 		queuesKey:      queuesKey,
 		consumersKey:   consumersKey,
 		readyKey:       readyKey,
+		rejectedKey:    rejectedKey,
 		unackedKey:     unackedKey,
 		redisClient:    redisClient,
 	}
@@ -246,7 +250,7 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 		}
 
 		debug(fmt.Sprintf("consume %s %s", result.Val(), queue))
-		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.redisClient)
+		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.redisClient)
 	}
 
 	return true
