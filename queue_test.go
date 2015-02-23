@@ -187,6 +187,55 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	connection.StopHeartbeat()
 }
 
+func (suite *QueueSuite) TestBatch(c *C) {
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("batch-conn", host, port, db)
+	queue := connection.OpenQueue("batch-q")
+	queue.Purge()
+
+	for i := 0; i < 20; i++ {
+		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), IsNil)
+	}
+	c.Check(queue.ReadyCount(), Equals, 20)
+	c.Check(queue.UnackedCount(), Equals, 0)
+
+	queue.StartConsuming(10)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 10)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	consumer := NewTestConsumer("batch-cons")
+	consumer.AutoAck = false
+	consumer.AutoFinish = false
+	queue.AddConsumer("batch-cons", consumer)
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 10)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	c.Check(consumer.LastDelivery.Ack(), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 9)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	consumer.Finish()
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 9)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	c.Check(consumer.LastDelivery.Ack(), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 8)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	consumer.Finish()
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 8)
+	c.Check(queue.UnackedCount(), Equals, 10)
+
+	queue.StopConsuming()
+	connection.StopHeartbeat()
+}
+
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
 	host, port, db := suite.goenv.GetRedis()
@@ -199,6 +248,7 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	var consumers []*TestConsumer
 	for i := 0; i < numConsumers; i++ {
 		consumer := NewTestConsumer("bench-A")
+		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
 		queue.StartConsuming(10)
 		queue.AddConsumer("bench-cons", consumer)

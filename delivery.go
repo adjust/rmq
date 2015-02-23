@@ -37,7 +37,7 @@ func (delivery *wrapDelivery) Payload() string {
 }
 
 func (delivery *wrapDelivery) Ack() bool {
-	debug(fmt.Sprintf("delivery ack %s %s", delivery))
+	debug(fmt.Sprintf("delivery ack %s", delivery))
 
 	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if result.Err() != nil {

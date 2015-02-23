@@ -36,6 +36,7 @@ type Queue struct {
 	unackedKey       string // key to list of currently consuming deliveries
 	redisClient      *redis.Client
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
+	unackedLimit     int           // max number of unacked deliveries at any time (used as channel size)
 	consumingStopped bool
 }
 
@@ -161,9 +162,9 @@ func (queue *Queue) CloseInConnection() error {
 	return nil
 }
 
-// StartConsuming starts consuming into a channel of size bufferSize
+// StartConsuming starts consuming into a channel of size unackedLimit
 // must be called before consumers can be added!
-func (queue *Queue) StartConsuming(bufferSize int) bool {
+func (queue *Queue) StartConsuming(unackedLimit int) bool {
 	if queue.deliveryChan != nil {
 		return false
 	}
@@ -175,7 +176,8 @@ func (queue *Queue) StartConsuming(bufferSize int) bool {
 		return false
 	}
 
-	queue.deliveryChan = make(chan Delivery, bufferSize)
+	queue.unackedLimit = unackedLimit
+	queue.deliveryChan = make(chan Delivery, unackedLimit)
 	log.Printf("queue started consuming %s", queue)
 	go queue.consume()
 	return true
@@ -235,8 +237,8 @@ func (queue *Queue) RemoveAllConsumers() int {
 
 func (queue *Queue) consume() {
 	for {
-		readyCount := queue.ReadyCount()
-		wantMore := queue.consumeBatch(readyCount)
+		batchSize := queue.batchSize()
+		wantMore := queue.consumeBatch(batchSize)
 
 		if !wantMore {
 			time.Sleep(time.Millisecond)
@@ -249,6 +251,14 @@ func (queue *Queue) consume() {
 	}
 }
 
+func (queue *Queue) batchSize() int {
+	unackedLimit := queue.unackedLimit - queue.UnackedCount() // TODO: what if UnackedCount failed? panic?
+	if readyCount := queue.ReadyCount(); readyCount < unackedLimit {
+		return readyCount
+	}
+	return unackedLimit
+}
+
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
 func (queue *Queue) consumeBatch(batchSize int) bool {
 	if batchSize == 0 {
@@ -258,18 +268,20 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 	for i := 0; i < batchSize; i++ {
 		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if result.Err() == redis.Nil {
+			debug(fmt.Sprintf("queue consumed last batch %s %d", queue, i))
 			return false
 		}
 
 		if result.Err() != nil {
-			log.Printf("queue failed to consume %s %s", queue, result.Err())
+			log.Printf("queue failed to consume batch %s %s", queue, result.Err())
 			return false
 		}
 
-		debug(fmt.Sprintf("consume %s %s", result.Val(), queue))
+		debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue))
 		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.redisClient)
 	}
 
+	debug(fmt.Sprintf("queue consumed batch %s %d", queue, batchSize))
 	return true
 }
 
