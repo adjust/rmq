@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	numConsumers = 1
+	numConsumers = 10
 	batchSize    = 5000
 )
 
@@ -30,12 +30,12 @@ type Consumer struct {
 }
 
 func (consumer *Consumer) Consume(delivery queue.Delivery) {
-	consumer.count++
 	if consumer.count%batchSize == 0 {
 		duration := time.Now().Sub(consumer.before)
 		consumer.before = time.Now()
 		perSecond := time.Second / (duration / batchSize)
 		log.Printf("consumed %d %s %d", consumer.count, delivery.Payload(), perSecond)
 	}
+	consumer.count++
 	delivery.Ack()
 }

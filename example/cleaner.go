@@ -2,10 +2,14 @@ package main
 
 import (
 	"github.com/adjust/queue"
+	"time"
 )
 
 func main() {
 	connection := queue.OpenConnection("cleaner", "localhost", "6379", 2)
 	cleaner := queue.NewCleaner(connection)
-	cleaner.Clean()
+
+	for _ = range time.Tick(time.Second) {
+		cleaner.Clean()
+	}
 }
