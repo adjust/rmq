@@ -1,9 +1,14 @@
 package queue
 
+import (
+	"time"
+)
+
 type TestConsumer struct {
-	name       string
-	AutoAck    bool
-	AutoFinish bool
+	name          string
+	AutoAck       bool
+	AutoFinish    bool
+	SleepDuration time.Duration
 
 	LastDelivery   Delivery
 	LastDeliveries []Delivery
@@ -28,6 +33,9 @@ func (consumer *TestConsumer) Consume(delivery Delivery) {
 	consumer.LastDelivery = delivery
 	consumer.LastDeliveries = append(consumer.LastDeliveries, delivery)
 
+	if consumer.SleepDuration > 0 {
+		time.Sleep(consumer.SleepDuration)
+	}
 	if consumer.AutoAck {
 		delivery.Ack()
 	}
