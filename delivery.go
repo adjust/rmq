@@ -37,7 +37,7 @@ func (delivery *wrapDelivery) Payload() string {
 }
 
 func (delivery *wrapDelivery) Ack() bool {
-	debug(fmt.Sprintf("delivery ack %s", delivery))
+	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
 	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if result.Err() != nil {
@@ -73,6 +73,6 @@ func (delivery *wrapDelivery) Reject() bool {
 		return false
 	}
 
-	debug(fmt.Sprintf("delivery rejected %s", delivery))
+	// debug(fmt.Sprintf("delivery rejected %s", delivery)) // COMMENTOUT
 	return true
 }

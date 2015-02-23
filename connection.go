@@ -117,7 +117,7 @@ func (connection *Connection) CloseAllQueuesInConnection() error {
 	if result.Err() != nil {
 		return fmt.Errorf("queue connection failed to close all queues %s", result.Err())
 	}
-	debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey))
+	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return nil
 }
 

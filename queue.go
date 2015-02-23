@@ -69,7 +69,7 @@ func (queue *Queue) String() string {
 
 // Publish adds a delivery with the given payload to the queue
 func (queue *Queue) Publish(payload string) error {
-	debug(fmt.Sprintf("publish %s %s", payload, queue))
+	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
 	return queue.redisClient.LPush(queue.readyKey, payload).Err()
 }
 
@@ -268,7 +268,7 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 	for i := 0; i < batchSize; i++ {
 		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if result.Err() == redis.Nil {
-			debug(fmt.Sprintf("queue consumed last batch %s %d", queue, i))
+			// debug(fmt.Sprintf("queue consumed last batch %s %d", queue, i)) // COMMENTOUT
 			return false
 		}
 
@@ -277,22 +277,21 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 			return false
 		}
 
-		debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue))
+		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
 		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.redisClient)
 	}
 
-	debug(fmt.Sprintf("queue consumed batch %s %d", queue, batchSize))
+	// debug(fmt.Sprintf("queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
 	return true
 }
 
 func (queue *Queue) addConsumer(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
-		debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer))
+		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
 	}
 }
 
-// TODO: comment out calls
 func debug(message string) {
-	log.Printf("queue.debug: %s", message)
+	// log.Printf("queue.debug: %s", message) // COMMENTOUT
 }
