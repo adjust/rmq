@@ -9,33 +9,44 @@ import (
 )
 
 const (
+	unackedLimit = 1000
 	numConsumers = 10
-	batchSize    = 5000
+	batchSize    = 1000
 )
 
 func main() {
 	connection := queue.OpenConnection("consumer", "localhost", "6379", 2)
 	queue := connection.OpenQueue("things")
-	queue.StartConsuming(100)
+	queue.StartConsuming(unackedLimit)
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
-		queue.AddConsumer(name, &Consumer{})
+		queue.AddConsumer(name, NewConsumer(i))
 	}
 	select {}
 }
 
 type Consumer struct {
+	name   string
 	count  int
 	before time.Time
 }
 
+func NewConsumer(tag int) *Consumer {
+	return &Consumer{
+		name:   fmt.Sprintf("consumer%d", tag),
+		count:  0,
+		before: time.Now(),
+	}
+}
+
 func (consumer *Consumer) Consume(delivery queue.Delivery) {
+	consumer.count++
 	if consumer.count%batchSize == 0 {
 		duration := time.Now().Sub(consumer.before)
 		consumer.before = time.Now()
 		perSecond := time.Second / (duration / batchSize)
-		log.Printf("consumed %d %s %d", consumer.count, delivery.Payload(), perSecond)
+		log.Printf("%s consumed %d %s %d", consumer.name, consumer.count, delivery.Payload(), perSecond)
 	}
-	consumer.count++
+	time.Sleep(time.Millisecond)
 	delivery.Ack()
 }

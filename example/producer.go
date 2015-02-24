@@ -10,7 +10,7 @@ import (
 
 const (
 	numDeliveries = 100000000
-	batchSize     = 5000
+	batchSize     = 10000
 )
 
 func main() {
