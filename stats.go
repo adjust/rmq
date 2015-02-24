@@ -7,6 +7,7 @@ import (
 )
 
 type ConnectionStat struct {
+	Active       bool
 	UnackedCount int
 	Consumers    []string
 }
@@ -16,6 +17,13 @@ func (stat ConnectionStat) String() string {
 		stat.UnackedCount,
 		len(stat.Consumers),
 	)
+}
+
+func (stat ConnectionStat) ActiveSign() string {
+	if stat.Active {
+		return "✓"
+	}
+	return "✗"
 }
 
 type ConnectionStats map[string]ConnectionStat
@@ -77,6 +85,7 @@ func CollectStats(mainConnection *Connection) QueueStats {
 			consumers := queue.GetConsumers()
 
 			queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
+				Active:       connection.Check(),
 				UnackedCount: queue.UnackedCount(),
 				Consumers:    consumers,
 			}
@@ -95,8 +104,8 @@ func (stats QueueStats) String() string {
 		))
 
 		for connectionName, connectionStat := range queueStat.ConnectionStats {
-			buffer.WriteString(fmt.Sprintf("        connection:%s unacked:%d consumers:%d\n",
-				connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+			buffer.WriteString(fmt.Sprintf("        connection:%s unacked:%d consumers:%d active:%t\n",
+				connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers), connectionStat.Active,
 			))
 		}
 	}
@@ -110,7 +119,8 @@ func (stats QueueStats) GetHtml() string {
 	buffer.WriteString(`<tr><td>` +
 		`queue</td><td></td><td>` +
 		`ready</td><td></td><td>` +
-		`rejected</td><td></td><td style="color:lightgrey">` +
+		`rejected</td><td></td><td>` +
+		`</td><td></td><td style="color:lightgrey">` +
 		`connection</td><td></td><td>` +
 		`unacked</td><td></td><td>` +
 		`consumers</td><td></td></tr>`,
@@ -123,9 +133,10 @@ func (stats QueueStats) GetHtml() string {
 			`%d</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%d</td><td></td></tr>`,
-			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", queueStat.UnackedCount(), queueStat.ConsumerCount(),
+			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", "", queueStat.UnackedCount(), queueStat.ConsumerCount(),
 		))
 
 		for _, connectionName := range queueStat.ConnectionStats.sortedNames() {
@@ -135,9 +146,10 @@ func (stats QueueStats) GetHtml() string {
 				`%s</td><td></td><td>`+
 				`%s</td><td></td><td>`+
 				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
 				`%d</td><td></td><td>`+
 				`%d</td><td></td></tr>`,
-				"", "", "", connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+				"", "", "", connectionStat.ActiveSign(), connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
 			))
 		}
 	}
