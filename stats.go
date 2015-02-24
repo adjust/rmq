@@ -3,6 +3,7 @@ package queue
 import (
 	"bytes"
 	"fmt"
+	"sort"
 )
 
 type ConnectionStat struct {
@@ -115,7 +116,8 @@ func (stats QueueStats) GetHtml() string {
 		`consumers</td><td></td></tr>`,
 	)
 
-	for queueName, queueStat := range stats {
+	for _, queueName := range stats.sortedNames() {
+		queueStat := stats[queueName]
 		buffer.WriteString(fmt.Sprintf(`<tr><td>`+
 			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
@@ -126,7 +128,8 @@ func (stats QueueStats) GetHtml() string {
 			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", queueStat.UnackedCount(), queueStat.ConsumerCount(),
 		))
 
-		for connectionName, connectionStat := range queueStat.ConnectionStats {
+		for _, connectionName := range queueStat.ConnectionStats.sortedNames() {
+			connectionStat := queueStat.ConnectionStats[connectionName]
 			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
 				`%s</td><td></td><td>`+
 				`%s</td><td></td><td>`+
@@ -141,4 +144,22 @@ func (stats QueueStats) GetHtml() string {
 
 	buffer.WriteString(`</table></body></html>`)
 	return buffer.String()
+}
+
+func (stats ConnectionStats) sortedNames() []string {
+	var keys []string
+	for key := range stats {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (stats QueueStats) sortedNames() []string {
+	var keys []string
+	for key := range stats {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
