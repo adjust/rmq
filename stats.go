@@ -66,39 +66,48 @@ func (stat QueueStat) ConsumerCount() int {
 	return consumer
 }
 
-type QueueStats map[string]QueueStat
+type Stats struct {
+	queueStats map[string]QueueStat
+}
 
-func CollectStats(mainConnection *Connection) QueueStats {
-	queueStats := QueueStats{}
+func NewStats() Stats {
+	return Stats{
+		queueStats: map[string]QueueStat{},
+	}
+}
+
+func CollectStats(mainConnection *Connection) Stats {
+	stats := NewStats()
 	for _, queueName := range mainConnection.GetOpenQueues() {
 		queue := mainConnection.openQueue(queueName)
-		queueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
+		stats.queueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
 	}
 
 	connectionNames := mainConnection.GetConnections()
 	for _, connectionName := range connectionNames {
 		connection := mainConnection.hijackConnection(connectionName)
-		queueNames := connection.GetConsumingQueues()
+		connectionActive := connection.Check()
 
+		queueNames := connection.GetConsumingQueues()
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
 			consumers := queue.GetConsumers()
 
-			queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
-				Active:       connection.Check(),
+			stats.queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
+				Active:       connectionActive,
 				UnackedCount: queue.UnackedCount(),
 				Consumers:    consumers,
 			}
 		}
 	}
 
-	return queueStats
+	return stats
 }
 
-func (stats QueueStats) String() string {
+func (stats Stats) String() string {
 	var buffer bytes.Buffer
 
-	for queueName, queueStat := range stats {
+	for queueName, queueStat := range stats.queueStats {
 		buffer.WriteString(fmt.Sprintf("    queue:%s ready:%d rejected:%d unacked:%d consumers:%d\n",
 			queueName, queueStat.ReadyCount, queueStat.RejectedCount, queueStat.UnackedCount(), queueStat.ConsumerCount(),
 		))
@@ -113,7 +122,7 @@ func (stats QueueStats) String() string {
 	return buffer.String()
 }
 
-func (stats QueueStats) GetHtml() string {
+func (stats Stats) GetHtml() string {
 	var buffer bytes.Buffer
 	buffer.WriteString(`<html><body><table style="font-family:monospace">`)
 	buffer.WriteString(`<tr><td>` +
@@ -126,8 +135,8 @@ func (stats QueueStats) GetHtml() string {
 		`consumers</td><td></td></tr>`,
 	)
 
-	for _, queueName := range stats.sortedNames() {
-		queueStat := stats[queueName]
+	for _, queueName := range stats.sortedQueueNames() {
+		queueStat := stats.queueStats[queueName]
 		buffer.WriteString(fmt.Sprintf(`<tr><td>`+
 			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
@@ -167,9 +176,9 @@ func (stats ConnectionStats) sortedNames() []string {
 	return keys
 }
 
-func (stats QueueStats) sortedNames() []string {
+func (stats Stats) sortedQueueNames() []string {
 	var keys []string
-	for key := range stats {
+	for key := range stats.queueStats {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
