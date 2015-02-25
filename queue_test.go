@@ -237,6 +237,60 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	connection.StopHeartbeat()
 }
 
+func (suite *QueueSuite) TestReturnRejected(c *C) {
+	host, port, db := suite.goenv.GetRedis()
+	connection := OpenConnection("return-conn", host, port, db)
+	queue := connection.OpenQueue("return-q")
+	queue.Purge()
+
+	for i := 0; i < 6; i++ {
+		queue.Publish(fmt.Sprintf("return-d%d", i))
+	}
+
+	c.Check(queue.ReadyCount(), Equals, 6)
+	c.Check(queue.UnackedCount(), Equals, 0)
+	c.Check(queue.RejectedCount(), Equals, 0)
+
+	queue.StartConsuming(10)
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 6)
+	c.Check(queue.RejectedCount(), Equals, 0)
+
+	consumer := NewTestConsumer("return-cons")
+	consumer.AutoAck = false
+	queue.AddConsumer("cons", consumer)
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 6)
+	c.Check(queue.RejectedCount(), Equals, 0)
+
+	c.Check(consumer.LastDeliveries, HasLen, 6)
+	consumer.LastDeliveries[0].Reject()
+	consumer.LastDeliveries[1].Ack()
+	consumer.LastDeliveries[2].Reject()
+	consumer.LastDeliveries[3].Reject()
+	// delivery 4 still open
+	consumer.LastDeliveries[5].Reject()
+
+	time.Sleep(time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)  // delivery 4
+	c.Check(queue.RejectedCount(), Equals, 4) // delivery 0, 2, 3, 5
+
+	queue.StopConsuming()
+
+	queue.ReturnRejectedDeliveries(2)
+	c.Check(queue.ReadyCount(), Equals, 2)    // delivery 0, 2
+	c.Check(queue.UnackedCount(), Equals, 1)  // delivery 4
+	c.Check(queue.RejectedCount(), Equals, 2) // delivery 3, 5
+
+	queue.ReturnAllRejectedDeliveries()
+	c.Check(queue.ReadyCount(), Equals, 4)   // delivery 0, 2, 3, 5
+	c.Check(queue.UnackedCount(), Equals, 1) // delivery 4
+	c.Check(queue.RejectedCount(), Equals, 0)
+}
+
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
 	host, port, db := suite.goenv.GetRedis()

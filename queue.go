@@ -117,8 +117,8 @@ func (queue *Queue) RejectedCount() int {
 	return int(result.Val())
 }
 
-// ReturnUnackedDeliveries moves all unacked deliveries back to the ready queue and deletes the unacked key afterwards
-func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
+// ReturnAllUnackedDeliveries moves all unacked deliveries back to the ready queue and deletes the unacked key afterwards
+func (queue *Queue) ReturnAllUnackedDeliveries() (returned int, err error) {
 	result := queue.redisClient.LLen(queue.unackedKey)
 	if result.Err() != nil {
 		return 0, fmt.Errorf("queue failed to get unacked count before returning %s %s", queue, result.Err())
@@ -128,9 +128,9 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 	for i := 0; i < unackedCount; i++ {
 		result := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)
 		if result.Err() != nil {
-			return 0, fmt.Errorf("queue failed to return unacked delivery %s", result.Err())
+			return 0, fmt.Errorf("queue failed to return unacked delivery %s %s", queue, result.Err())
 		}
-		log.Printf("queue returned delivery %s %s", result.Val(), queue.readyKey)
+		// debug(fmt.Sprintf("queue returned unacked delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
 
 	result = queue.redisClient.LLen(queue.unackedKey)
@@ -143,6 +143,34 @@ func (queue *Queue) ReturnUnackedDeliveries() (returned int, err error) {
 	}
 
 	return unackedCount, nil
+}
+
+// ReturnAllRejectedDeliveries moves all rejected deliveries back to the ready list
+func (queue *Queue) ReturnAllRejectedDeliveries() (returned int, err error) {
+	result := queue.redisClient.LLen(queue.rejectedKey)
+	if result.Err() != nil {
+		return 0, fmt.Errorf("queue failed to get rejected count before returning %s %s", queue, result.Err())
+	}
+
+	rejectedCount := int(result.Val())
+	return queue.ReturnRejectedDeliveries(rejectedCount)
+}
+
+// ReturnRejectedDeliveries moves count rejected deliveries back to the ready list
+func (queue *Queue) ReturnRejectedDeliveries(count int) (returned int, err error) {
+	if count == 0 {
+		return 0, nil
+	}
+
+	for i := 0; i < count; i++ {
+		result := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
+		if result.Err() != nil {
+			return i, fmt.Errorf("queue failed to return rejected delivery %s %s", queue, result.Err())
+		}
+		// debug(fmt.Sprintf("queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
+	}
+
+	return count, nil
 }
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys

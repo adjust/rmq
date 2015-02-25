@@ -51,7 +51,7 @@ func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
 }
 
 func (cleaner *Cleaner) CleanQueue(queue *Queue) error {
-	returned, err := queue.ReturnUnackedDeliveries()
+	returned, err := queue.ReturnAllUnackedDeliveries()
 	if err != nil {
 		return fmt.Errorf("queue cleaner failed to return unacked deliveries of queue %s %s", queue, err)
 	}
