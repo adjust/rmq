@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	connection := queue.OpenConnection("producer", "localhost", "6379", 2)
+	connection := queue.OpenConnection("handler", "localhost", "6379", 2)
 	http.Handle("/overview", NewHandler(connection))
 	http.ListenAndServe(":3333", nil)
 }

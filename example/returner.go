@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	connection := queue.OpenConnection("cleaner", "localhost", "6379", 2)
+	connection := queue.OpenConnection("returner", "localhost", "6379", 2)
 	queue := connection.OpenQueue("things")
 	queue.ReturnAllRejectedDeliveries()
 }

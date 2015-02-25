@@ -19,13 +19,6 @@ func (stat ConnectionStat) String() string {
 	)
 }
 
-func (stat ConnectionStat) ActiveSign() string {
-	if stat.Active {
-		return "✓"
-	}
-	return "✗"
-}
-
 type ConnectionStats map[string]ConnectionStat
 
 type QueueStat struct {
@@ -67,12 +60,14 @@ func (stat QueueStat) ConsumerCount() int {
 }
 
 type Stats struct {
-	queueStats map[string]QueueStat
+	queueStats       map[string]QueueStat
+	otherConnections map[string]bool // non consuming connections, active or not
 }
 
 func NewStats() Stats {
 	return Stats{
-		queueStats: map[string]QueueStat{},
+		queueStats:       map[string]QueueStat{},
+		otherConnections: map[string]bool{},
 	}
 }
 
@@ -89,6 +84,11 @@ func CollectStats(mainConnection *Connection) Stats {
 		connectionActive := connection.Check()
 
 		queueNames := connection.GetConsumingQueues()
+		if len(queueNames) == 0 {
+			stats.otherConnections[connectionName] = connectionActive
+			continue
+		}
+
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
 			consumers := queue.GetConsumers()
@@ -117,6 +117,12 @@ func (stats Stats) String() string {
 				connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers), connectionStat.Active,
 			))
 		}
+	}
+
+	for connectionName, active := range stats.otherConnections {
+		buffer.WriteString(fmt.Sprintf("    connection:%s active:%t\n",
+			connectionName, active,
+		))
 	}
 
 	return buffer.String()
@@ -158,9 +164,24 @@ func (stats Stats) GetHtml() string {
 				`%s</td><td></td><td>`+
 				`%d</td><td></td><td>`+
 				`%d</td><td></td></tr>`,
-				"", "", "", connectionStat.ActiveSign(), connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+				"", "", "", ActiveSign(connectionStat.Active), connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
 			))
 		}
+	}
+
+	buffer.WriteString(`<tr><td>-----</td></tr>`)
+	for _, connectionName := range stats.sortedConnectionNames() {
+		active := stats.otherConnections[connectionName]
+		buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td><td>`+
+			`%s</td><td></td></tr>`,
+			"", "", "", ActiveSign(active), connectionName, "", "",
+		))
 	}
 
 	buffer.WriteString(`</table></body></html>`)
@@ -183,4 +204,20 @@ func (stats Stats) sortedQueueNames() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func (stats Stats) sortedConnectionNames() []string {
+	var keys []string
+	for key := range stats.otherConnections {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func ActiveSign(active bool) string {
+	if active {
+		return "✓"
+	}
+	return "✗"
 }

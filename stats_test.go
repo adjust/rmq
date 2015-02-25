@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"log"
 	"testing"
 	"time"
 
@@ -45,9 +46,8 @@ func (suite *StatsSuite) TestStats(c *C) {
 	consumer.LastDeliveries[1].Reject()
 	q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 
-	time.Sleep(5 * time.Millisecond)
-
 	stats := CollectStats(connection)
+	log.Printf("stats\n%s", stats)
 	html := stats.GetHtml()
 	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
 	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*1.*2.*conn2.*1.*2.*")
