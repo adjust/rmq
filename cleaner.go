@@ -33,13 +33,11 @@ func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
 	queueNames := connection.GetConsumingQueues()
 	for _, queueName := range queueNames {
 		queue := connection.OpenQueue(queueName)
-		if err := cleaner.CleanQueue(queue); err != nil {
-			return err
-		}
+		cleaner.CleanQueue(queue)
 	}
 
-	if err := connection.Close(); err != nil {
-		return fmt.Errorf("queue cleaner failed to close connection %s %s", connection, err)
+	if !connection.Close() {
+		return fmt.Errorf("queue cleaner failed to close connection %s", connection)
 	}
 
 	if err := connection.CloseAllQueuesInConnection(); err != nil {
@@ -50,16 +48,8 @@ func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
 	return nil
 }
 
-func (cleaner *Cleaner) CleanQueue(queue *Queue) error {
-	returned, err := queue.ReturnAllUnackedDeliveries()
-	if err != nil {
-		return fmt.Errorf("queue cleaner failed to return unacked deliveries of queue %s %s", queue, err)
-	}
-
-	if err := queue.CloseInConnection(); err != nil {
-		return fmt.Errorf("queue cleaner failed to close queue in connection %s %s", queue, err)
-	}
-
+func (cleaner *Cleaner) CleanQueue(queue *Queue) {
+	returned := queue.ReturnAllUnackedDeliveries()
+	queue.CloseInConnection()
 	log.Printf("queue cleaner cleaned queue %s %d", queue, returned)
-	return nil
 }

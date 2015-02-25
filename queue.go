@@ -68,23 +68,21 @@ func (queue *Queue) String() string {
 }
 
 // Publish adds a delivery with the given payload to the queue
-func (queue *Queue) Publish(payload string) error {
+func (queue *Queue) Publish(payload string) bool {
 	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
-	return queue.redisClient.LPush(queue.readyKey, payload).Err()
+	return !redisErrIsNil(queue.redisClient.LPush(queue.readyKey, payload))
 }
 
-// Purge removes all ready and rejected deliveries from the queue
+// Purge removes all ready and rejected deliveries from the queue and returns the total number of purged deliveries
 func (queue *Queue) Purge() int {
 	readyResult := queue.redisClient.Del(queue.readyKey)
-	if readyResult.Err() != nil {
-		log.Printf("queue failed to purge ready deliveries %s %s", queue, readyResult.Err())
+	if redisErrIsNil(readyResult) {
 		return 0
 	}
 
 	rejectedResult := queue.redisClient.Del(queue.rejectedKey)
-	if rejectedResult.Err() != nil {
-		log.Printf("queue failed to purge rejected deliveries %s %s", queue, readyResult.Err())
-		return 0
+	if redisErrIsNil(rejectedResult) {
+		return int(readyResult.Val())
 	}
 
 	return int(readyResult.Val() + rejectedResult.Val())
@@ -92,8 +90,7 @@ func (queue *Queue) Purge() int {
 
 func (queue *Queue) ReadyCount() int {
 	result := queue.redisClient.LLen(queue.readyKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to get ready count %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
 		return 0
 	}
 	return int(result.Val())
@@ -101,8 +98,7 @@ func (queue *Queue) ReadyCount() int {
 
 func (queue *Queue) UnackedCount() int {
 	result := queue.redisClient.LLen(queue.unackedKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to get unacked count %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
 		return 0
 	}
 	return int(result.Val())
@@ -110,86 +106,66 @@ func (queue *Queue) UnackedCount() int {
 
 func (queue *Queue) RejectedCount() int {
 	result := queue.redisClient.LLen(queue.rejectedKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to get rejected count %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
 		return 0
 	}
 	return int(result.Val())
 }
 
-// ReturnAllUnackedDeliveries moves all unacked deliveries back to the ready queue and deletes the unacked key afterwards
-func (queue *Queue) ReturnAllUnackedDeliveries() (returned int, err error) {
+// ReturnAllUnackedDeliveries moves all unacked deliveries back to the ready
+// queue and deletes the unacked key afterwards, returns number of returned
+// deliveries
+func (queue *Queue) ReturnAllUnackedDeliveries() int {
 	result := queue.redisClient.LLen(queue.unackedKey)
-	if result.Err() != nil {
-		return 0, fmt.Errorf("queue failed to get unacked count before returning %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
+		return 0
 	}
 
 	unackedCount := int(result.Val())
 	for i := 0; i < unackedCount; i++ {
-		result := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)
-		if result.Err() != nil {
-			return 0, fmt.Errorf("queue failed to return unacked delivery %s %s", queue, result.Err())
+		if redisErrIsNil(queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)) {
+			return i
 		}
 		// debug(fmt.Sprintf("queue returned unacked delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
 
-	result = queue.redisClient.LLen(queue.unackedKey)
-	if result.Err() != nil {
-		return 0, fmt.Errorf("queue failed to get unacked count after returning %s %s", queue, result.Err())
-	}
-
-	if result.Val() != 0 {
-		return 0, fmt.Errorf("queue found new unacked deliverys after returning %s %d", queue, result.Val())
-	}
-
-	return unackedCount, nil
+	return unackedCount
 }
 
-// ReturnAllRejectedDeliveries moves all rejected deliveries back to the ready list
-func (queue *Queue) ReturnAllRejectedDeliveries() (returned int, err error) {
+// ReturnAllRejectedDeliveries moves all rejected deliveries back to the ready
+// list and returns the number of returned deliveries
+func (queue *Queue) ReturnAllRejectedDeliveries() int {
 	result := queue.redisClient.LLen(queue.rejectedKey)
-	if result.Err() != nil {
-		return 0, fmt.Errorf("queue failed to get rejected count before returning %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
+		return 0
 	}
 
 	rejectedCount := int(result.Val())
 	return queue.ReturnRejectedDeliveries(rejectedCount)
 }
 
-// ReturnRejectedDeliveries tries to return count rejected deliveries back to the ready list
-func (queue *Queue) ReturnRejectedDeliveries(count int) (returned int, err error) {
+// ReturnRejectedDeliveries tries to return count rejected deliveries back to
+// the ready list and returns the number of returned deliveries
+func (queue *Queue) ReturnRejectedDeliveries(count int) int {
 	if count == 0 {
-		return 0, nil
+		return 0
 	}
 
 	for i := 0; i < count; i++ {
-		result := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
-		if err := result.Err(); err == redis.Nil {
-			return i, nil
-		} else if err != nil {
-			return 0, fmt.Errorf("queue failed to return rejected delivery %s %s", queue, err)
+		if redisErrIsNil(queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)) {
+			return i
 		}
 		// debug(fmt.Sprintf("queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
 
-	return count, nil
+	return count
 }
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
-func (queue *Queue) CloseInConnection() error {
-	if err := queue.redisClient.Del(queue.unackedKey).Err(); err != nil {
-		log.Printf("queue failed to delete unacked key %s %s", queue, err)
-		return err
-	}
-	if err := queue.redisClient.Del(queue.consumersKey).Err(); err != nil {
-		log.Printf("queue failed to delete consumers key %s %s", queue, err)
-		return err
-	}
-	if err := queue.redisClient.SRem(queue.queuesKey, queue.name).Err(); err != nil {
-		log.Printf("queue failed to delete queues key %s %s", queue, err)
-		return err
-	}
-	return nil
+func (queue *Queue) CloseInConnection() {
+	redisErrIsNil(queue.redisClient.Del(queue.unackedKey))
+	redisErrIsNil(queue.redisClient.Del(queue.consumersKey))
+	redisErrIsNil(queue.redisClient.SRem(queue.queuesKey, queue.name))
 }
 
 // StartConsuming starts consuming into a channel of size prefetchLimit
@@ -200,9 +176,7 @@ func (queue *Queue) StartConsuming(prefetchLimit int) bool {
 	}
 
 	// add queue to list of queues consumed on this connection
-	result := queue.redisClient.SAdd(queue.queuesKey, queue.name)
-	if result.Err() != nil {
-		log.Printf("queue failed to add itself %s %s", queue.name, result.Err())
+	if redisErrIsNil(queue.redisClient.SAdd(queue.queuesKey, queue.name)) {
 		return false
 	}
 
@@ -227,10 +201,8 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
-	result := queue.redisClient.SAdd(queue.consumersKey, name)
-	if result.Err() != nil {
-		log.Printf("queue failed to add consumer %s %s", name, result.Err())
-		return ""
+	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
+		return "" // TODO: panic
 	}
 
 	go queue.addConsumer(consumer)
@@ -240,8 +212,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 
 func (queue *Queue) GetConsumers() []string {
 	result := queue.redisClient.SMembers(queue.consumersKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to get consumers %s", result.Err())
+	if redisErrIsNil(result) {
 		return []string{}
 	}
 	return result.Val()
@@ -249,8 +220,7 @@ func (queue *Queue) GetConsumers() []string {
 
 func (queue *Queue) RemoveConsumer(name string) bool {
 	result := queue.redisClient.SRem(queue.consumersKey, name)
-	if result.Err() != nil {
-		log.Printf("queue failed to remove consumer %s %s %s", queue, name, result.Err())
+	if redisErrIsNil(result) {
 		return false
 	}
 	return result.Val() > 0
@@ -258,8 +228,7 @@ func (queue *Queue) RemoveConsumer(name string) bool {
 
 func (queue *Queue) RemoveAllConsumers() int {
 	result := queue.redisClient.Del(queue.consumersKey)
-	if result.Err() != nil {
-		log.Printf("queue failed to remove all consumers %s %s", queue, result.Err())
+	if redisErrIsNil(result) {
 		return 0
 	}
 	return int(result.Val())
@@ -298,13 +267,8 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 
 	for i := 0; i < batchSize; i++ {
 		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
-		if result.Err() == redis.Nil {
+		if redisErrIsNil(result) {
 			// debug(fmt.Sprintf("queue consumed last batch %s %d", queue, i)) // COMMENTOUT
-			return false
-		}
-
-		if result.Err() != nil {
-			log.Printf("queue failed to consume batch %s %s", queue, result.Err())
 			return false
 		}
 
@@ -320,6 +284,19 @@ func (queue *Queue) addConsumer(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
+	}
+}
+
+// redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
+func redisErrIsNil(result redis.Cmder) bool {
+	switch result.Err() {
+	case nil:
+		return false
+	case redis.Nil:
+		return true
+	default:
+		log.Panicf("redis error is not nil %s", result)
+		return false
 	}
 }
 

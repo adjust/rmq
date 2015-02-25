@@ -3,7 +3,6 @@ package queue
 import (
 	"fmt"
 	redis "github.com/adjust/redis-latest-head" // TODO: update
-	"log"
 )
 
 type Delivery interface {
@@ -40,36 +39,19 @@ func (delivery *wrapDelivery) Ack() bool {
 	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
 	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	if result.Err() != nil {
-		log.Printf("delivery failed to ack LRem failed %s", delivery)
-		return false
-	}
-	if result.Val() == 0 {
-		log.Printf("delivery failed to ack LRem none %s", delivery)
+	if redisErrIsNil(result) {
 		return false
 	}
 
-	return true
+	return result.Val() == 1
 }
 
 func (delivery *wrapDelivery) Reject() bool {
-	result := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	if result.Err() != nil {
-		log.Printf("delivery failed to reject LRem failed %s", delivery)
-		return false
-	}
-	if result.Val() == 0 {
-		log.Printf("delivery failed to reject LRem none %s", delivery)
+	if redisErrIsNil(delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)) {
 		return false
 	}
 
-	result = delivery.redisClient.LPush(delivery.rejectedKey, delivery.payload)
-	if result.Err() != nil {
-		log.Printf("delivery failed to reject LPush failed %s", delivery)
-		return false
-	}
-	if result.Val() == 0 {
-		log.Printf("delivery failed to reject LPush failed %s", delivery)
+	if redisErrIsNil(delivery.redisClient.LPush(delivery.rejectedKey, delivery.payload)) {
 		return false
 	}
 
