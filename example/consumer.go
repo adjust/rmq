@@ -48,5 +48,9 @@ func (consumer *Consumer) Consume(delivery queue.Delivery) {
 		log.Printf("%s consumed %d %s %d", consumer.name, consumer.count, delivery.Payload(), perSecond)
 	}
 	time.Sleep(time.Millisecond)
-	delivery.Ack()
+	if consumer.count%batchSize == 0 {
+		delivery.Reject()
+	} else {
+		delivery.Ack()
+	}
 }
