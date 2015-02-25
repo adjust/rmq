@@ -156,7 +156,7 @@ func (queue *Queue) ReturnAllRejectedDeliveries() (returned int, err error) {
 	return queue.ReturnRejectedDeliveries(rejectedCount)
 }
 
-// ReturnRejectedDeliveries moves count rejected deliveries back to the ready list
+// ReturnRejectedDeliveries tries to return count rejected deliveries back to the ready list
 func (queue *Queue) ReturnRejectedDeliveries(count int) (returned int, err error) {
 	if count == 0 {
 		return 0, nil
@@ -164,8 +164,10 @@ func (queue *Queue) ReturnRejectedDeliveries(count int) (returned int, err error
 
 	for i := 0; i < count; i++ {
 		result := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
-		if result.Err() != nil {
-			return i, fmt.Errorf("queue failed to return rejected delivery %s %s", queue, result.Err())
+		if err := result.Err(); err == redis.Nil {
+			return i, nil
+		} else if err != nil {
+			return 0, fmt.Errorf("queue failed to return rejected delivery %s %s", queue, err)
 		}
 		// debug(fmt.Sprintf("queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
