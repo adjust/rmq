@@ -177,7 +177,7 @@ func (queue *Queue) StartConsuming(prefetchLimit int) bool {
 
 	// add queue to list of queues consumed on this connection
 	if redisErrIsNil(queue.redisClient.SAdd(queue.queuesKey, queue.name)) {
-		return false
+		log.Panicf("queue failed to start consuming %s", queue)
 	}
 
 	queue.prefetchLimit = prefetchLimit
@@ -202,7 +202,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 
 	// add consumer to list of consumers of this queue
 	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
-		return "" // TODO: panic
+		log.Panicf("queue failed to add consumer %s %s", queue, consumer)
 	}
 
 	go queue.addConsumer(consumer)
@@ -295,7 +295,7 @@ func redisErrIsNil(result redis.Cmder) bool {
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("redis error is not nil %s", result)
+		log.Panicf("redis error is not nil %s", result.Err())
 		return false
 	}
 }

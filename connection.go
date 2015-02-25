@@ -158,5 +158,5 @@ func (connection *Connection) openQueue(name string) *Queue {
 
 // flushDb flushes the redis database to reset everything, used in tests
 func (connection *Connection) flushDb() {
-	redisErrIsNil(connection.redisClient.FlushDb())
+	connection.redisClient.FlushDb()
 }

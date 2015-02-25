@@ -75,10 +75,12 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	queue2.StartConsuming(1)
 	c.Check(connection.GetConsumingQueues(), HasLen, 2)
 
+	queue2.StopConsuming()
 	queue2.CloseInConnection()
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
 	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
 
+	queue1.StopConsuming()
 	queue1.CloseInConnection()
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
