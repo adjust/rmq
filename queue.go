@@ -36,7 +36,7 @@ type Queue struct {
 	unackedKey       string // key to list of currently consuming deliveries
 	redisClient      *redis.Client
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
-	unackedLimit     int           // max number of unacked deliveries at any time (used as channel size)
+	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	consumingStopped bool
 }
 
@@ -162,9 +162,9 @@ func (queue *Queue) CloseInConnection() error {
 	return nil
 }
 
-// StartConsuming starts consuming into a channel of size unackedLimit
+// StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
-func (queue *Queue) StartConsuming(unackedLimit int) bool {
+func (queue *Queue) StartConsuming(prefetchLimit int) bool {
 	if queue.deliveryChan != nil {
 		return false
 	}
@@ -176,8 +176,8 @@ func (queue *Queue) StartConsuming(unackedLimit int) bool {
 		return false
 	}
 
-	queue.unackedLimit = unackedLimit
-	queue.deliveryChan = make(chan Delivery, unackedLimit)
+	queue.prefetchLimit = prefetchLimit
+	queue.deliveryChan = make(chan Delivery, prefetchLimit)
 	log.Printf("queue started consuming %s", queue)
 	go queue.consume()
 	return true
@@ -252,11 +252,12 @@ func (queue *Queue) consume() {
 }
 
 func (queue *Queue) batchSize() int {
-	unackedLimit := queue.unackedLimit - queue.UnackedCount() // TODO: what if UnackedCount failed? panic?
-	if readyCount := queue.ReadyCount(); readyCount < unackedLimit {
+	prefetchCount := len(queue.deliveryChan)
+	prefetchLimit := queue.prefetchLimit - prefetchCount
+	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
 		return readyCount
 	}
-	return unackedLimit
+	return prefetchLimit
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed

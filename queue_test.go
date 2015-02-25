@@ -207,10 +207,11 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	consumer := NewTestConsumer("batch-cons")
 	consumer.AutoAck = false
 	consumer.AutoFinish = false
+
 	queue.AddConsumer("batch-cons", consumer)
-	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 10)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 9)
+	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(2 * time.Millisecond)
@@ -218,9 +219,9 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 9)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 8)
+	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(2 * time.Millisecond)
@@ -228,9 +229,9 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 8)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.ReadyCount(), Equals, 7)
+	c.Check(queue.UnackedCount(), Equals, 11)
 
 	queue.StopConsuming()
 	connection.StopHeartbeat()
