@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	connection := queue.OpenConnection("cleaner", "localhost", "6379", 2)
+	connection := queue.OpenConnection("cleaner", "tcp", "localhost:6379", 2)
 	queue := connection.OpenQueue("things")
 	queue.Purge()
 }

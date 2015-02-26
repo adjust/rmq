@@ -18,16 +18,15 @@ type CleanerSuite struct {
 }
 
 func (suite *CleanerSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.TestGoenv()
+	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
 }
 
 func (suite *CleanerSuite) TestCleaner(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	flushConn := OpenConnection("cleaner-flush", host, port, db)
+	flushConn := OpenConnection(SettingsFromGoenv("cleaner-flush", suite.goenv))
 	flushConn.flushDb()
 	flushConn.StopHeartbeat()
 
-	conn := OpenConnection("cleaner-conn1", host, port, db)
+	conn := OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
 	c.Check(conn.GetOpenQueues(), HasLen, 0)
 	queue := conn.OpenQueue("q1")
 	c.Check(conn.GetOpenQueues(), HasLen, 1)
@@ -80,7 +79,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	conn.StopHeartbeat()
 	time.Sleep(time.Millisecond)
 
-	conn = OpenConnection("cleaner-conn1", host, port, db)
+	conn = OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
 	queue = conn.OpenQueue("q1")
 
 	queue.Publish("del7")
@@ -125,13 +124,13 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	conn.StopHeartbeat()
 	time.Sleep(time.Millisecond)
 
-	cleanerConn := OpenConnection("cleaner-conn", host, port, db)
+	cleanerConn := OpenConnection(SettingsFromGoenv("cleaner-conn", suite.goenv))
 	cleaner := NewCleaner(cleanerConn)
 	c.Check(cleaner.Clean(), IsNil)
 	c.Check(queue.ReadyCount(), Equals, 9) // 2 of 11 were acked above
 	c.Check(conn.GetOpenQueues(), HasLen, 2)
 
-	conn = OpenConnection("cleaner-conn1", host, port, db)
+	conn = OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
 	queue = conn.OpenQueue("q1")
 	queue.StartConsuming(10)
 	consumer = NewTestConsumer("c-C")

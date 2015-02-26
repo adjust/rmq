@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	connection := queue.OpenConnection("cleaner", "localhost", "6379", 2)
+	connection := queue.OpenConnection("cleaner", "tcp", "localhost:6379", 2)
 	cleaner := queue.NewCleaner(connection)
 
 	for _ = range time.Tick(time.Second) {

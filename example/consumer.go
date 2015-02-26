@@ -15,7 +15,7 @@ const (
 )
 
 func main() {
-	connection := queue.OpenConnection("consumer", "localhost", "6379", 2)
+	connection := queue.OpenConnection("consumer", "tcp", "localhost:6379", 2)
 	queue := connection.OpenQueue("things")
 	queue.StartConsuming(unackedLimit)
 	for i := 0; i < numConsumers; i++ {

@@ -19,16 +19,15 @@ type StatsSuite struct {
 }
 
 func (suite *StatsSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.TestGoenv()
+	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
 }
 
 func (suite *StatsSuite) TestStats(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("stats-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("stats-conn", suite.goenv))
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
-	conn1 := OpenConnection("stats-conn1", host, port, db)
-	conn2 := OpenConnection("stats-conn2", host, port, db)
+	conn1 := OpenConnection(SettingsFromGoenv("stats-conn1", suite.goenv))
+	conn2 := OpenConnection(SettingsFromGoenv("stats-conn2", suite.goenv))
 	q1 := conn2.OpenQueue("stats-q1")
 	q1.Purge()
 	q1.Publish("stats-d1")

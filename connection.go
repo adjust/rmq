@@ -21,14 +21,15 @@ type Connection struct {
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag, host, port string, db int) *Connection {
-	redisClient := redis.NewTCPClient(&redis.Options{
-		Addr: host + ":" + port,
-		DB:   int64(db),
+func OpenConnection(tag, network, address string, db int) *Connection {
+	redisClient := redis.NewClient(&redis.Options{
+		Network: network,
+		Addr:    address,
+		DB:      int64(db),
 	})
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
-	redisErrIsNil(redisClient.SAdd(connectionsKey, name))
+	redisErrIsNil(redisClient.SAdd(connectionsKey, name)) // already checks the connection
 
 	connection := &Connection{
 		Name:         name,
@@ -42,7 +43,7 @@ func OpenConnection(tag, host, port string, db int) *Connection {
 	}
 
 	go connection.heartbeat()
-	log.Printf("queue connection connected to %s %s:%s %d", name, host, port, db)
+	log.Printf("queue connection connected to %s %s:%s %d", name, network, address, db)
 	return connection
 }
 

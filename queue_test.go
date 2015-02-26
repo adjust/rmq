@@ -19,22 +19,21 @@ type QueueSuite struct {
 }
 
 func (suite *QueueSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.TestGoenv()
+	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
 }
 
 func (suite *QueueSuite) TestConnections(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("conns-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("conns-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
 	c.Check(connection.GetConnections(), HasLen, 1, Commentf("cleaner %s", connection.Name)) // cleaner connection remains
 
-	conn1 := OpenConnection("conns-conn1", host, port, db)
+	conn1 := OpenConnection(SettingsFromGoenv("conns-conn1", suite.goenv))
 	c.Check(connection.GetConnections(), HasLen, 2)
 	c.Check(connection.hijackConnection("nope").Check(), Equals, false)
 	c.Check(conn1.Check(), Equals, true)
-	conn2 := OpenConnection("conns-conn2", host, port, db)
+	conn2 := OpenConnection(SettingsFromGoenv("conns-conn2", suite.goenv))
 	c.Check(connection.GetConnections(), HasLen, 3)
 	c.Check(conn1.Check(), Equals, true)
 	c.Check(conn2.Check(), Equals, true)
@@ -54,8 +53,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 }
 
 func (suite *QueueSuite) TestConnectionQueues(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("conn-q-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("conn-q-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 
 	connection.CloseAllQueues()
@@ -89,8 +87,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("queue-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("queue-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 
 	queue := connection.OpenQueue("queue-q")
@@ -126,8 +123,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 }
 
 func (suite *QueueSuite) TestConsumer(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("cons-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("cons-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 
 	queue := connection.OpenQueue("cons-q")
@@ -190,8 +186,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 }
 
 func (suite *QueueSuite) TestBatch(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("batch-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
 	queue := connection.OpenQueue("batch-q")
 	queue.Purge()
 
@@ -240,8 +235,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 }
 
 func (suite *QueueSuite) TestReturnRejected(c *C) {
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("return-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("return-conn", suite.goenv))
 	queue := connection.OpenQueue("return-q")
 	queue.Purge()
 
@@ -295,8 +289,7 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
-	host, port, db := suite.goenv.GetRedis()
-	connection := OpenConnection("bench-conn", host, port, db)
+	connection := OpenConnection(SettingsFromGoenv("bench-conn", suite.goenv))
 	queueName := fmt.Sprintf("bench-q%d", c.N)
 	queue := connection.OpenQueue(queueName)
 
