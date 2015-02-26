@@ -1,0 +1,11 @@
+testing:
+    queue_redis:
+        network: tcp
+        address: localhost:6379
+        db: 2
+
+production:
+    queue_redis:
+        network: unix
+        address: /tmp/redis.sock
+        db: 2
