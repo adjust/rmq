@@ -23,6 +23,10 @@ func (suite *QueueSuite) SetUpSuite(c *C) {
 }
 
 func (suite *QueueSuite) TestConnections(c *C) {
+	flushConn := OpenConnection(SettingsFromGoenv("conns-flush", suite.goenv))
+	flushConn.flushDb()
+	flushConn.StopHeartbeat()
+
 	connection := OpenConnection(SettingsFromGoenv("conns-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
@@ -289,7 +293,8 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
-	connection := OpenConnection(SettingsFromGoenv("bench-conn", suite.goenv))
+	goenv := goenv.NewGoenv("config.yml", "production", "")
+	connection := OpenConnection(SettingsFromGoenv("bench-conn", goenv))
 	queueName := fmt.Sprintf("bench-q%d", c.N)
 	queue := connection.OpenQueue(queueName)
 
