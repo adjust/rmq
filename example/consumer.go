@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/adjust/goenv"
 	"github.com/adjust/queue"
 )
 
@@ -15,7 +16,8 @@ const (
 )
 
 func main() {
-	connection := queue.OpenConnection("consumer", "tcp", "localhost:6379", 2)
+	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
+	connection := queue.OpenConnection(queue.SettingsFromGoenv("consumer", goenv))
 	queue := connection.OpenQueue("things")
 	queue.StartConsuming(unackedLimit)
 	for i := 0; i < numConsumers; i++ {

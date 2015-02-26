@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/adjust/goenv"
 	"github.com/adjust/queue"
 )
 
@@ -14,7 +15,8 @@ const (
 )
 
 func main() {
-	connection := queue.OpenConnection("producer", "tcp", "localhost:6379", 2)
+	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
+	connection := queue.OpenConnection(queue.SettingsFromGoenv("producer", goenv))
 	things := connection.OpenQueue("things")
 	balls := connection.OpenQueue("balls")
 	var before time.Time

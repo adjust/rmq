@@ -8,4 +8,4 @@ production:
     queue_redis:
         network: unix
         address: /tmp/redis.sock
-        db: 2
+        db: 3

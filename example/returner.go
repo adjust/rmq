@@ -1,12 +1,14 @@
 package main
 
 import (
+	"github.com/adjust/goenv"
 	"github.com/adjust/queue"
 	"log"
 )
 
 func main() {
-	connection := queue.OpenConnection("returner", "tcp", "localhost:6379", 2)
+	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
+	connection := queue.OpenConnection(queue.SettingsFromGoenv("returner", goenv))
 	queue := connection.OpenQueue("things")
 	returned := queue.ReturnAllRejectedDeliveries()
 	log.Printf("queue returner returned %d rejected deliveries", returned)

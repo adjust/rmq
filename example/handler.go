@@ -5,11 +5,13 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/adjust/goenv"
 	"github.com/adjust/queue"
 )
 
 func main() {
-	connection := queue.OpenConnection("handler", "tcp", "localhost:6379", 2)
+	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
+	connection := queue.OpenConnection(queue.SettingsFromGoenv("handler", goenv))
 	http.Handle("/overview", NewHandler(connection))
 	http.ListenAndServe(":3333", nil)
 }
