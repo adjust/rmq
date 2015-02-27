@@ -253,6 +253,7 @@ func (queue *Queue) consume() {
 func (queue *Queue) batchSize() int {
 	prefetchCount := len(queue.deliveryChan)
 	prefetchLimit := queue.prefetchLimit - prefetchCount
+	// TODO: ignore ready count here and just return prefetchLimit?
 	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
 		return readyCount
 	}

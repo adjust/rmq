@@ -47,11 +47,11 @@ func (delivery *wrapDelivery) Ack() bool {
 }
 
 func (delivery *wrapDelivery) Reject() bool {
-	if redisErrIsNil(delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)) {
+	if redisErrIsNil(delivery.redisClient.LPush(delivery.rejectedKey, delivery.payload)) {
 		return false
 	}
 
-	if redisErrIsNil(delivery.redisClient.LPush(delivery.rejectedKey, delivery.payload)) {
+	if redisErrIsNil(delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)) {
 		return false
 	}
 
