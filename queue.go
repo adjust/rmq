@@ -182,7 +182,7 @@ func (queue *Queue) StartConsuming(prefetchLimit int) bool {
 
 	queue.prefetchLimit = prefetchLimit
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	log.Printf("queue started consuming %s", queue)
+	log.Printf("queue started consuming %s %d", queue, prefetchLimit)
 	go queue.consume()
 	return true
 }
