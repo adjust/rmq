@@ -22,6 +22,15 @@ func (connection TestConnection) CollectStats() Stats {
 	return Stats{}
 }
 
+func (connection TestConnection) GetDeliveries(queueName string) []string {
+	queue, ok := connection.queues[queueName]
+	if !ok {
+		return []string{}
+	}
+
+	return queue.LastDeliveries
+}
+
 func (connection TestConnection) GetDelivery(queueName string, index int) string {
 	queue, ok := connection.queues[queueName]
 	if !ok || index < 0 || index >= len(queue.LastDeliveries) {
