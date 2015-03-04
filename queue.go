@@ -26,6 +26,11 @@ const (
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
 )
 
+// PublishQueue is an interface that can be used to test publishing
+type PublishQueue interface {
+	Publish(payload string) bool
+}
+
 type Queue struct {
 	name             string
 	connectionName   string
