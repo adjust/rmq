@@ -10,6 +10,11 @@ import (
 	"github.com/adjust/uniuri"
 )
 
+// PublishConnection is an interface that can be used to test publishing
+type PublishConnection interface {
+	OpenQueue(name string) PublishQueue
+}
+
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type Connection struct {
