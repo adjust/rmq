@@ -15,6 +15,22 @@ func (queue *TestQueue) Publish(payload string) bool {
 	return true
 }
 
+func (queue *TestQueue) StartConsuming(prefetchLimit int) bool {
+	return true
+}
+
+func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
+	return ""
+}
+
+func (queue *TestQueue) ReturnAllRejectedDeliveries() int {
+	return 0
+}
+
+func (queue *TestQueue) Purge() int {
+	return 0
+}
+
 func (queue *TestQueue) Reset() {
 	queue.LastDeliveries = []string{}
 }

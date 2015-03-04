@@ -6,10 +6,10 @@ import (
 )
 
 type Cleaner struct {
-	connection *Connection
+	connection *redisConnection
 }
 
-func NewCleaner(connection *Connection) *Cleaner {
+func NewCleaner(connection *redisConnection) *Cleaner {
 	return &Cleaner{connection: connection}
 }
 
@@ -29,10 +29,14 @@ func (cleaner *Cleaner) Clean() error {
 	return nil
 }
 
-func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
+func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 	queueNames := connection.GetConsumingQueues()
 	for _, queueName := range queueNames {
-		queue := connection.OpenQueue(queueName)
+		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
+		if !ok {
+			return fmt.Errorf("queue cleaner failed to open queue %s", queueName)
+		}
+
 		cleaner.CleanQueue(queue)
 	}
 
@@ -48,7 +52,7 @@ func (cleaner *Cleaner) CleanConnection(connection *Connection) error {
 	return nil
 }
 
-func (cleaner *Cleaner) CleanQueue(queue *Queue) {
+func (cleaner *Cleaner) CleanQueue(queue *redisQueue) {
 	returned := queue.ReturnAllUnackedDeliveries()
 	queue.CloseInConnection()
 	log.Printf("queue cleaner cleaned queue %s %d", queue, returned)

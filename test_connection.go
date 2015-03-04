@@ -12,10 +12,14 @@ func NewTestConnection() TestConnection {
 	}
 }
 
-func (connection TestConnection) OpenQueue(name string) PublishQueue {
+func (connection TestConnection) OpenQueue(name string) Queue {
 	queue := NewTestQueue()
 	connection.queues[name] = queue
 	return queue
+}
+
+func (connection TestConnection) CollectStats() Stats {
+	return Stats{}
 }
 
 func (connection TestConnection) GetDelivery(queueName string, index int) string {

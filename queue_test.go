@@ -63,14 +63,14 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	connection.CloseAllQueues()
 	c.Check(connection.GetOpenQueues(), HasLen, 0)
 
-	queue1 := connection.OpenQueue("conn-q-q1")
+	queue1 := connection.OpenQueue("conn-q-q1").(*redisQueue)
 	c.Assert(queue1, NotNil)
 	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q1"})
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
 	queue1.StartConsuming(1)
 	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
 
-	queue2 := connection.OpenQueue("conn-q-q2")
+	queue2 := connection.OpenQueue("conn-q-q2").(*redisQueue)
 	c.Assert(queue2, NotNil)
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
 	c.Check(connection.GetConsumingQueues(), HasLen, 1)
@@ -94,7 +94,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("queue-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 
-	queue := connection.OpenQueue("queue-q")
+	queue := connection.OpenQueue("queue-q").(*redisQueue)
 	c.Assert(queue, NotNil)
 	queue.Purge()
 	c.Check(queue.ReadyCount(), Equals, 0)
@@ -130,7 +130,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("cons-conn", suite.goenv))
 	c.Assert(connection, NotNil)
 
-	queue := connection.OpenQueue("cons-q")
+	queue := connection.OpenQueue("cons-q").(*redisQueue)
 	c.Assert(queue, NotNil)
 	queue.Purge()
 
@@ -191,7 +191,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 func (suite *QueueSuite) TestBatch(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
-	queue := connection.OpenQueue("batch-q")
+	queue := connection.OpenQueue("batch-q").(*redisQueue)
 	queue.Purge()
 
 	for i := 0; i < 20; i++ {
@@ -240,7 +240,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 
 func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("return-conn", suite.goenv))
-	queue := connection.OpenQueue("return-q")
+	queue := connection.OpenQueue("return-q").(*redisQueue)
 	queue.Purge()
 
 	for i := 0; i < 6; i++ {
@@ -296,7 +296,7 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	goenv := goenv.NewGoenv("config.yml", "production", "")
 	connection := OpenConnection(SettingsFromGoenv("bench-conn", goenv))
 	queueName := fmt.Sprintf("bench-q%d", c.N)
-	queue := connection.OpenQueue(queueName)
+	queue := connection.OpenQueue(queueName).(*redisQueue)
 
 	// add some consumers
 	numConsumers := 10

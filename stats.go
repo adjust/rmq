@@ -71,7 +71,7 @@ func NewStats() Stats {
 	}
 }
 
-func CollectStats(mainConnection *Connection) Stats {
+func CollectStats(mainConnection *redisConnection) Stats {
 	stats := NewStats()
 	for _, queueName := range mainConnection.GetOpenQueues() {
 		queue := mainConnection.openQueue(queueName)

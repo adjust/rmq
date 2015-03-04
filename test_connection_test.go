@@ -22,6 +22,8 @@ func (suite *ConnectionSuite) SetUpSuite(c *C) {
 
 func (suite *ConnectionSuite) TestConnection(c *C) {
 	connection := NewTestConnection()
+	var conn Connection
+	c.Check(connection, Implements, &conn)
 	c.Check(connection.GetDelivery("things", 0), Equals, "queue.TestConnection: delivery not found: things[0]")
 
 	queue := connection.OpenQueue("things")

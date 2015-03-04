@@ -27,11 +27,15 @@ const (
 )
 
 // PublishQueue is an interface that can be used to test publishing
-type PublishQueue interface {
+type Queue interface {
 	Publish(payload string) bool
+	StartConsuming(prefetchLimit int) bool
+	AddConsumer(tag string, consumer Consumer) string
+	ReturnAllRejectedDeliveries() int
+	Purge() int
 }
 
-type Queue struct {
+type redisQueue struct {
 	name             string
 	connectionName   string
 	queuesKey        string // key to list of queues consumed by this connection
@@ -45,7 +49,7 @@ type Queue struct {
 	consumingStopped bool
 }
 
-func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *Queue {
+func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *redisQueue {
 	consumersKey := strings.Replace(connectionQueueConsumersTemplate, phConnection, connectionName, 1)
 	consumersKey = strings.Replace(consumersKey, phQueue, name, 1)
 
@@ -55,7 +59,7 @@ func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client)
 	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
-	queue := &Queue{
+	queue := &redisQueue{
 		name:           name,
 		connectionName: connectionName,
 		queuesKey:      queuesKey,
@@ -68,18 +72,18 @@ func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client)
 	return queue
 }
 
-func (queue *Queue) String() string {
+func (queue *redisQueue) String() string {
 	return fmt.Sprintf("[%s conn:%s]", queue.name, queue.connectionName)
 }
 
 // Publish adds a delivery with the given payload to the queue
-func (queue *Queue) Publish(payload string) bool {
+func (queue *redisQueue) Publish(payload string) bool {
 	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
 	return !redisErrIsNil(queue.redisClient.LPush(queue.readyKey, payload))
 }
 
 // Purge removes all ready and rejected deliveries from the queue and returns the total number of purged deliveries
-func (queue *Queue) Purge() int {
+func (queue *redisQueue) Purge() int {
 	readyResult := queue.redisClient.Del(queue.readyKey)
 	if redisErrIsNil(readyResult) {
 		return 0
@@ -93,7 +97,7 @@ func (queue *Queue) Purge() int {
 	return int(readyResult.Val() + rejectedResult.Val())
 }
 
-func (queue *Queue) ReadyCount() int {
+func (queue *redisQueue) ReadyCount() int {
 	result := queue.redisClient.LLen(queue.readyKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -101,7 +105,7 @@ func (queue *Queue) ReadyCount() int {
 	return int(result.Val())
 }
 
-func (queue *Queue) UnackedCount() int {
+func (queue *redisQueue) UnackedCount() int {
 	result := queue.redisClient.LLen(queue.unackedKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -109,7 +113,7 @@ func (queue *Queue) UnackedCount() int {
 	return int(result.Val())
 }
 
-func (queue *Queue) RejectedCount() int {
+func (queue *redisQueue) RejectedCount() int {
 	result := queue.redisClient.LLen(queue.rejectedKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -120,7 +124,7 @@ func (queue *Queue) RejectedCount() int {
 // ReturnAllUnackedDeliveries moves all unacked deliveries back to the ready
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
-func (queue *Queue) ReturnAllUnackedDeliveries() int {
+func (queue *redisQueue) ReturnAllUnackedDeliveries() int {
 	result := queue.redisClient.LLen(queue.unackedKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -139,7 +143,7 @@ func (queue *Queue) ReturnAllUnackedDeliveries() int {
 
 // ReturnAllRejectedDeliveries moves all rejected deliveries back to the ready
 // list and returns the number of returned deliveries
-func (queue *Queue) ReturnAllRejectedDeliveries() int {
+func (queue *redisQueue) ReturnAllRejectedDeliveries() int {
 	result := queue.redisClient.LLen(queue.rejectedKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -151,7 +155,7 @@ func (queue *Queue) ReturnAllRejectedDeliveries() int {
 
 // ReturnRejectedDeliveries tries to return count rejected deliveries back to
 // the ready list and returns the number of returned deliveries
-func (queue *Queue) ReturnRejectedDeliveries(count int) int {
+func (queue *redisQueue) ReturnRejectedDeliveries(count int) int {
 	if count == 0 {
 		return 0
 	}
@@ -167,7 +171,7 @@ func (queue *Queue) ReturnRejectedDeliveries(count int) int {
 }
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
-func (queue *Queue) CloseInConnection() {
+func (queue *redisQueue) CloseInConnection() {
 	redisErrIsNil(queue.redisClient.Del(queue.unackedKey))
 	redisErrIsNil(queue.redisClient.Del(queue.consumersKey))
 	redisErrIsNil(queue.redisClient.SRem(queue.queuesKey, queue.name))
@@ -175,7 +179,7 @@ func (queue *Queue) CloseInConnection() {
 
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
-func (queue *Queue) StartConsuming(prefetchLimit int) bool {
+func (queue *redisQueue) StartConsuming(prefetchLimit int) bool {
 	if queue.deliveryChan != nil {
 		return false
 	}
@@ -192,13 +196,13 @@ func (queue *Queue) StartConsuming(prefetchLimit int) bool {
 	return true
 }
 
-func (queue *Queue) StopConsuming() {
+func (queue *redisQueue) StopConsuming() {
 	queue.consumingStopped = true
 }
 
 // AddConsumer adds a consumer to the queue and returns its internal name
 // panics if StartConsuming wasn't called before!
-func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
+func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 	if queue.deliveryChan == nil {
 		log.Panicf("queue failed to add consumer, call StartConsuming first! %s", queue)
 	}
@@ -215,7 +219,7 @@ func (queue *Queue) AddConsumer(tag string, consumer Consumer) string {
 	return name
 }
 
-func (queue *Queue) GetConsumers() []string {
+func (queue *redisQueue) GetConsumers() []string {
 	result := queue.redisClient.SMembers(queue.consumersKey)
 	if redisErrIsNil(result) {
 		return []string{}
@@ -223,7 +227,7 @@ func (queue *Queue) GetConsumers() []string {
 	return result.Val()
 }
 
-func (queue *Queue) RemoveConsumer(name string) bool {
+func (queue *redisQueue) RemoveConsumer(name string) bool {
 	result := queue.redisClient.SRem(queue.consumersKey, name)
 	if redisErrIsNil(result) {
 		return false
@@ -231,7 +235,7 @@ func (queue *Queue) RemoveConsumer(name string) bool {
 	return result.Val() > 0
 }
 
-func (queue *Queue) RemoveAllConsumers() int {
+func (queue *redisQueue) RemoveAllConsumers() int {
 	result := queue.redisClient.Del(queue.consumersKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -239,7 +243,7 @@ func (queue *Queue) RemoveAllConsumers() int {
 	return int(result.Val())
 }
 
-func (queue *Queue) consume() {
+func (queue *redisQueue) consume() {
 	for {
 		batchSize := queue.batchSize()
 		wantMore := queue.consumeBatch(batchSize)
@@ -255,7 +259,7 @@ func (queue *Queue) consume() {
 	}
 }
 
-func (queue *Queue) batchSize() int {
+func (queue *redisQueue) batchSize() int {
 	prefetchCount := len(queue.deliveryChan)
 	prefetchLimit := queue.prefetchLimit - prefetchCount
 	// TODO: ignore ready count here and just return prefetchLimit?
@@ -266,7 +270,7 @@ func (queue *Queue) batchSize() int {
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *Queue) consumeBatch(batchSize int) bool {
+func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	if batchSize == 0 {
 		return false
 	}
@@ -286,7 +290,7 @@ func (queue *Queue) consumeBatch(batchSize int) bool {
 	return true
 }
 
-func (queue *Queue) addConsumer(consumer Consumer) {
+func (queue *redisQueue) addConsumer(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)

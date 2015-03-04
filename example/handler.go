@@ -17,15 +17,15 @@ func main() {
 }
 
 type Handler struct {
-	connection *queue.Connection
+	connection queue.Connection
 }
 
-func NewHandler(connection *queue.Connection) *Handler {
+func NewHandler(connection queue.Connection) *Handler {
 	return &Handler{connection: connection}
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
-	stats := queue.CollectStats(handler.connection)
+	stats := handler.connection.CollectStats()
 	log.Printf("queue stats\n%s", stats)
 	fmt.Fprint(writer, stats.GetHtml())
 }
