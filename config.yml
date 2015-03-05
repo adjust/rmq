@@ -4,6 +4,11 @@ testing:
         address: localhost:6379
         db: 2
 
+jenkins:
+    queue_redis:
+        network: tcp
+        address: localhost:6379
+
 production:
     queue_redis:
         network: unix
