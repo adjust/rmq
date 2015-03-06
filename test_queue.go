@@ -23,7 +23,11 @@ func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
 	return ""
 }
 
-func (queue *TestQueue) ReturnAllRejectedDeliveries() int {
+func (queue *TestQueue) ReturnRejected(count int) int {
+	return 0
+}
+
+func (queue *TestQueue) ReturnAllRejected() int {
 	return 0
 }
 

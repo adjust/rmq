@@ -285,12 +285,12 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 	queue.StopConsuming()
 
-	queue.ReturnRejectedDeliveries(2)
+	queue.ReturnRejected(2)
 	c.Check(queue.ReadyCount(), Equals, 2)    // delivery 0, 2
 	c.Check(queue.UnackedCount(), Equals, 1)  // delivery 4
 	c.Check(queue.RejectedCount(), Equals, 2) // delivery 3, 5
 
-	queue.ReturnAllRejectedDeliveries()
+	queue.ReturnAllRejected()
 	c.Check(queue.ReadyCount(), Equals, 4)   // delivery 0, 2, 3, 5
 	c.Check(queue.UnackedCount(), Equals, 1) // delivery 4
 	c.Check(queue.RejectedCount(), Equals, 0)

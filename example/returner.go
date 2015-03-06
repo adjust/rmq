@@ -10,6 +10,6 @@ func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
 	connection := queue.OpenConnection(queue.SettingsFromGoenv("returner", goenv))
 	queue := connection.OpenQueue("things")
-	returned := queue.ReturnAllRejectedDeliveries()
+	returned := queue.ReturnAllRejected()
 	log.Printf("queue returner returned %d rejected deliveries", returned)
 }

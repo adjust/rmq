@@ -31,9 +31,10 @@ type Queue interface {
 	Publish(payload string) bool
 	StartConsuming(prefetchLimit int) bool
 	AddConsumer(tag string, consumer Consumer) string
-	ReturnAllRejectedDeliveries() int
 	PurgeReady() bool
 	PurgeRejected() bool
+	ReturnRejected(count int) int
+	ReturnAllRejected() int
 }
 
 type redisQueue struct {
@@ -125,10 +126,10 @@ func (queue *redisQueue) RejectedCount() int {
 	return int(result.Val())
 }
 
-// ReturnAllUnackedDeliveries moves all unacked deliveries back to the ready
+// ReturnAllUnacked moves all unacked deliveries back to the ready
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
-func (queue *redisQueue) ReturnAllUnackedDeliveries() int {
+func (queue *redisQueue) ReturnAllUnacked() int {
 	result := queue.redisClient.LLen(queue.unackedKey)
 	if redisErrIsNil(result) {
 		return 0
@@ -145,21 +146,21 @@ func (queue *redisQueue) ReturnAllUnackedDeliveries() int {
 	return unackedCount
 }
 
-// ReturnAllRejectedDeliveries moves all rejected deliveries back to the ready
+// ReturnAllRejected moves all rejected deliveries back to the ready
 // list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnAllRejectedDeliveries() int {
+func (queue *redisQueue) ReturnAllRejected() int {
 	result := queue.redisClient.LLen(queue.rejectedKey)
 	if redisErrIsNil(result) {
 		return 0
 	}
 
 	rejectedCount := int(result.Val())
-	return queue.ReturnRejectedDeliveries(rejectedCount)
+	return queue.ReturnRejected(rejectedCount)
 }
 
-// ReturnRejectedDeliveries tries to return count rejected deliveries back to
+// ReturnRejected tries to return count rejected deliveries back to
 // the ready list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnRejectedDeliveries(count int) int {
+func (queue *redisQueue) ReturnRejected(count int) int {
 	if count == 0 {
 		return 0
 	}

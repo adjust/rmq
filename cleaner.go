@@ -53,7 +53,7 @@ func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 }
 
 func (cleaner *Cleaner) CleanQueue(queue *redisQueue) {
-	returned := queue.ReturnAllUnackedDeliveries()
+	returned := queue.ReturnAllUnacked()
 	queue.CloseInConnection()
 	log.Printf("queue cleaner cleaned queue %s %d", queue, returned)
 }
