@@ -29,10 +29,10 @@ func (suite *StatsSuite) TestStats(c *C) {
 	conn1 := OpenConnection(SettingsFromGoenv("stats-conn1", suite.goenv))
 	conn2 := OpenConnection(SettingsFromGoenv("stats-conn2", suite.goenv))
 	q1 := conn2.OpenQueue("stats-q1").(*redisQueue)
-	q1.Purge()
+	q1.PurgeReady()
 	q1.Publish("stats-d1")
 	q2 := conn2.OpenQueue("stats-q2").(*redisQueue)
-	q2.Purge()
+	q2.PurgeReady()
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false
 	q2.StartConsuming(10)

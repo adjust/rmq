@@ -9,5 +9,5 @@ func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
 	connection := queue.OpenConnection(queue.SettingsFromGoenv("cleaner", goenv))
 	queue := connection.OpenQueue("things")
-	queue.Purge()
+	queue.PurgeReady()
 }

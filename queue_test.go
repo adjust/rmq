@@ -96,13 +96,13 @@ func (suite *QueueSuite) TestQueue(c *C) {
 
 	queue := connection.OpenQueue("queue-q").(*redisQueue)
 	c.Assert(queue, NotNil)
-	queue.Purge()
+	queue.PurgeReady()
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.Publish("queue-d1"), Equals, true)
 	c.Check(queue.ReadyCount(), Equals, 1)
 	c.Check(queue.Publish("queue-d2"), Equals, true)
 	c.Check(queue.ReadyCount(), Equals, 2)
-	c.Check(queue.Purge(), Equals, 1)
+	c.Check(queue.PurgeReady(), Equals, 1)
 	c.Check(queue.ReadyCount(), Equals, 0)
 
 	queue.RemoveAllConsumers()
@@ -132,7 +132,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	queue := connection.OpenQueue("cons-q").(*redisQueue)
 	c.Assert(queue, NotNil)
-	queue.Purge()
+	queue.PurgeReady()
 
 	consumer := NewTestConsumer("cons-A")
 	consumer.AutoAck = false
@@ -192,7 +192,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 func (suite *QueueSuite) TestBatch(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
 	queue := connection.OpenQueue("batch-q").(*redisQueue)
-	queue.Purge()
+	queue.PurgeReady()
 
 	for i := 0; i < 20; i++ {
 		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), Equals, true)
@@ -241,7 +241,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection := OpenConnection(SettingsFromGoenv("return-conn", suite.goenv))
 	queue := connection.OpenQueue("return-q").(*redisQueue)
-	queue.Purge()
+	queue.PurgeReady()
 
 	for i := 0; i < 6; i++ {
 		c.Check(queue.Publish(fmt.Sprintf("return-d%d", i)), Equals, true)
