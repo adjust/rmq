@@ -32,7 +32,8 @@ type Queue interface {
 	StartConsuming(prefetchLimit int) bool
 	AddConsumer(tag string, consumer Consumer) string
 	ReturnAllRejectedDeliveries() int
-	PurgeReady() int
+	PurgeReady() bool
+	PurgeRejected() bool
 }
 
 type redisQueue struct {
@@ -83,12 +84,21 @@ func (queue *redisQueue) Publish(payload string) bool {
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeReady() int {
+func (queue *redisQueue) PurgeReady() bool {
 	result := queue.redisClient.Del(queue.readyKey)
 	if redisErrIsNil(result) {
-		return 0
+		return false
 	}
-	return int(result.Val())
+	return result.Val() > 0
+}
+
+// PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
+func (queue *redisQueue) PurgeRejected() bool {
+	result := queue.redisClient.Del(queue.rejectedKey)
+	if redisErrIsNil(result) {
+		return false
+	}
+	return result.Val() > 0
 }
 
 func (queue *redisQueue) ReadyCount() int {

@@ -27,8 +27,11 @@ func (queue *TestQueue) ReturnAllRejectedDeliveries() int {
 	return 0
 }
 
-func (queue *TestQueue) PurgeReady() int {
-	return 0
+func (queue *TestQueue) PurgeReady() bool {
+	return false
+}
+func (queue *TestQueue) PurgeRejected() bool {
+	return false
 }
 
 func (queue *TestQueue) Reset() {
