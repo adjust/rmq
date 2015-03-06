@@ -136,7 +136,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	consumer = NewTestConsumer("c-C")
 
 	queue.AddConsumer("consumer3", consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(consumer.LastDeliveries, HasLen, 9)
 
 	queue.StopConsuming()
