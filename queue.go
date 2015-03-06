@@ -166,7 +166,8 @@ func (queue *redisQueue) ReturnRejected(count int) int {
 	}
 
 	for i := 0; i < count; i++ {
-		if redisErrIsNil(queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)) {
+		result := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
+		if redisErrIsNil(result) {
 			return i
 		}
 		// debug(fmt.Sprintf("queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
