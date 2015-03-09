@@ -35,7 +35,6 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 	})
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
-	redisErrIsNil(redisClient.SAdd(connectionsKey, name)) // already checks the connection
 
 	connection := &redisConnection{
 		Name:         name,
@@ -44,9 +43,12 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 		redisClient:  redisClient,
 	}
 
-	if !connection.updateHeartbeat() {
+	if !connection.updateHeartbeat() { // checks the connection
 		log.Panicf("queue connection failed to update heartbeat %s", connection)
 	}
+
+	// add to connection set after setting heartbeat to avoid race with cleaner
+	redisErrIsNil(redisClient.SAdd(connectionsKey, name))
 
 	go connection.heartbeat()
 	log.Printf("queue connection connected to %s %s:%s %d", name, network, address, db)
