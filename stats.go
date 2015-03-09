@@ -7,31 +7,31 @@ import (
 )
 
 type ConnectionStat struct {
-	Active       bool
-	UnackedCount int
-	Consumers    []string
+	active       bool
+	unackedCount int
+	consumers    []string
 }
 
 func (stat ConnectionStat) String() string {
 	return fmt.Sprintf("[unacked:%d consumers:%d]",
-		stat.UnackedCount,
-		len(stat.Consumers),
+		stat.unackedCount,
+		len(stat.consumers),
 	)
 }
 
 type ConnectionStats map[string]ConnectionStat
 
 type QueueStat struct {
-	ReadyCount      int
-	RejectedCount   int
-	ConnectionStats ConnectionStats
+	ReadyCount      int `json:"ready"`
+	RejectedCount   int `json:"rejected"`
+	connectionStats ConnectionStats
 }
 
 func NewQueueStat(readyCount, rejectedCount int) QueueStat {
 	return QueueStat{
 		ReadyCount:      readyCount,
 		RejectedCount:   rejectedCount,
-		ConnectionStats: ConnectionStats{},
+		connectionStats: ConnectionStats{},
 	}
 }
 
@@ -39,34 +39,36 @@ func (stat QueueStat) String() string {
 	return fmt.Sprintf("[ready:%d rejected:%d conn:%s",
 		stat.ReadyCount,
 		stat.RejectedCount,
-		stat.ConnectionStats,
+		stat.connectionStats,
 	)
 }
 
-func (stat QueueStat) UnackedCount() int {
+func (stat QueueStat) unackedCount() int {
 	unacked := 0
-	for _, connectionStat := range stat.ConnectionStats {
-		unacked += connectionStat.UnackedCount
+	for _, connectionStat := range stat.connectionStats {
+		unacked += connectionStat.unackedCount
 	}
 	return unacked
 }
 
 func (stat QueueStat) ConsumerCount() int {
 	consumer := 0
-	for _, connectionStat := range stat.ConnectionStats {
-		consumer += len(connectionStat.Consumers)
+	for _, connectionStat := range stat.connectionStats {
+		consumer += len(connectionStat.consumers)
 	}
 	return consumer
 }
 
+type QueueStats map[string]QueueStat
+
 type Stats struct {
-	queueStats       map[string]QueueStat
+	QueueStats       QueueStats      `json:"queues"`
 	otherConnections map[string]bool // non consuming connections, active or not
 }
 
 func NewStats() Stats {
 	return Stats{
-		queueStats:       map[string]QueueStat{},
+		QueueStats:       QueueStats{},
 		otherConnections: map[string]bool{},
 	}
 }
@@ -75,7 +77,7 @@ func CollectStats(mainConnection *redisConnection) Stats {
 	stats := NewStats()
 	for _, queueName := range mainConnection.GetOpenQueues() {
 		queue := mainConnection.openQueue(queueName)
-		stats.queueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
+		stats.QueueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
 	}
 
 	connectionNames := mainConnection.GetConnections()
@@ -93,10 +95,10 @@ func CollectStats(mainConnection *redisConnection) Stats {
 			queue := connection.openQueue(queueName)
 			consumers := queue.GetConsumers()
 
-			stats.queueStats[queueName].ConnectionStats[connectionName] = ConnectionStat{
-				Active:       connectionActive,
-				UnackedCount: queue.UnackedCount(),
-				Consumers:    consumers,
+			stats.QueueStats[queueName].connectionStats[connectionName] = ConnectionStat{
+				active:       connectionActive,
+				unackedCount: queue.UnackedCount(),
+				consumers:    consumers,
 			}
 		}
 	}
@@ -107,14 +109,14 @@ func CollectStats(mainConnection *redisConnection) Stats {
 func (stats Stats) String() string {
 	var buffer bytes.Buffer
 
-	for queueName, queueStat := range stats.queueStats {
+	for queueName, queueStat := range stats.QueueStats {
 		buffer.WriteString(fmt.Sprintf("    queue:%s ready:%d rejected:%d unacked:%d consumers:%d\n",
-			queueName, queueStat.ReadyCount, queueStat.RejectedCount, queueStat.UnackedCount(), queueStat.ConsumerCount(),
+			queueName, queueStat.ReadyCount, queueStat.RejectedCount, queueStat.unackedCount(), queueStat.ConsumerCount(),
 		))
 
-		for connectionName, connectionStat := range queueStat.ConnectionStats {
+		for connectionName, connectionStat := range queueStat.connectionStats {
 			buffer.WriteString(fmt.Sprintf("        connection:%s unacked:%d consumers:%d active:%t\n",
-				connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers), connectionStat.Active,
+				connectionName, connectionStat.unackedCount, len(connectionStat.consumers), connectionStat.active,
 			))
 		}
 	}
@@ -142,7 +144,7 @@ func (stats Stats) GetHtml() string {
 	)
 
 	for _, queueName := range stats.sortedQueueNames() {
-		queueStat := stats.queueStats[queueName]
+		queueStat := stats.QueueStats[queueName]
 		buffer.WriteString(fmt.Sprintf(`<tr><td>`+
 			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
@@ -151,11 +153,11 @@ func (stats Stats) GetHtml() string {
 			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%d</td><td></td></tr>`,
-			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", "", queueStat.UnackedCount(), queueStat.ConsumerCount(),
+			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", "", queueStat.unackedCount(), queueStat.ConsumerCount(),
 		))
 
-		for _, connectionName := range queueStat.ConnectionStats.sortedNames() {
-			connectionStat := queueStat.ConnectionStats[connectionName]
+		for _, connectionName := range queueStat.connectionStats.sortedNames() {
+			connectionStat := queueStat.connectionStats[connectionName]
 			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
 				`%s</td><td></td><td>`+
 				`%s</td><td></td><td>`+
@@ -164,7 +166,7 @@ func (stats Stats) GetHtml() string {
 				`%s</td><td></td><td>`+
 				`%d</td><td></td><td>`+
 				`%d</td><td></td></tr>`,
-				"", "", "", ActiveSign(connectionStat.Active), connectionName, connectionStat.UnackedCount, len(connectionStat.Consumers),
+				"", "", "", ActiveSign(connectionStat.active), connectionName, connectionStat.unackedCount, len(connectionStat.consumers),
 			))
 		}
 	}
@@ -199,7 +201,7 @@ func (stats ConnectionStats) sortedNames() []string {
 
 func (stats Stats) sortedQueueNames() []string {
 	var keys []string
-	for key := range stats.queueStats {
+	for key := range stats.QueueStats {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
