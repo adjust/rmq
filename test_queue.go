@@ -34,7 +34,12 @@ func (queue *TestQueue) ReturnAllRejected() int {
 func (queue *TestQueue) PurgeReady() bool {
 	return false
 }
+
 func (queue *TestQueue) PurgeRejected() bool {
+	return false
+}
+
+func (queue *TestQueue) Close() bool {
 	return false
 }
 

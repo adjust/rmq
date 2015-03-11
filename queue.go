@@ -35,6 +35,7 @@ type Queue interface {
 	PurgeRejected() bool
 	ReturnRejected(count int) int
 	ReturnAllRejected() int
+	Close() bool
 }
 
 type redisQueue struct {
@@ -96,6 +97,17 @@ func (queue *redisQueue) PurgeReady() bool {
 // PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
 func (queue *redisQueue) PurgeRejected() bool {
 	result := queue.redisClient.Del(queue.rejectedKey)
+	if redisErrIsNil(result) {
+		return false
+	}
+	return result.Val() > 0
+}
+
+// Close purges and removes the queue from the list of queues
+func (queue *redisQueue) Close() bool {
+	queue.PurgeRejected()
+	queue.PurgeReady()
+	result := queue.redisClient.SRem(queuesKey, queue.name)
 	if redisErrIsNil(result) {
 		return false
 	}

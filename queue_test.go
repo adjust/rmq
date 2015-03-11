@@ -87,6 +87,10 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(connection.GetOpenQueues(), HasLen, 2)
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
 
+	queue1.Close()
+	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q2"})
+	c.Check(connection.GetConsumingQueues(), HasLen, 0)
+
 	connection.StopHeartbeat()
 }
 
