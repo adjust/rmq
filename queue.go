@@ -24,6 +24,8 @@ const (
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
+
+	consumeSleepDuration = 100 * time.Millisecond
 )
 
 // PublishQueue is an interface that can be used to test publishing
@@ -267,7 +269,7 @@ func (queue *redisQueue) consume() {
 		wantMore := queue.consumeBatch(batchSize)
 
 		if !wantMore {
-			time.Sleep(time.Millisecond)
+			time.Sleep(consumeSleepDuration)
 		}
 
 		if queue.consumingStopped {
