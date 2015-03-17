@@ -212,7 +212,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	log.Printf("queue started consuming %s %d", queue, prefetchLimit)
+	log.Printf("queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return true
 }
