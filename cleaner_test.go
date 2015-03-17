@@ -48,7 +48,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 6)
 
 	c.Check(queue.UnackedCount(), Equals, 0)
-	queue.StartConsuming(2)
+	queue.StartConsuming(2, time.Millisecond)
 	time.Sleep(time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 4)
@@ -94,7 +94,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 7)
 
 	c.Check(queue.UnackedCount(), Equals, 0)
-	queue.StartConsuming(2)
+	queue.StartConsuming(2, time.Millisecond)
 	time.Sleep(time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 5)
@@ -132,7 +132,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	conn = OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
 	queue = conn.OpenQueue("q1").(*redisQueue)
-	queue.StartConsuming(10)
+	queue.StartConsuming(10, time.Millisecond)
 	consumer = NewTestConsumer("c-C")
 
 	queue.AddConsumer("consumer3", consumer)

@@ -35,7 +35,7 @@ func (suite *StatsSuite) TestStats(c *C) {
 	q2.PurgeReady()
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false
-	q2.StartConsuming(10)
+	q2.StartConsuming(10, time.Millisecond)
 	q2.AddConsumer("stats-cons1", consumer)
 	q2.Publish("stats-d2")
 	q2.Publish("stats-d3")

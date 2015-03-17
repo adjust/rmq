@@ -1,5 +1,7 @@
 package queue
 
+import "time"
+
 type TestQueue struct {
 	LastDeliveries []string
 }
@@ -15,7 +17,7 @@ func (queue *TestQueue) Publish(payload string) bool {
 	return true
 }
 
-func (queue *TestQueue) StartConsuming(prefetchLimit int) bool {
+func (queue *TestQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
 	return true
 }
 

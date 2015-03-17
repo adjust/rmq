@@ -24,14 +24,12 @@ const (
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
-
-	consumeSleepDuration = 100 * time.Millisecond
 )
 
 // PublishQueue is an interface that can be used to test publishing
 type Queue interface {
 	Publish(payload string) bool
-	StartConsuming(prefetchLimit int) bool
+	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	AddConsumer(tag string, consumer Consumer) string
 	PurgeReady() bool
 	PurgeRejected() bool
@@ -51,6 +49,7 @@ type redisQueue struct {
 	redisClient      *redis.Client
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
+	pollDuration     time.Duration
 	consumingStopped bool
 }
 
@@ -199,7 +198,8 @@ func (queue *redisQueue) CloseInConnection() {
 
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
-func (queue *redisQueue) StartConsuming(prefetchLimit int) bool {
+// pollDuration is the duration the queue sleeps before checking for new deliveries
+func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
 	if queue.deliveryChan != nil {
 		return false
 	}
@@ -210,6 +210,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int) bool {
 	}
 
 	queue.prefetchLimit = prefetchLimit
+	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
 	log.Printf("queue started consuming %s %d", queue, prefetchLimit)
 	go queue.consume()
@@ -269,7 +270,7 @@ func (queue *redisQueue) consume() {
 		wantMore := queue.consumeBatch(batchSize)
 
 		if !wantMore {
-			time.Sleep(consumeSleepDuration)
+			time.Sleep(queue.pollDuration)
 		}
 
 		if queue.consumingStopped {

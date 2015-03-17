@@ -19,7 +19,7 @@ func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
 	connection := queue.OpenConnection(queue.SettingsFromGoenv("consumer", goenv))
 	queue := connection.OpenQueue("things")
-	queue.StartConsuming(unackedLimit)
+	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
 		queue.AddConsumer(name, NewConsumer(i))
