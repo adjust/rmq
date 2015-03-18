@@ -225,19 +225,8 @@ func (queue *redisQueue) StopConsuming() {
 // AddConsumer adds a consumer to the queue and returns its internal name
 // panics if StartConsuming wasn't called before!
 func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
-	if queue.deliveryChan == nil {
-		log.Panicf("queue failed to add consumer, call StartConsuming first! %s", queue)
-	}
-
-	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
-
-	// add consumer to list of consumers of this queue
-	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
-		log.Panicf("queue failed to add consumer %s %s", queue, consumer)
-	}
-
+	name := queue.addConsumer(tag)
 	go queue.consumerConsume(consumer)
-	log.Printf("queue added consumer %s %s", queue, name)
 	return name
 }
 
@@ -259,6 +248,22 @@ func (queue *redisQueue) RemoveConsumer(name string) bool {
 		return false
 	}
 	return result.Val() > 0
+}
+
+func (queue *redisQueue) addConsumer(tag string) string {
+	if queue.deliveryChan == nil {
+		log.Panicf("queue failed to add consumer, call StartConsuming first! %s", queue)
+	}
+
+	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+
+	// add consumer to list of consumers of this queue
+	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
+		log.Panicf("queue failed to add consumer %s %s", queue, tag)
+	}
+
+	log.Printf("queue added consumer %s %s", queue, name)
+	return name
 }
 
 func (queue *redisQueue) RemoveAllConsumers() int {
