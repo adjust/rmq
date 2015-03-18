@@ -31,6 +31,7 @@ type Queue interface {
 	Publish(payload string) bool
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	AddConsumer(tag string, consumer Consumer) string
+	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	PurgeReady() bool
 	PurgeRejected() bool
 	ReturnRejected(count int) int
@@ -238,6 +239,10 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 	go queue.addConsumer(consumer)
 	log.Printf("queue added consumer %s %s", queue, name)
 	return name
+}
+
+func (queue *redisQueue) AddBatchConsumer(tag string, batchCount int, consumer BatchConsumer) string {
+	return ""
 }
 
 func (queue *redisQueue) GetConsumers() []string {

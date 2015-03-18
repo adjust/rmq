@@ -25,6 +25,10 @@ func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
 	return ""
 }
 
+func (queue *TestQueue) AddBatchConsumer(tag string, batchCount int, consumer BatchConsumer) string {
+	return ""
+}
+
 func (queue *TestQueue) ReturnRejected(count int) int {
 	return 0
 }
