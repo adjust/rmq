@@ -236,7 +236,7 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 		log.Panicf("queue failed to add consumer %s %s", queue, consumer)
 	}
 
-	go queue.addConsumer(consumer)
+	go queue.consumerConsume(consumer)
 	log.Printf("queue added consumer %s %s", queue, name)
 	return name
 }
@@ -316,7 +316,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	return true
 }
 
-func (queue *redisQueue) addConsumer(consumer Consumer) {
+func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
