@@ -1,5 +1,5 @@
 package queue
 
 type BatchConsumer interface {
-	Consume(batch []Delivery)
+	Consume(batch Deliveries)
 }

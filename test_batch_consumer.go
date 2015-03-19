@@ -3,7 +3,7 @@ package queue
 import "log"
 
 type TestBatchConsumer struct {
-	LastBatch []Delivery
+	LastBatch Deliveries
 
 	finish chan int
 }
@@ -14,7 +14,7 @@ func NewTestBatchConsumer() *TestBatchConsumer {
 	}
 }
 
-func (consumer *TestBatchConsumer) Consume(batch []Delivery) {
+func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
 	log.Printf("TestBatchConsumer.Consume(%d)", len(batch))
 	consumer.LastBatch = batch
 	<-consumer.finish
