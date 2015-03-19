@@ -198,13 +198,13 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	connection.StopHeartbeat()
 }
 
-func (suite *QueueSuite) TestBatch(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
-	queue := connection.OpenQueue("batch-q").(*redisQueue)
+func (suite *QueueSuite) TestMulti(c *C) {
+	connection := OpenConnection(SettingsFromGoenv("multi-conn", suite.goenv))
+	queue := connection.OpenQueue("multi-q").(*redisQueue)
 	queue.PurgeReady()
 
 	for i := 0; i < 20; i++ {
-		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), Equals, true)
+		c.Check(queue.Publish(fmt.Sprintf("multi-d%d", i)), Equals, true)
 	}
 	c.Check(queue.ReadyCount(), Equals, 20)
 	c.Check(queue.UnackedCount(), Equals, 0)
@@ -214,11 +214,11 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 10)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
-	consumer := NewTestConsumer("batch-cons")
+	consumer := NewTestConsumer("multi-cons")
 	consumer.AutoAck = false
 	consumer.AutoFinish = false
 
-	queue.AddConsumer("batch-cons", consumer)
+	queue.AddConsumer("multi-cons", consumer)
 	time.Sleep(2 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 9)
 	c.Check(queue.UnackedCount(), Equals, 11)
@@ -245,6 +245,58 @@ func (suite *QueueSuite) TestBatch(c *C) {
 
 	queue.StopConsuming()
 	connection.StopHeartbeat()
+}
+
+func (suite *QueueSuite) TestBatch(c *C) {
+	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
+	queue := connection.OpenQueue("batch-q").(*redisQueue)
+	queue.PurgeRejected()
+	queue.PurgeReady()
+
+	for i := 0; i < 5; i++ {
+		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), Equals, true)
+	}
+
+	queue.StartConsuming(10, time.Millisecond)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue.UnackedCount(), Equals, 5)
+
+	consumer := NewTestBatchConsumer()
+	queue.AddBatchConsumer("batch-cons", 2, consumer)
+	time.Sleep(2 * time.Millisecond)
+	c.Assert(consumer.LastBatch, HasLen, 2)
+	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
+	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d1")
+	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
+	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
+	c.Check(queue.UnackedCount(), Equals, 3)
+	c.Check(queue.RejectedCount(), Equals, 1)
+
+	consumer.Finish()
+	time.Sleep(2 * time.Millisecond)
+	c.Assert(consumer.LastBatch, HasLen, 2)
+	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d2")
+	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d3")
+	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
+	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
+	c.Check(queue.UnackedCount(), Equals, 1)
+	c.Check(queue.RejectedCount(), Equals, 2)
+
+	consumer.Finish()
+	time.Sleep(2 * time.Millisecond)
+	c.Check(consumer.LastBatch, HasLen, 0)
+	c.Check(queue.UnackedCount(), Equals, 1)
+	c.Check(queue.RejectedCount(), Equals, 2)
+
+	c.Check(queue.Publish("batch-d5"), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Assert(consumer.LastBatch, HasLen, 2)
+	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
+	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d5")
+	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
+	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
+	c.Check(queue.UnackedCount(), Equals, 0)
+	c.Check(queue.RejectedCount(), Equals, 3)
 }
 
 func (suite *QueueSuite) TestReturnRejected(c *C) {

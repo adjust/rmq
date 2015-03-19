@@ -230,8 +230,11 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 	return name
 }
 
-func (queue *redisQueue) AddBatchConsumer(tag string, batchCount int, consumer BatchConsumer) string {
-	return ""
+// AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
+func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
+	name := queue.addConsumer(tag)
+	go queue.consumerBatchConsume(batchSize, consumer)
+	return name
 }
 
 func (queue *redisQueue) GetConsumers() []string {
@@ -325,6 +328,28 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
+	}
+}
+
+func (queue *redisQueue) consumerBatchConsume(batchSize int, consumer BatchConsumer) {
+	batch := []Delivery{}
+	waitUntil := time.Now().UTC().Add(time.Second)
+
+	for delivery := range queue.deliveryChan {
+		batch = append(batch, delivery)
+		now := time.Now().UTC()
+		// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
+
+		if len(batch) < batchSize && now.Before(waitUntil) {
+			// debug(fmt.Sprintf("batch consume wait %d < %d", len(batch), batchSize)) // COMMENTOUT
+			continue
+		}
+
+		// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
+		consumer.Consume(batch)
+
+		batch = []Delivery{}
+		waitUntil = time.Now().UTC().Add(time.Second)
 	}
 }
 

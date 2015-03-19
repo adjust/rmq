@@ -25,7 +25,7 @@ func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
 	return ""
 }
 
-func (queue *TestQueue) AddBatchConsumer(tag string, batchCount int, consumer BatchConsumer) string {
+func (queue *TestQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
 	return ""
 }
 
