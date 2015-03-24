@@ -26,9 +26,9 @@ const (
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
 )
 
-// PublishQueue is an interface that can be used to test publishing
 type Queue interface {
 	Publish(payload string) bool
+	PublishBytes(payload []byte) bool
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
@@ -85,6 +85,11 @@ func (queue *redisQueue) String() string {
 func (queue *redisQueue) Publish(payload string) bool {
 	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
 	return !redisErrIsNil(queue.redisClient.LPush(queue.readyKey, payload))
+}
+
+// PublishBytes just casts the bytes and calls Publish
+func (queue *redisQueue) PublishBytes(payload []byte) bool {
+	return queue.Publish(string(payload))
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
