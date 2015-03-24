@@ -1,5 +1,7 @@
 package queue
 
+import "encoding/json"
+
 type state int
 
 const (
@@ -13,7 +15,20 @@ type TestDelivery struct {
 	payload string
 }
 
-func NewTestDelivery(payload string) *TestDelivery {
+func NewTestDelivery(content interface{}) *TestDelivery {
+	if payload, ok := content.(string); ok {
+		return NewTestDeliveryString(payload)
+	}
+
+	bytes, err := json.Marshal(content)
+	if err != nil {
+		bytes = []byte("queue.NewTestDelivery failed to marshal")
+	}
+
+	return NewTestDeliveryString(string(bytes))
+}
+
+func NewTestDeliveryString(payload string) *TestDelivery {
 	return &TestDelivery{
 		payload: payload,
 	}
