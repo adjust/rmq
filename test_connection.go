@@ -13,6 +13,10 @@ func NewTestConnection() TestConnection {
 }
 
 func (connection TestConnection) OpenQueue(name string) Queue {
+	if queue, ok := connection.queues[name]; ok {
+		return queue
+	}
+
 	queue := NewTestQueue()
 	connection.queues[name] = queue
 	return queue
