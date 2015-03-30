@@ -17,7 +17,7 @@ func (connection TestConnection) OpenQueue(name string) Queue {
 		return queue
 	}
 
-	queue := NewTestQueue()
+	queue := NewTestQueue(name)
 	connection.queues[name] = queue
 	return queue
 }

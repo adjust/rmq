@@ -3,13 +3,18 @@ package queue
 import "time"
 
 type TestQueue struct {
+	name           string
 	LastDeliveries []string
 }
 
-func NewTestQueue() *TestQueue {
-	queue := &TestQueue{}
+func NewTestQueue(name string) *TestQueue {
+	queue := &TestQueue{name: name}
 	queue.Reset()
 	return queue
+}
+
+func (queue *TestQueue) String() string {
+	return queue.name
 }
 
 func (queue *TestQueue) Publish(payload string) bool {
