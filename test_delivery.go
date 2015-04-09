@@ -2,6 +2,8 @@ package queue
 
 import "encoding/json"
 
+//go:generate stringer -type=state
+
 type state int
 
 const (
