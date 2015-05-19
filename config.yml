@@ -13,4 +13,3 @@ production:
     queue_redis:
         network: unix
         address: /tmp/redis.sock
-        db: 3
