@@ -132,7 +132,7 @@ func (stats Stats) String() string {
 
 func (stats Stats) GetHtml() string {
 	var buffer bytes.Buffer
-	buffer.WriteString(`<html><body><table style="font-family:monospace">`)
+	buffer.WriteString(`<html><head><meta http-equiv="refresh" content="5"></head><body><table style="font-family:monospace">`)
 	buffer.WriteString(`<tr><td>` +
 		`queue</td><td></td><td>` +
 		`ready</td><td></td><td>` +
