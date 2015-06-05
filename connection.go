@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	redis "github.com/adjust/redis-latest-head" // TODO: update
+	"github.com/adjust/redis"
 	"github.com/adjust/uniuri"
 )
 

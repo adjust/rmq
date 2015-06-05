@@ -2,7 +2,7 @@ package queue
 
 import (
 	"fmt"
-	redis "github.com/adjust/redis-latest-head" // TODO: update
+	"github.com/adjust/redis"
 )
 
 type Delivery interface {
