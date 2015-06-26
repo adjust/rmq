@@ -10,6 +10,8 @@ import (
 	"github.com/adjust/uniuri"
 )
 
+const heartbeatDuration = time.Minute
+
 // Connection is an interface that can be used to test publishing
 type Connection interface {
 	OpenQueue(name string) Queue
@@ -151,7 +153,7 @@ func (connection *redisConnection) heartbeat() {
 }
 
 func (connection *redisConnection) updateHeartbeat() bool {
-	return !redisErrIsNil(connection.redisClient.SetEx(connection.heartbeatKey, 3*time.Second, "1"))
+	return !redisErrIsNil(connection.redisClient.SetEx(connection.heartbeatKey, heartbeatDuration, "1"))
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
