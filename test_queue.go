@@ -26,6 +26,9 @@ func (queue *TestQueue) PublishBytes(payload []byte) bool {
 	return queue.Publish(string(payload))
 }
 
+func (queue *TestQueue) SetPushQueue(pushQueue Queue) {
+}
+
 func (queue *TestQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
 	return true
 }

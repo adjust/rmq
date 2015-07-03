@@ -9,20 +9,23 @@ type Delivery interface {
 	Payload() string
 	Ack() bool
 	Reject() bool
+	Push() bool
 }
 
 type wrapDelivery struct {
 	payload     string
 	unackedKey  string
 	rejectedKey string
+	pushKey     string
 	redisClient *redis.Client
 }
 
-func newDelivery(payload, unackedKey, rejectedKey string, redisClient *redis.Client) *wrapDelivery {
+func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient *redis.Client) *wrapDelivery {
 	return &wrapDelivery{
 		payload:     payload,
 		unackedKey:  unackedKey,
 		rejectedKey: rejectedKey,
+		pushKey:     pushKey,
 		redisClient: redisClient,
 	}
 }
@@ -47,7 +50,15 @@ func (delivery *wrapDelivery) Ack() bool {
 }
 
 func (delivery *wrapDelivery) Reject() bool {
-	if redisErrIsNil(delivery.redisClient.LPush(delivery.rejectedKey, delivery.payload)) {
+	return delivery.move(delivery.rejectedKey)
+}
+
+func (delivery *wrapDelivery) Push() bool {
+	return delivery.move(delivery.pushKey)
+}
+
+func (delivery *wrapDelivery) move(key string) bool {
+	if redisErrIsNil(delivery.redisClient.LPush(key, delivery.payload)) {
 		return false
 	}
 

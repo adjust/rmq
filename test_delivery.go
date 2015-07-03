@@ -10,6 +10,7 @@ const (
 	Unacked state = iota
 	Acked
 	Rejected
+	Pushed
 )
 
 type TestDelivery struct {
@@ -51,6 +52,14 @@ func (delivery *TestDelivery) Ack() bool {
 func (delivery *TestDelivery) Reject() bool {
 	if delivery.State == Unacked {
 		delivery.State = Rejected
+		return true
+	}
+	return false
+}
+
+func (delivery *TestDelivery) Push() bool {
+	if delivery.State == Unacked {
+		delivery.State = Pushed
 		return true
 	}
 	return false

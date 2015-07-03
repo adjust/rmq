@@ -352,6 +352,35 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 0)
 }
 
+func (suite *QueueSuite) TestPushQueue(c *C) {
+	connection := OpenConnection(SettingsFromGoenv("push", suite.goenv))
+	queue1 := connection.OpenQueue("queue1").(*redisQueue)
+	queue2 := connection.OpenQueue("queue2").(*redisQueue)
+	queue1.SetPushQueue(queue2)
+	c.Check(queue1.pushKey, Equals, queue2.readyKey)
+
+	consumer1 := NewTestConsumer("push-cons")
+	consumer1.AutoAck = false
+	consumer1.AutoFinish = false
+	queue1.StartConsuming(10, time.Millisecond)
+	queue1.AddConsumer("push-cons", consumer1)
+
+	consumer2 := NewTestConsumer("push-cons")
+	consumer2.AutoAck = false
+	consumer2.AutoFinish = false
+	queue2.StartConsuming(10, time.Millisecond)
+	queue2.AddConsumer("push-cons", consumer2)
+
+	queue1.Publish("d1")
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue1.UnackedCount(), Equals, 1)
+	c.Assert(consumer1.LastDeliveries, HasLen, 1)
+
+	consumer1.LastDelivery.Push()
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue2.UnackedCount(), Equals, 1)
+}
+
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
 	goenv := goenv.NewGoenv("config.yml", "production", "")

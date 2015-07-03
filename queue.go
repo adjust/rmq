@@ -29,6 +29,7 @@ const (
 type Queue interface {
 	Publish(payload string) bool
 	PublishBytes(payload []byte) bool
+	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
@@ -47,6 +48,7 @@ type redisQueue struct {
 	readyKey         string // key to list of ready deliveries
 	rejectedKey      string // key to list of rejected deliveries
 	unackedKey       string // key to list of currently consuming deliveries
+	pushKey          string // key to list of pushed deliveries
 	redisClient      *redis.Client
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
@@ -202,6 +204,15 @@ func (queue *redisQueue) CloseInConnection() {
 	redisErrIsNil(queue.redisClient.SRem(queue.queuesKey, queue.name))
 }
 
+func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
+	redisPushQueue, ok := pushQueue.(*redisQueue)
+	if !ok {
+		return
+	}
+
+	queue.pushKey = redisPushQueue.readyKey
+}
+
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
@@ -322,7 +333,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 		}
 
 		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
-		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.redisClient)
+		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
