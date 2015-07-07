@@ -54,7 +54,11 @@ func (delivery *wrapDelivery) Reject() bool {
 }
 
 func (delivery *wrapDelivery) Push() bool {
-	return delivery.move(delivery.pushKey)
+	if delivery.pushKey != "" {
+		return delivery.move(delivery.pushKey)
+	} else {
+		return delivery.move(delivery.rejectedKey)
+	}
 }
 
 func (delivery *wrapDelivery) move(key string) bool {

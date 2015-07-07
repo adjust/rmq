@@ -376,9 +376,15 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 	c.Check(queue1.UnackedCount(), Equals, 1)
 	c.Assert(consumer1.LastDeliveries, HasLen, 1)
 
-	consumer1.LastDelivery.Push()
+	c.Check(consumer1.LastDelivery.Push(), Equals, true)
 	time.Sleep(2 * time.Millisecond)
+	c.Check(queue1.UnackedCount(), Equals, 0)
 	c.Check(queue2.UnackedCount(), Equals, 1)
+
+	c.Assert(consumer2.LastDeliveries, HasLen, 1)
+	c.Check(consumer2.LastDelivery.Push(), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(queue2.RejectedCount(), Equals, 1)
 }
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
