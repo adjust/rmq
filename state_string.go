@@ -4,9 +4,9 @@ package queue
 
 import "fmt"
 
-const _state_name = "UnackedAckedRejected"
+const _state_name = "UnackedAckedRejectedPushed"
 
-var _state_index = [...]uint8{0, 7, 12, 20}
+var _state_index = [...]uint8{0, 7, 12, 20, 26}
 
 func (i state) String() string {
 	if i < 0 || i+1 >= state(len(_state_index)) {
