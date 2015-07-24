@@ -49,3 +49,7 @@ func (connection TestConnection) Reset() {
 		queue.Reset()
 	}
 }
+
+func (connection TestConnection) GetOpenQueues() []string {
+	return []string{}
+}

@@ -16,6 +16,7 @@ const heartbeatDuration = time.Minute
 type Connection interface {
 	OpenQueue(name string) Queue
 	CollectStats() Stats
+	GetOpenQueues() []string
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
