@@ -143,26 +143,27 @@ func (stats Stats) GetHtml(refresh string) string {
 		`queue</td><td></td><td>` +
 		`ready</td><td></td><td>` +
 		`rejected</td><td></td><td>` +
-		`</td><td></td><td style="color:lightgrey">` +
-		`connection</td><td></td><td>` +
+		`</td><td></td><td>` +
+		`connections</td><td></td><td>` +
 		`unacked</td><td></td><td>` +
 		`consumers</td><td></td></tr>`,
 	)
 
 	for _, queueName := range stats.sortedQueueNames() {
 		queueStat := stats.QueueStats[queueName]
+		connectionNames := queueStat.connectionStats.sortedNames()
 		buffer.WriteString(fmt.Sprintf(`<tr><td>`+
 			`%s</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
+			`%d</td><td></td><td>`+
 			`%d</td><td></td><td>`+
 			`%d</td><td></td></tr>`,
-			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", "", queueStat.unackedCount(), queueStat.ConsumerCount(),
+			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", len(connectionNames), queueStat.unackedCount(), queueStat.ConsumerCount(),
 		))
 
-		for _, connectionName := range queueStat.connectionStats.sortedNames() {
+		for _, connectionName := range connectionNames {
 			connectionStat := queueStat.connectionStats[connectionName]
 			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
 				`%s</td><td></td><td>`+
