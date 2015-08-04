@@ -162,18 +162,20 @@ func (stats Stats) GetHtml(layout, refresh string) string {
 			queueName, queueStat.ReadyCount, queueStat.RejectedCount, "", len(connectionNames), queueStat.unackedCount(), queueStat.ConsumerCount(),
 		))
 
-		for _, connectionName := range connectionNames {
-			connectionStat := queueStat.connectionStats[connectionName]
-			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
-				`%s</td><td></td><td>`+
-				`%s</td><td></td><td>`+
-				`%s</td><td></td><td>`+
-				`%s</td><td></td><td>`+
-				`%s</td><td></td><td>`+
-				`%d</td><td></td><td>`+
-				`%d</td><td></td></tr>`,
-				"", "", "", ActiveSign(connectionStat.active), connectionName, connectionStat.unackedCount, len(connectionStat.consumers),
-			))
+		if layout != "condensed" {
+			for _, connectionName := range connectionNames {
+				connectionStat := queueStat.connectionStats[connectionName]
+				buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
+					`%s</td><td></td><td>`+
+					`%s</td><td></td><td>`+
+					`%s</td><td></td><td>`+
+					`%s</td><td></td><td>`+
+					`%s</td><td></td><td>`+
+					`%d</td><td></td><td>`+
+					`%d</td><td></td></tr>`,
+					"", "", "", ActiveSign(connectionStat.active), connectionName, connectionStat.unackedCount, len(connectionStat.consumers),
+				))
+			}
 		}
 	}
 
