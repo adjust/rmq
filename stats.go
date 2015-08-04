@@ -130,9 +130,8 @@ func (stats Stats) String() string {
 	return buffer.String()
 }
 
-func (stats Stats) GetHtml(refresh string) string {
-	var buffer bytes.Buffer
-	buffer.WriteString(`<html>`)
+func (stats Stats) GetHtml(layout, refresh string) string {
+	buffer := bytes.NewBufferString("<html>")
 
 	if refresh != "" {
 		buffer.WriteString(fmt.Sprintf(`<head><meta http-equiv="refresh" content="%s">`, refresh))
