@@ -73,9 +73,9 @@ func NewStats() Stats {
 	}
 }
 
-func CollectStats(mainConnection *redisConnection) Stats {
+func CollectStats(queueList []string, mainConnection *redisConnection) Stats {
 	stats := NewStats()
-	for _, queueName := range mainConnection.GetOpenQueues() {
+	for _, queueName := range queueList {
 		queue := mainConnection.openQueue(queueName)
 		stats.QueueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
 	}
@@ -94,8 +94,11 @@ func CollectStats(mainConnection *redisConnection) Stats {
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
 			consumers := queue.GetConsumers()
-
-			stats.QueueStats[queueName].connectionStats[connectionName] = ConnectionStat{
+			openQueueStat, ok := stats.QueueStats[queueName]
+			if !ok {
+				continue
+			}
+			openQueueStat.connectionStats[connectionName] = ConnectionStat{
 				active:       connectionActive,
 				unackedCount: queue.UnackedCount(),
 				consumers:    consumers,

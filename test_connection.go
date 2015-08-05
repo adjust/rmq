@@ -22,7 +22,7 @@ func (connection TestConnection) OpenQueue(name string) Queue {
 	return queue
 }
 
-func (connection TestConnection) CollectStats() Stats {
+func (connection TestConnection) CollectStats(queueList []string) Stats {
 	return Stats{}
 }
 

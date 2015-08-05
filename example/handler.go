@@ -25,7 +25,8 @@ func NewHandler(connection queue.Connection) *Handler {
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
-	stats := handler.connection.CollectStats()
+	queues := handler.connection.GetOpenQueues()
+	stats := handler.connection.CollectStats(queues)
 	log.Printf("queue stats\n%s", stats)
 	fmt.Fprint(writer, stats.GetHtml("", ""))
 }

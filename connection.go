@@ -15,7 +15,7 @@ const heartbeatDuration = time.Minute
 // Connection is an interface that can be used to test publishing
 type Connection interface {
 	OpenQueue(name string) Queue
-	CollectStats() Stats
+	CollectStats(queueList []string) Stats
 	GetOpenQueues() []string
 }
 
@@ -65,8 +65,8 @@ func (connection *redisConnection) OpenQueue(name string) Queue {
 	return queue
 }
 
-func (connection *redisConnection) CollectStats() Stats {
-	return CollectStats(connection)
+func (connection *redisConnection) CollectStats(queueList []string) Stats {
+	return CollectStats(queueList, connection)
 }
 
 func (connection *redisConnection) String() string {
