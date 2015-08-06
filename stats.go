@@ -179,19 +179,21 @@ func (stats Stats) GetHtml(layout, refresh string) string {
 		}
 	}
 
-	buffer.WriteString(`<tr><td>-----</td></tr>`)
-	for _, connectionName := range stats.sortedConnectionNames() {
-		active := stats.otherConnections[connectionName]
-		buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td><td>`+
-			`%s</td><td></td></tr>`,
-			"", "", "", ActiveSign(active), connectionName, "", "",
-		))
+	if layout != "condensed" {
+		buffer.WriteString(`<tr><td>-----</td></tr>`)
+		for _, connectionName := range stats.sortedConnectionNames() {
+			active := stats.otherConnections[connectionName]
+			buffer.WriteString(fmt.Sprintf(`<tr style="color:lightgrey"><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td><td>`+
+				`%s</td><td></td></tr>`,
+				"", "", "", ActiveSign(active), connectionName, "", "",
+			))
+		}
 	}
 
 	buffer.WriteString(`</table></body></html>`)
