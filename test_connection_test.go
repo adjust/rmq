@@ -3,8 +3,6 @@ package rmq
 import (
 	"testing"
 
-	"github.com/adjust/goenv"
-
 	. "github.com/adjust/gocheck"
 )
 
@@ -12,13 +10,7 @@ func TestConnectionSuite(t *testing.T) {
 	TestingSuiteT(&ConnectionSuite{}, t)
 }
 
-type ConnectionSuite struct {
-	goenv *goenv.Goenv
-}
-
-func (suite *ConnectionSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
-}
+type ConnectionSuite struct{}
 
 func (suite *ConnectionSuite) TestConnection(c *C) {
 	connection := NewTestConnection()

@@ -4,8 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adjust/goenv"
-
 	. "github.com/adjust/gocheck"
 )
 
@@ -13,20 +11,14 @@ func TestCleanerSuite(t *testing.T) {
 	TestingSuiteT(&CleanerSuite{}, t)
 }
 
-type CleanerSuite struct {
-	goenv *goenv.Goenv
-}
-
-func (suite *CleanerSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
-}
+type CleanerSuite struct{}
 
 func (suite *CleanerSuite) TestCleaner(c *C) {
-	flushConn := OpenConnection(SettingsFromGoenv("cleaner-flush", suite.goenv))
+	flushConn := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1)
 	flushConn.flushDb()
 	flushConn.StopHeartbeat()
 
-	conn := OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
+	conn := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	c.Check(conn.GetOpenQueues(), HasLen, 0)
 	queue := conn.OpenQueue("q1").(*redisQueue)
 	c.Check(conn.GetOpenQueues(), HasLen, 1)
@@ -79,7 +71,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	conn.StopHeartbeat()
 	time.Sleep(time.Millisecond)
 
-	conn = OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
+	conn = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	queue = conn.OpenQueue("q1").(*redisQueue)
 
 	queue.Publish("del7")
@@ -124,13 +116,13 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	conn.StopHeartbeat()
 	time.Sleep(time.Millisecond)
 
-	cleanerConn := OpenConnection(SettingsFromGoenv("cleaner-conn", suite.goenv))
+	cleanerConn := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1)
 	cleaner := NewCleaner(cleanerConn)
 	c.Check(cleaner.Clean(), IsNil)
 	c.Check(queue.ReadyCount(), Equals, 9) // 2 of 11 were acked above
 	c.Check(conn.GetOpenQueues(), HasLen, 2)
 
-	conn = OpenConnection(SettingsFromGoenv("cleaner-conn1", suite.goenv))
+	conn = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	queue = conn.OpenQueue("q1").(*redisQueue)
 	queue.StartConsuming(10, time.Millisecond)
 	consumer = NewTestConsumer("c-C")

@@ -5,13 +5,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/adjust/goenv"
 	"github.com/adjust/rmq"
 )
 
 func main() {
-	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("handler", goenv))
+	connection := rmq.OpenConnection("handler", "tcp", "localhost:6379", 2)
 	http.Handle("/overview", NewHandler(connection))
 	fmt.Printf("Handler listening on http://localhost:3333/overview\n")
 	http.ListenAndServe(":3333", nil)

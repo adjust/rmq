@@ -3,13 +3,11 @@ package main
 import (
 	"time"
 
-	"github.com/adjust/goenv"
 	"github.com/adjust/rmq"
 )
 
 func main() {
-	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("cleaner", goenv))
+	connection := rmq.OpenConnection("cleaner", "tcp", "localhost:6379", 2)
 	cleaner := rmq.NewCleaner(connection)
 
 	for _ = range time.Tick(time.Second) {

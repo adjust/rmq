@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adjust/goenv"
-
 	. "github.com/adjust/gocheck"
 )
 
@@ -14,30 +12,24 @@ func TestQueueSuite(t *testing.T) {
 	TestingSuiteT(&QueueSuite{}, t)
 }
 
-type QueueSuite struct {
-	goenv *goenv.Goenv
-}
-
-func (suite *QueueSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
-}
+type QueueSuite struct{}
 
 func (suite *QueueSuite) TestConnections(c *C) {
-	flushConn := OpenConnection(SettingsFromGoenv("conns-flush", suite.goenv))
+	flushConn := OpenConnection("conns-flush", "tcp", "localhost:6379", 1)
 	flushConn.flushDb()
 	flushConn.StopHeartbeat()
 
-	connection := OpenConnection(SettingsFromGoenv("conns-conn", suite.goenv))
+	connection := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
 	c.Assert(connection, NotNil)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
 	c.Check(connection.GetConnections(), HasLen, 1, Commentf("cleaner %s", connection.Name)) // cleaner connection remains
 
-	conn1 := OpenConnection(SettingsFromGoenv("conns-conn1", suite.goenv))
+	conn1 := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1)
 	c.Check(connection.GetConnections(), HasLen, 2)
 	c.Check(connection.hijackConnection("nope").Check(), Equals, false)
 	c.Check(conn1.Check(), Equals, true)
-	conn2 := OpenConnection(SettingsFromGoenv("conns-conn2", suite.goenv))
+	conn2 := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1)
 	c.Check(connection.GetConnections(), HasLen, 3)
 	c.Check(conn1.Check(), Equals, true)
 	c.Check(conn2.Check(), Equals, true)
@@ -57,7 +49,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 }
 
 func (suite *QueueSuite) TestConnectionQueues(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("conn-q-conn", suite.goenv))
+	connection := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1)
 	c.Assert(connection, NotNil)
 
 	connection.CloseAllQueues()
@@ -95,7 +87,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("queue-conn", suite.goenv))
+	connection := OpenConnection("queue-conn", "tcp", "localhost:6379", 1)
 	c.Assert(connection, NotNil)
 
 	queue := connection.OpenQueue("queue-q").(*redisQueue)
@@ -132,7 +124,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 }
 
 func (suite *QueueSuite) TestConsumer(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("cons-conn", suite.goenv))
+	connection := OpenConnection("cons-conn", "tcp", "localhost:6379", 1)
 	c.Assert(connection, NotNil)
 
 	queue := connection.OpenQueue("cons-q").(*redisQueue)
@@ -199,7 +191,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 }
 
 func (suite *QueueSuite) TestMulti(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("multi-conn", suite.goenv))
+	connection := OpenConnection("multi-conn", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("multi-q").(*redisQueue)
 	queue.PurgeReady()
 
@@ -248,7 +240,7 @@ func (suite *QueueSuite) TestMulti(c *C) {
 }
 
 func (suite *QueueSuite) TestBatch(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("batch-conn", suite.goenv))
+	connection := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("batch-q").(*redisQueue)
 	queue.PurgeRejected()
 	queue.PurgeReady()
@@ -300,7 +292,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 }
 
 func (suite *QueueSuite) TestReturnRejected(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("return-conn", suite.goenv))
+	connection := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("return-q").(*redisQueue)
 	queue.PurgeReady()
 
@@ -353,7 +345,7 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 }
 
 func (suite *QueueSuite) TestPushQueue(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("push", suite.goenv))
+	connection := OpenConnection("push", "tcp", "localhost:6379", 1)
 	queue1 := connection.OpenQueue("queue1").(*redisQueue)
 	queue2 := connection.OpenQueue("queue2").(*redisQueue)
 	queue1.SetPushQueue(queue2)
@@ -389,8 +381,7 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
-	goenv := goenv.NewGoenv("config.yml", "production", "")
-	connection := OpenConnection(SettingsFromGoenv("bench-conn", goenv))
+	connection := OpenConnection("bench-conn", "tcp", "localhost:6379", 1)
 	queueName := fmt.Sprintf("bench-q%d", c.N)
 	queue := connection.OpenQueue(queueName).(*redisQueue)
 

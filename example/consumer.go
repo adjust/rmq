@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/adjust/goenv"
 	"github.com/adjust/rmq"
 )
 
@@ -16,8 +15,7 @@ const (
 )
 
 func main() {
-	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("consumer", goenv))
+	connection := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
 	queue := connection.OpenQueue("things")
 	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
 	for i := 0; i < numConsumers; i++ {

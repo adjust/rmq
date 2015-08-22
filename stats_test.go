@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adjust/goenv"
-
 	. "github.com/adjust/gocheck"
 )
 
@@ -14,20 +12,14 @@ func TestStatsSuite(t *testing.T) {
 	TestingSuiteT(&StatsSuite{}, t)
 }
 
-type StatsSuite struct {
-	goenv *goenv.Goenv
-}
-
-func (suite *StatsSuite) SetUpSuite(c *C) {
-	suite.goenv = goenv.NewGoenv("config.yml", "testing", "")
-}
+type StatsSuite struct{}
 
 func (suite *StatsSuite) TestStats(c *C) {
-	connection := OpenConnection(SettingsFromGoenv("stats-conn", suite.goenv))
+	connection := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
-	conn1 := OpenConnection(SettingsFromGoenv("stats-conn1", suite.goenv))
-	conn2 := OpenConnection(SettingsFromGoenv("stats-conn2", suite.goenv))
+	conn1 := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
+	conn2 := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
 	q1 := conn2.OpenQueue("stats-q1").(*redisQueue)
 	q1.PurgeReady()
 	q1.Publish("stats-d1")
