@@ -13,6 +13,7 @@ func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
 	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("handler", goenv))
 	http.Handle("/overview", NewHandler(connection))
+	fmt.Printf("Handler listening on http://localhost:3333/overview\n")
 	http.ListenAndServe(":3333", nil)
 }
 
@@ -24,9 +25,12 @@ func NewHandler(connection rmq.Connection) *Handler {
 	return &Handler{connection: connection}
 }
 
-func (handler *Handler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
+func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	layout := request.FormValue("layout")
+	refresh := request.FormValue("refresh")
+
 	queues := handler.connection.GetOpenQueues()
 	stats := handler.connection.CollectStats(queues)
 	log.Printf("queue stats\n%s", stats)
-	fmt.Fprint(writer, stats.GetHtml("", ""))
+	fmt.Fprint(writer, stats.GetHtml(layout, refresh))
 }
