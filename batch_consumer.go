@@ -1,4 +1,4 @@
-package queue
+package rmq
 
 type BatchConsumer interface {
 	Consume(batch Deliveries)

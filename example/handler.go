@@ -6,21 +6,21 @@ import (
 	"net/http"
 
 	"github.com/adjust/goenv"
-	"github.com/adjust/queue"
+	"github.com/adjust/rmq"
 )
 
 func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := queue.OpenConnection(queue.SettingsFromGoenv("handler", goenv))
+	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("handler", goenv))
 	http.Handle("/overview", NewHandler(connection))
 	http.ListenAndServe(":3333", nil)
 }
 
 type Handler struct {
-	connection queue.Connection
+	connection rmq.Connection
 }
 
-func NewHandler(connection queue.Connection) *Handler {
+func NewHandler(connection rmq.Connection) *Handler {
 	return &Handler{connection: connection}
 }
 

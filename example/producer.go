@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/adjust/goenv"
-	"github.com/adjust/queue"
+	"github.com/adjust/rmq"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 
 func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := queue.OpenConnection(queue.SettingsFromGoenv("producer", goenv))
+	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("producer", goenv))
 	things := connection.OpenQueue("things")
 	balls := connection.OpenQueue("balls")
 	var before time.Time

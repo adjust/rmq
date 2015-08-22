@@ -2,12 +2,12 @@ package main
 
 import (
 	"github.com/adjust/goenv"
-	"github.com/adjust/queue"
+	"github.com/adjust/rmq"
 )
 
 func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := queue.OpenConnection(queue.SettingsFromGoenv("cleaner", goenv))
+	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("cleaner", goenv))
 	queue := connection.OpenQueue("things")
 	queue.PurgeReady()
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/adjust/goenv"
-	"github.com/adjust/queue"
+	"github.com/adjust/rmq"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 
 func main() {
 	goenv := goenv.NewGoenv("../config.yml", "production", "nil")
-	connection := queue.OpenConnection(queue.SettingsFromGoenv("consumer", goenv))
+	connection := rmq.OpenConnection(rmq.SettingsFromGoenv("consumer", goenv))
 	queue := connection.OpenQueue("things")
 	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
 	for i := 0; i < numConsumers; i++ {
@@ -41,7 +41,7 @@ func NewConsumer(tag int) *Consumer {
 	}
 }
 
-func (consumer *Consumer) Consume(delivery queue.Delivery) {
+func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	consumer.count++
 	if consumer.count%batchSize == 0 {
 		duration := time.Now().Sub(consumer.before)
