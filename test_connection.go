@@ -38,7 +38,7 @@ func (connection TestConnection) GetDeliveries(queueName string) []string {
 func (connection TestConnection) GetDelivery(queueName string, index int) string {
 	queue, ok := connection.queues[queueName]
 	if !ok || index < 0 || index >= len(queue.LastDeliveries) {
-		return fmt.Sprintf("queue.TestConnection: delivery not found: %s[%d]", queueName, index)
+		return fmt.Sprintf("rmq.TestConnection: delivery not found: %s[%d]", queueName, index)
 	}
 
 	return queue.LastDeliveries[index]

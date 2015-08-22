@@ -25,7 +25,7 @@ func NewTestDelivery(content interface{}) *TestDelivery {
 
 	bytes, err := json.Marshal(content)
 	if err != nil {
-		bytes = []byte("queue.NewTestDelivery failed to marshal")
+		bytes = []byte("rmq.NewTestDelivery failed to marshal")
 	}
 
 	return NewTestDeliveryString(string(bytes))

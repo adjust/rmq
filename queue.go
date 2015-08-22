@@ -161,7 +161,7 @@ func (queue *redisQueue) ReturnAllUnacked() int {
 		if redisErrIsNil(queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey)) {
 			return i
 		}
-		// debug(fmt.Sprintf("queue returned unacked delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
+		// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
 
 	return unackedCount
@@ -191,7 +191,7 @@ func (queue *redisQueue) ReturnRejected(count int) int {
 		if redisErrIsNil(result) {
 			return i
 		}
-		// debug(fmt.Sprintf("queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
+		// debug(fmt.Sprintf("rmq queue returned rejected delivery %s %s", result.Val(), queue.readyKey)) // COMMENTOUT
 	}
 
 	return count
@@ -223,13 +223,13 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 
 	// add queue to list of queues consumed on this connection
 	if redisErrIsNil(queue.redisClient.SAdd(queue.queuesKey, queue.name)) {
-		log.Panicf("queue failed to start consuming %s", queue)
+		log.Panicf("rmq queue failed to start consuming %s", queue)
 	}
 
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	log.Printf("queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
+	log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return true
 }
@@ -271,17 +271,17 @@ func (queue *redisQueue) RemoveConsumer(name string) bool {
 
 func (queue *redisQueue) addConsumer(tag string) string {
 	if queue.deliveryChan == nil {
-		log.Panicf("queue failed to add consumer, call StartConsuming first! %s", queue)
+		log.Panicf("rmq queue failed to add consumer, call StartConsuming first! %s", queue)
 	}
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
 	if redisErrIsNil(queue.redisClient.SAdd(queue.consumersKey, name)) {
-		log.Panicf("queue failed to add consumer %s %s", queue, tag)
+		log.Panicf("rmq queue failed to add consumer %s %s", queue, tag)
 	}
 
-	log.Printf("queue added consumer %s %s", queue, name)
+	log.Printf("rmq queue added consumer %s %s", queue, name)
 	return name
 }
 
@@ -303,7 +303,7 @@ func (queue *redisQueue) consume() {
 		}
 
 		if queue.consumingStopped {
-			log.Printf("queue stopped consuming %s", queue)
+			log.Printf("rmq queue stopped consuming %s", queue)
 			return
 		}
 	}
@@ -328,7 +328,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	for i := 0; i < batchSize; i++ {
 		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if redisErrIsNil(result) {
-			// debug(fmt.Sprintf("queue consumed last batch %s %d", queue, i)) // COMMENTOUT
+			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
 			return false
 		}
 
@@ -336,7 +336,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
-	// debug(fmt.Sprintf("queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
+	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
 	return true
 }
 
@@ -377,11 +377,11 @@ func redisErrIsNil(result redis.Cmder) bool {
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("redis error is not nil %s", result.Err())
+		log.Panicf("rmq redis error is not nil %s", result.Err())
 		return false
 	}
 }
 
 func debug(message string) {
-	// log.Printf("queue.debug: %s", message) // COMMENTOUT
+	// log.Printf("rmq debug: %s", message) // COMMENTOUT
 }

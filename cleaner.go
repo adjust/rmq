@@ -34,26 +34,26 @@ func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 	for _, queueName := range queueNames {
 		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
 		if !ok {
-			return fmt.Errorf("queue cleaner failed to open queue %s", queueName)
+			return fmt.Errorf("rmq cleaner failed to open queue %s", queueName)
 		}
 
 		cleaner.CleanQueue(queue)
 	}
 
 	if !connection.Close() {
-		return fmt.Errorf("queue cleaner failed to close connection %s", connection)
+		return fmt.Errorf("rmq cleaner failed to close connection %s", connection)
 	}
 
 	if err := connection.CloseAllQueuesInConnection(); err != nil {
-		return fmt.Errorf("queue cleaner failed to close all queues %d %s", connection, err)
+		return fmt.Errorf("rmq cleaner failed to close all queues %d %s", connection, err)
 	}
 
-	log.Printf("queue cleaner cleaned connection %s", connection)
+	log.Printf("rmq cleaner cleaned connection %s", connection)
 	return nil
 }
 
 func (cleaner *Cleaner) CleanQueue(queue *redisQueue) {
 	returned := queue.ReturnAllUnacked()
 	queue.CloseInConnection()
-	log.Printf("queue cleaner cleaned queue %s %d", queue, returned)
+	log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
 }

@@ -47,14 +47,14 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 	}
 
 	if !connection.updateHeartbeat() { // checks the connection
-		log.Panicf("queue connection failed to update heartbeat %s", connection)
+		log.Panicf("rmq connection failed to update heartbeat %s", connection)
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
 	redisErrIsNil(redisClient.SAdd(connectionsKey, name))
 
 	go connection.heartbeat()
-	log.Printf("queue connection connected to %s %s:%s %d", name, network, address, db)
+	log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
 	return connection
 }
 
@@ -141,13 +141,13 @@ func (connection *redisConnection) GetConsumingQueues() []string {
 func (connection *redisConnection) heartbeat() {
 	for {
 		if !connection.updateHeartbeat() {
-			log.Printf("redis connection failed to update heartbeat %s", connection)
+			log.Printf("rmq connection failed to update heartbeat %s", connection)
 		}
 
 		time.Sleep(time.Second)
 
 		if connection.heartbeatStopped {
-			log.Printf("queue connection stopped heartbeat %s", connection)
+			log.Printf("rmq connection stopped heartbeat %s", connection)
 			return
 		}
 	}
