@@ -119,3 +119,116 @@ func (consumer *TaskConsumer) Consume(delivery rmq.Delivery) {
 
 First we unmarshal the JSON package found in the delivery payload. If this fails
 we reject the delivery, otherwise we perform the task and ack the delivery.
+
+## Testing Included
+
+To simplify testing of queue producers and consumers we include test mocks.
+
+### Test Connection
+
+As before, we first need a queue connection, but this time we use a
+`rmq.TestConnection` that doesn't need any connection settings.
+
+```go
+testConn := rmq.NewTestConnection()
+```
+
+If you are using a testing framework that uses test suites, you can reuse that
+test connection by setting it up once for the suite and resetting it with
+`testConn.Reset` before each test.
+
+### Producer Test
+
+Now lets say we want to test the function `publishTask` that creates a task and
+publishes it to a queue from that connection.
+
+```go
+// call the function that should publish a task
+publishTask(testConn)
+
+// check that the task is published
+c.Check(suite.testConn.GetDelivery("tasks", 0), Equals, "task payload")
+```
+
+The `c.Check` part is from [gocheck][gocheck], but it will look similar for
+other testing frameworks. Given a `rmq.TestConnection`, we can check the
+deliveries that were published to it's queues (since the last `Reset()` call)
+with `GetDelivery(queue, index)`. In this case we want to extract the first
+(and possibly only) delivery that was published to queue `tasks` and just check
+the payload string.
+
+If the payload is JSON again, the unmarshalling and check might look like this:
+
+```go
+var task Task
+err := json.Unmarshal([]byte(suite.testConn.GetDelivery("tasks", 0), &task))
+c.Assert(err, IsNil)
+c.Assert(task, NotNil)
+c.Check(task.Property, Equals, "value")
+```
+
+If you expect a producer to create multiple deliveries you can use different
+indexes to access them all.
+
+```go
+c.Check(suite.testConn.GetDelivery("tasks", 0), Equals, "task1")
+c.Check(suite.testConn.GetDelivery("tasks", 1), Equals, "task2")
+```
+
+For convenience there's also a function `GetDeliveries` that returns all
+published deliveries to a queue as string array.
+
+```go
+c.Check(suite.testConn.GetDeliveries("tasks"), DeepEquals, []string{"task1", "task2"})
+```
+
+If your producer doesn't have guarantees about the order of its deliveries, you
+could implement a selector function like `findByPrefix` and then check each
+delivery regardless of their index.
+
+```go
+tasks := suite.testConn.GetDeliveries("tasks")
+c.Assert(tasks, HasLen, 2)
+xTask := findByPrefix(tasks, "x")
+yTask := findByPrefix(tasks, "y")
+c.Check(xTask.Id, Equals, "3")
+c.Check(yTask.Id, Equals, "4")
+```
+
+These examples assumed that you inject the `rmq.Connection` into your testable
+functions. If you inject instances of `rmq.Queue` instead, you can use
+`rmq.TestQueue` instances in tests and access their `LastDeliveries` (since
+`Reset()`) directly.
+
+[gocheck]: https://labix.org/gocheck
+
+### Consumer Test
+
+Testing consumers is a bit easier because consumers must implement the
+`rmq.Consumer` interface. In the tests just create `rmq.TestDelivery` and pass
+it to your `Consume` implementation. This example creates a test delivery from a
+string and then checks that the delivery was acked.
+
+```go
+consumer := &TaskConsumer{}
+delivery := rmq.NewTestDeliveryString("task payload")
+
+consumer.Consume(delivery)
+
+c.Check(delivery.State, Equals, rmq.Acked)
+```
+
+The `State` field will always be one of these values:
+
+- `rmq.Acked`: The delivery was acked
+- `rmq.Rejected`: The delivery was rejected
+- `rmq.Pushed`: The delivery was pushed (see below)
+- `rmq.Unacked`: Nothing of the above
+
+If your packages are JSON marshalled objects, then you can create test
+deliveries out of those like this:
+
+```go
+task := Task{Property: "bad value"}
+delivery := rmq.NewTestDelivery(task)
+```
