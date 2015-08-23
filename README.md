@@ -76,6 +76,10 @@ if err != nil {
 taskQueue.PublishBytes(taskBytes)
 ```
 
+For a full example see [`example/producer.go`][producer.go]
+
+[producer.go]: example/producer.go
+
 ### Consumer
 
 Now that our queue starts filling, lets add a consumer. After opening the queue
@@ -119,6 +123,10 @@ func (consumer *TaskConsumer) Consume(delivery rmq.Delivery) {
 
 First we unmarshal the JSON package found in the delivery payload. If this fails
 we reject the delivery, otherwise we perform the task and ack the delivery.
+
+For a full example see [`example/consumer.go`][consumer.go]
+
+[consumer.go]: example/consumer.go
 
 ## Testing Included
 
