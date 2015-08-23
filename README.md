@@ -240,3 +240,20 @@ deliveries out of those like this:
 task := Task{Property: "bad value"}
 delivery := rmq.NewTestDelivery(task)
 ```
+
+## Statistics
+
+Given a connection, you can call `connection.CollectStats` to receive
+`rmq.Stats` about all open queues, connections and consumers. If you run
+[`example/handler.go`][handler.go] you can see what's available:
+
+![][handler.png]
+
+In this example you see three connections consuming `things`, each wich 10
+consumers each. Two of them have 8 packages unacked. Below the marker you see
+connections which are not consuming. One of the handler connections died
+because I stopped the handler. Running the cleaner would clean that up (see
+below).
+
+[handler.go]: example/handler.go
+[handler.png]: http://i.imgur.com/5FexMvZ.png
