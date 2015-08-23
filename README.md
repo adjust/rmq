@@ -257,3 +257,31 @@ below).
 
 [handler.go]: example/handler.go
 [handler.png]: http://i.imgur.com/5FexMvZ.png
+
+## TODO
+
+There are some features and aspects not properly documented yet. I will quickly
+list those here, hopefully they will be expanded in the future. :wink:
+
+- Batch Consumers: Use `queue.AddBatchConsumer()` to register a consumer that
+  receives batches of deliveries to be consumed at once (database bulk insert)
+- Push Queues: When consuming queue A you can set up its push queue to be queue
+  B. The consumer can then call `delivery.Push()` to push this delivery
+  (originally from queue A) to the associated push queue B. (useful for
+  retries)
+- Cleaner: Run this regularly to return unacked deliveries of stopped or
+  crashed consumers back to ready so they can be consumed by a new consumer.
+  See [`example/cleaner.go`][cleaner.go]
+- Returner: Imagine there was some error that made you reject a lot of
+  deliveries by accident. Just call `queue.ReturnRejected()` to return all
+  rejected deliveries of that queue back to ready. (Similar to `ReturnUnacked`
+  which is used by the cleaner) Consider using push queues if you do this
+  regularly. See [`example/returner.go`][returner.go]
+- Purger: If deliveries failed you don't want to retry them anymore for whatever
+  reason, you can call `queue.PurgeRejected()` to dispose of them for good.
+  There's also `queue.PurgeReady` if you want to get a queue clean without
+  consuming possibly bad deliveries. See [`example/purger.go`][purger.go]
+
+[cleaner.go]: example/cleaner.go
+[returner.go]: example/returner.go
+[purger.go]: example/purger.go
