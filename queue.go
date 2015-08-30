@@ -229,7 +229,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
+	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return true
 }
@@ -281,7 +281,7 @@ func (queue *redisQueue) addConsumer(tag string) string {
 		log.Panicf("rmq queue failed to add consumer %s %s", queue, tag)
 	}
 
-	log.Printf("rmq queue added consumer %s %s", queue, name)
+	// log.Printf("rmq queue added consumer %s %s", queue, name)
 	return name
 }
 
@@ -303,7 +303,7 @@ func (queue *redisQueue) consume() {
 		}
 
 		if queue.consumingStopped {
-			log.Printf("rmq queue stopped consuming %s", queue)
+			// log.Printf("rmq queue stopped consuming %s", queue)
 			return
 		}
 	}

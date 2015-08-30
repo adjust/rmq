@@ -1,9 +1,6 @@
 package rmq
 
-import (
-	"fmt"
-	"log"
-)
+import "fmt"
 
 type Cleaner struct {
 	connection *redisConnection
@@ -48,12 +45,13 @@ func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 		return fmt.Errorf("rmq cleaner failed to close all queues %d %s", connection, err)
 	}
 
-	log.Printf("rmq cleaner cleaned connection %s", connection)
+	// log.Printf("rmq cleaner cleaned connection %s", connection)
 	return nil
 }
 
 func (cleaner *Cleaner) CleanQueue(queue *redisQueue) {
 	returned := queue.ReturnAllUnacked()
 	queue.CloseInConnection()
-	log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
+	_ = returned
+	// log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
 }

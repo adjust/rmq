@@ -1,7 +1,5 @@
 package rmq
 
-import "log"
-
 type TestBatchConsumer struct {
 	LastBatch Deliveries
 
@@ -15,14 +13,14 @@ func NewTestBatchConsumer() *TestBatchConsumer {
 }
 
 func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
-	log.Printf("TestBatchConsumer.Consume(%d)", len(batch))
+	// log.Printf("TestBatchConsumer.Consume(%d)", len(batch))
 	consumer.LastBatch = batch
 	<-consumer.finish
-	log.Printf("TestBatchConsumer.Consume() finished")
+	// log.Printf("TestBatchConsumer.Consume() finished")
 }
 
 func (consumer *TestBatchConsumer) Finish() {
-	log.Printf("TestBatchConsumer.Finish()")
+	// log.Printf("TestBatchConsumer.Finish()")
 	consumer.LastBatch = nil
 	consumer.finish <- 1
 }
