@@ -379,6 +379,17 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 	c.Check(queue2.RejectedCount(), Equals, 1)
 }
 
+func (suite *QueueSuite) TestConsuming(c *C) {
+	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("consume-q").(*redisQueue)
+
+	c.Check(queue.StopConsuming(), Equals, false)
+
+	queue.StartConsuming(10, time.Millisecond)
+	c.Check(queue.StopConsuming(), Equals, true)
+	c.Check(queue.StopConsuming(), Equals, false)
+}
+
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
 	connection := OpenConnection("bench-conn", "tcp", "localhost:6379", 1)

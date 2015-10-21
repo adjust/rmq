@@ -33,7 +33,8 @@ func (queue *TestQueue) StartConsuming(prefetchLimit int, pollDuration time.Dura
 	return true
 }
 
-func (queue *TestQueue) StopConsuming() {
+func (queue *TestQueue) StopConsuming() bool {
+	return true
 }
 
 func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
