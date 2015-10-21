@@ -31,6 +31,7 @@ type Queue interface {
 	PublishBytes(payload []byte) bool
 	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
+	StopConsuming() bool
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	PurgeReady() bool
@@ -218,7 +219,7 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // pollDuration is the duration the queue sleeps before checking for new deliveries
 func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
 	if queue.deliveryChan != nil {
-		return false
+		return false // already consuming
 	}
 
 	// add queue to list of queues consumed on this connection
@@ -234,8 +235,13 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	return true
 }
 
-func (queue *redisQueue) StopConsuming() {
+func (queue *redisQueue) StopConsuming() bool {
+	if queue.deliveryChan == nil || queue.consumingStopped {
+		return false // not consuming or already stopped
+	}
+
 	queue.consumingStopped = true
+	return true
 }
 
 // AddConsumer adds a consumer to the queue and returns its internal name
