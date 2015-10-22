@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adjust/redis"
@@ -55,6 +56,8 @@ type redisQueue struct {
 	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	pollDuration     time.Duration
 	consumingStopped bool
+
+	messageOnProcessing sync.WaitGroup
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *redisQueue {
@@ -241,6 +244,9 @@ func (queue *redisQueue) StopConsuming() bool {
 	}
 
 	queue.consumingStopped = true
+
+	queue.messageOnProcessing.Wait()
+
 	return true
 }
 
@@ -337,7 +343,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
 			return false
 		}
-
+		queue.messageOnProcessing.Add(1)
 		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
 		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
@@ -350,6 +356,7 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
+		queue.messageOnProcessing.Done()
 	}
 }
 
@@ -369,6 +376,10 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, consumer BatchConsu
 
 		// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
 		consumer.Consume(batch)
+
+		for i := 0; i < batchSize; i++ {
+			queue.messageOnProcessing.Done()
+		}
 
 		batch = []Delivery{}
 		waitUntil = time.Now().UTC().Add(time.Second)
