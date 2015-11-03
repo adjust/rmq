@@ -29,14 +29,8 @@ type redisConnection struct {
 	heartbeatStopped bool
 }
 
-// OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int) *redisConnection {
-	redisClient := redis.NewClient(&redis.Options{
-		Network: network,
-		Addr:    address,
-		DB:      int64(db),
-	})
-
+//OpenConnectionWithRedisClient opens and return a new connection
+func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redisConnection {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
@@ -56,6 +50,16 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 	go connection.heartbeat()
 	// log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
 	return connection
+}
+
+// OpenConnection opens and returns a new connection
+func OpenConnection(tag, network, address string, db int) *redisConnection {
+	redisClient := redis.NewClient(&redis.Options{
+		Network: network,
+		Addr:    address,
+		DB:      int64(db),
+	})
+	return OpenConnectionWithRedisClient(tag, redisClient)
 }
 
 // OpenQueue opens and returns the queue with a given name
