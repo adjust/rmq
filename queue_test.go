@@ -107,11 +107,11 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(connection.GetConsumingQueues(), HasLen, 0)
 	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, true)
 	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, false)
-	cons1name := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
+	cons1name, _ := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
 	time.Sleep(time.Millisecond)
 	c.Check(connection.GetConsumingQueues(), HasLen, 1)
 	c.Check(queue.GetConsumers(), DeepEquals, []string{cons1name})
-	cons2name := queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
+	cons2name, _ := queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
 	c.Check(queue.GetConsumers(), HasLen, 2)
 	c.Check(queue.RemoveConsumer("queue-cons3"), Equals, false)
 	c.Check(queue.RemoveConsumer(cons1name), Equals, true)
@@ -237,6 +237,29 @@ func (suite *QueueSuite) TestMulti(c *C) {
 
 	queue.StopConsuming()
 	connection.StopHeartbeat()
+}
+
+func (suite *QueueSuite) TestStop(c *C) {
+	connection := OpenConnection("stop-conn", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("stop-q").(*redisQueue)
+	queue.PurgeRejected()
+	queue.PurgeReady()
+	consumer := NewTestConsumer("stop-cons")
+
+	queue.StartConsuming(10, time.Millisecond)
+	_, stopper := queue.AddConsumer("stop-cons", consumer)
+
+	c.Check(queue.Publish("stop-d1"), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(consumer.LastDeliveries, HasLen, 1)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "stop-d1")
+
+	stopper <- 1
+
+	c.Check(queue.Publish("stop-d2"), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(consumer.LastDeliveries, HasLen, 1)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "stop-d1")
 }
 
 func (suite *QueueSuite) TestBatch(c *C) {
