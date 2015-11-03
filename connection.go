@@ -29,7 +29,7 @@ type redisConnection struct {
 	heartbeatStopped bool
 }
 
-//OpenConnectionWithRedisClient opens and return a new connection
+// OpenConnectionWithRedisClient opens and returns a new connection
 func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redisConnection {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
