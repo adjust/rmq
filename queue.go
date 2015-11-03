@@ -32,7 +32,7 @@ type Queue interface {
 	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	StopConsuming() bool
-	AddConsumer(tag string, consumer Consumer) string
+	AddConsumer(tag string, consumer Consumer) (name string, stopper chan<- int)
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	PurgeReady() bool
 	PurgeRejected() bool
@@ -244,12 +244,14 @@ func (queue *redisQueue) StopConsuming() bool {
 	return true
 }
 
-// AddConsumer adds a consumer to the queue and returns its internal name
+// AddConsumer adds a consumer to the queue
+// returns its internal name and a queue that can be used to stop consuming
 // panics if StartConsuming wasn't called before!
-func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
-	name := queue.addConsumer(tag)
-	go queue.consumerConsume(consumer)
-	return name
+func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string, stopper chan<- int) {
+	name = queue.addConsumer(tag)
+	stopChan := make(chan int, 1)
+	go queue.consumerConsume(consumer, stopChan)
+	return name, stopChan
 }
 
 // AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
@@ -346,10 +348,16 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	return true
 }
 
-func (queue *redisQueue) consumerConsume(consumer Consumer) {
-	for delivery := range queue.deliveryChan {
-		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
-		consumer.Consume(delivery)
+func (queue *redisQueue) consumerConsume(consumer Consumer, stopper chan int) {
+	for {
+		select {
+		case delivery := <-queue.deliveryChan:
+			// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
+			consumer.Consume(delivery)
+		case <-stopper:
+			// debug(fmt.Sprintf("consumer stopped %s", consumer)) // COMMENTOUT
+			return
+		}
 	}
 }
 

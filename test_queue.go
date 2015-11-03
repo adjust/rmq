@@ -37,8 +37,8 @@ func (queue *TestQueue) StopConsuming() bool {
 	return true
 }
 
-func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
-	return ""
+func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) (name string, stopper chan<- int) {
+	return "", nil
 }
 
 func (queue *TestQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
