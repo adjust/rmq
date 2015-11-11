@@ -45,6 +45,10 @@ func (queue *TestQueue) AddBatchConsumer(tag string, batchSize int, consumer Bat
 	return ""
 }
 
+func (queue *TestQueue) AddLimitedConsumer(tag string, consumer Consumer, limit int) (name string, stopper chan<- int) {
+	return "", nil
+}
+
 func (queue *TestQueue) ReturnRejected(count int) int {
 	return 0
 }
