@@ -314,6 +314,27 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 3)
 }
 
+func (suite *QueueSuite) TestLimited(c *C) {
+	connection := OpenConnection("limited-conn", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("limited-q").(*redisQueue)
+	queue.PurgeRejected()
+	queue.PurgeReady()
+	consumer := NewTestConsumer("limited-cons")
+
+	queue.StartConsuming(10, time.Millisecond)
+	queue.AddLimitedConsumer("limited-cons", consumer, 1)
+
+	c.Check(queue.Publish("limited-d1"), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(consumer.LastDeliveries, HasLen, 1)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "limited-d1")
+
+	c.Check(queue.Publish("limited-d2"), Equals, true)
+	time.Sleep(2 * time.Millisecond)
+	c.Check(consumer.LastDeliveries, HasLen, 1)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "limited-d1")
+}
+
 func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("return-q").(*redisQueue)
