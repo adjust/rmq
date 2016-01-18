@@ -108,7 +108,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, true)
 	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, false)
 	cons1name := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(connection.GetConsumingQueues(), HasLen, 1)
 	c.Check(queue.GetConsumers(), DeepEquals, []string{cons1name})
 	cons2name := queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
@@ -138,14 +138,14 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(consumer.LastDelivery, IsNil)
 
 	c.Check(queue.Publish("cons-d1"), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastDelivery, NotNil)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d1")
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 
 	c.Check(queue.Publish("cons-d2"), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d2")
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 2)
@@ -161,7 +161,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(consumer.LastDeliveries[0].Ack(), Equals, false)
 
 	c.Check(queue.Publish("cons-d3"), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 	c.Check(queue.RejectedCount(), Equals, 0)
@@ -172,7 +172,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 1)
 
 	c.Check(queue.Publish("cons-d4"), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 	c.Check(queue.RejectedCount(), Equals, 1)
@@ -202,7 +202,7 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 0)
 
 	queue.StartConsuming(10, time.Millisecond)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 10)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
@@ -211,27 +211,27 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	consumer.AutoFinish = false
 
 	queue.AddConsumer("multi-cons", consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 9)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 9)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 8)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 8)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 7)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
@@ -250,12 +250,12 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	}
 
 	queue.StartConsuming(10, time.Millisecond)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 5)
 
 	consumer := NewTestBatchConsumer()
 	queue.AddBatchConsumer("batch-cons", 2, consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
 	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d1")
@@ -265,7 +265,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 1)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d2")
 	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d3")
@@ -275,13 +275,13 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 2)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(consumer.LastBatch, HasLen, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 	c.Check(queue.RejectedCount(), Equals, 2)
 
 	c.Check(queue.Publish("batch-d5"), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
 	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d5")
@@ -313,12 +313,12 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	consumer := NewTestConsumer("return-cons")
 	consumer.AutoAck = false
 	queue.AddConsumer("cons", consumer)
-	time.Sleep(time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 6)
 	c.Check(queue.RejectedCount(), Equals, 0)
 
-	c.Check(consumer.LastDeliveries, HasLen, 6)
+	c.Assert(consumer.LastDeliveries, HasLen, 6)
 	consumer.LastDeliveries[0].Reject()
 	consumer.LastDeliveries[1].Ack()
 	consumer.LastDeliveries[2].Reject()
@@ -364,18 +364,18 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 	queue2.AddConsumer("push-cons", consumer2)
 
 	queue1.Publish("d1")
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue1.UnackedCount(), Equals, 1)
 	c.Assert(consumer1.LastDeliveries, HasLen, 1)
 
 	c.Check(consumer1.LastDelivery.Push(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue1.UnackedCount(), Equals, 0)
 	c.Check(queue2.UnackedCount(), Equals, 1)
 
 	c.Assert(consumer2.LastDeliveries, HasLen, 1)
 	c.Check(consumer2.LastDelivery.Push(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue2.RejectedCount(), Equals, 1)
 }
 
@@ -420,10 +420,10 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		if ready == 0 && unacked == 0 {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	sum := 0
 	for _, consumer := range consumers {

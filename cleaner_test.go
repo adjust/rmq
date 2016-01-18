@@ -41,7 +41,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	c.Check(queue.UnackedCount(), Equals, 0)
 	queue.StartConsuming(2, time.Millisecond)
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 4)
 
@@ -50,26 +50,26 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	consumer.AutoAck = false
 
 	queue.AddConsumer("consumer1", consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 3)
 
 	c.Assert(consumer.LastDelivery, NotNil)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del1")
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 3)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 2)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del2")
 
 	queue.StopConsuming()
 	conn.StopHeartbeat()
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	conn = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	queue = conn.OpenQueue("q1").(*redisQueue)
@@ -87,7 +87,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	c.Check(queue.UnackedCount(), Equals, 0)
 	queue.StartConsuming(2, time.Millisecond)
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 5)
 
@@ -96,25 +96,25 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	consumer.AutoAck = false
 
 	queue.AddConsumer("consumer2", consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 4)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
 
 	consumer.Finish() // unacked
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 4)
 	c.Check(queue.ReadyCount(), Equals, 3)
 
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del6")
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 3)
 
 	queue.StopConsuming()
 	conn.StopHeartbeat()
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	cleanerConn := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1)
 	cleaner := NewCleaner(cleanerConn)
@@ -133,7 +133,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	queue.StopConsuming()
 	conn.StopHeartbeat()
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	c.Check(cleaner.Clean(), IsNil)
 	cleanerConn.StopHeartbeat()

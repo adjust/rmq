@@ -326,24 +326,42 @@ func (queue *redisQueue) batchSize() int {
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *redisQueue) consumeBatch(batchSize int) bool {
+func (queue *redisQueue) consumeBatch(batchSize int) (wantMore bool) {
 	if batchSize == 0 {
 		return false
 	}
 
-	for i := 0; i < batchSize; i++ {
-		result := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
-		if redisErrIsNil(result) {
-			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
-			return false
+	results, err := queue.redisClient.Pipelined(func(pipeline *redis.Pipeline) error {
+		for i := 0; i < batchSize; i++ {
+			pipeline.RPopLPush(queue.readyKey, queue.unackedKey)
+		}
+		return nil
+	})
+	redisErrorIsNil(err) // panics
+
+	wantMore = true
+	for _, result := range results {
+		result, ok := result.(*redis.StringCmd)
+		if !ok {
+			log.Printf("DEBUG#rmq found non string")
+			continue
 		}
 
 		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
-		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
+		if redisErrIsNil(result) {
+			wantMore = false
+			continue
+		}
+		if !wantMore {
+			log.Printf("DEBUG#rmq found result after nil")
+		}
+
+		value := result.Val()
+		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
-	return true
+	return wantMore
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
@@ -377,13 +395,18 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, consumer BatchConsu
 
 // redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
 func redisErrIsNil(result redis.Cmder) bool {
-	switch result.Err() {
+	return redisErrorIsNil(result.Err())
+}
+
+// TODO: merge with above
+func redisErrorIsNil(err error) bool {
+	switch err {
 	case nil:
 		return false
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("rmq redis error is not nil %s", result.Err())
+		log.Panicf("rmq redis error is not nil %s", err)
 		return false
 	}
 }
