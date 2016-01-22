@@ -26,6 +26,7 @@ type redisConnection struct {
 	heartbeatKey     string // key to keep alive
 	queuesKey        string // key to list of queues consumed by this connection
 	redisClient      *redis.Client
+	openQueues       map[string]Queue
 	heartbeatStopped bool
 }
 
@@ -38,6 +39,7 @@ func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redis
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:  redisClient,
+		openQueues:   map[string]Queue{},
 	}
 
 	if !connection.updateHeartbeat() { // checks the connection
@@ -64,8 +66,13 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) Queue {
+	if queue, ok := connection.openQueues[name]; ok {
+		return queue // cached
+	}
+
 	redisErrIsNil(connection.redisClient.SAdd(queuesKey, name))
 	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
+	connection.openQueues[name] = queue
 	return queue
 }
 
@@ -168,6 +175,7 @@ func (connection *redisConnection) hijackConnection(name string) *redisConnectio
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:  connection.redisClient,
+		openQueues:   map[string]Queue{},
 	}
 }
 
