@@ -42,19 +42,20 @@ type Queue interface {
 }
 
 type redisQueue struct {
-	name             string
-	connectionName   string
-	queuesKey        string // key to list of queues consumed by this connection
-	consumersKey     string // key to set of consumers using this connection
-	readyKey         string // key to list of ready deliveries
-	rejectedKey      string // key to list of rejected deliveries
-	unackedKey       string // key to list of currently consuming deliveries
-	pushKey          string // key to list of pushed deliveries
-	redisClient      *redis.Client
-	consumeChan      chan Delivery // nil for publish channels, not nil for consuming channels
-	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
-	pollDuration     time.Duration
-	consumingStopped bool
+	name           string
+	connectionName string
+	queuesKey      string // key to list of queues consumed by this connection
+	consumersKey   string // key to set of consumers using this connection
+	readyKey       string // key to list of ready deliveries
+	rejectedKey    string // key to list of rejected deliveries
+	unackedKey     string // key to list of currently consuming deliveries
+	pushKey        string // key to list of pushed deliveries
+	redisClient    *redis.Client
+
+	consumeChan         chan Delivery // nil for publish channels, not nil for consuming channels
+	prefetchLimit       int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
+	consumePollDuration time.Duration
+	consumingStopped    bool
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *redisQueue {
@@ -228,7 +229,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	}
 
 	queue.prefetchLimit = prefetchLimit
-	queue.pollDuration = pollDuration
+	queue.consumePollDuration = pollDuration
 	queue.consumeChan = make(chan Delivery, prefetchLimit)
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
@@ -305,7 +306,7 @@ func (queue *redisQueue) consume() {
 		wantMore := queue.consumeBatch(batchSize)
 
 		if !wantMore {
-			time.Sleep(queue.pollDuration)
+			time.Sleep(queue.consumePollDuration)
 		}
 
 		if queue.consumingStopped {
