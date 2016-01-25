@@ -51,7 +51,7 @@ type redisQueue struct {
 	unackedKey       string // key to list of currently consuming deliveries
 	pushKey          string // key to list of pushed deliveries
 	redisClient      *redis.Client
-	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
+	consumeChan      chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	pollDuration     time.Duration
 	consumingStopped bool
@@ -218,7 +218,7 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
 func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
-	if queue.deliveryChan != nil {
+	if queue.consumeChan != nil {
 		return false // already consuming
 	}
 
@@ -229,14 +229,14 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
-	queue.deliveryChan = make(chan Delivery, prefetchLimit)
+	queue.consumeChan = make(chan Delivery, prefetchLimit)
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return true
 }
 
 func (queue *redisQueue) StopConsuming() bool {
-	if queue.deliveryChan == nil || queue.consumingStopped {
+	if queue.consumeChan == nil || queue.consumingStopped {
 		return false // not consuming or already stopped
 	}
 
@@ -276,7 +276,7 @@ func (queue *redisQueue) RemoveConsumer(name string) bool {
 }
 
 func (queue *redisQueue) addConsumer(tag string) string {
-	if queue.deliveryChan == nil {
+	if queue.consumeChan == nil {
 		log.Panicf("rmq queue failed to add consumer, call StartConsuming first! %s", queue)
 	}
 
@@ -316,7 +316,7 @@ func (queue *redisQueue) consume() {
 }
 
 func (queue *redisQueue) batchSize() int {
-	prefetchCount := len(queue.deliveryChan)
+	prefetchCount := len(queue.consumeChan)
 	prefetchLimit := queue.prefetchLimit - prefetchCount
 	// TODO: ignore ready count here and just return prefetchLimit?
 	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
@@ -339,7 +339,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 		}
 
 		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
-		queue.deliveryChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
+		queue.consumeChan <- newDelivery(result.Val(), queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
@@ -347,7 +347,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
-	for delivery := range queue.deliveryChan {
+	for delivery := range queue.consumeChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
 	}
@@ -357,7 +357,7 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, consumer BatchConsu
 	batch := []Delivery{}
 	waitUntil := time.Now().UTC().Add(time.Second)
 
-	for delivery := range queue.deliveryChan {
+	for delivery := range queue.consumeChan {
 		batch = append(batch, delivery)
 		now := time.Now().UTC()
 		// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
