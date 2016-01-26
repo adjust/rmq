@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adjust/uniuri"
@@ -27,6 +28,7 @@ const (
 )
 
 type Queue interface {
+	SetPublishBufferSize(size int, pollDuration time.Duration)
 	Publish(payload string) bool
 	PublishBytes(payload []byte) bool
 	SetPushQueue(pushQueue Queue)
@@ -54,8 +56,13 @@ type redisQueue struct {
 
 	consumeChan         chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit       int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
-	consumePollDuration time.Duration
+	consumePollDuration time.Duration // how long to wait between polling on empty consumeChan
 	consumingStopped    bool
+
+	publishChan         chan string     // buffered publishes go here if exists
+	publishMutex        *sync.RWMutex   // protects publishChan and SetPublishBufferSize
+	publishWg           *sync.WaitGroup // wait for buffered publishes to complete
+	publishPollDuration time.Duration   // how long to wait between polling on empty publishChan
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client) *redisQueue {
@@ -77,6 +84,7 @@ func newQueue(name, connectionName, queuesKey string, redisClient *redis.Client)
 		rejectedKey:    rejectedKey,
 		unackedKey:     unackedKey,
 		redisClient:    redisClient,
+		publishMutex:   &sync.RWMutex{},
 	}
 	return queue
 }
@@ -85,9 +93,77 @@ func (queue *redisQueue) String() string {
 	return fmt.Sprintf("[%s conn:%s]", queue.name, queue.connectionName)
 }
 
+// SetPublishBufferSize allows you to enable and disable buffering of deliveries to be published
+// change from 0 to 10 to enable buffering of up to 10 published deliveries
+// change from 10 to 0 to disable buffering again. blocks until buffer is processed
+// changing from 10 to 20 disables buffering (blocking) and then enables it again
+func (queue *redisQueue) SetPublishBufferSize(size int, pollDuration time.Duration) {
+	queue.publishMutex.Lock() // make thread safe
+	defer queue.publishMutex.Unlock()
+
+	if cap(queue.publishChan) == size {
+		return // nothing to do
+	}
+
+	if queue.publishChan != nil { // stop buffering
+		close(queue.publishChan)
+		queue.publishWg.Wait()
+		queue.publishChan = nil
+		queue.publishWg = nil
+	}
+
+	if size > 0 { // start buffering
+		queue.publishPollDuration = pollDuration
+		queue.publishChan = make(chan string, size)
+		queue.publishWg = &sync.WaitGroup{}
+		queue.publishWg.Add(1)
+		go queue.publish()
+	}
+}
+
+func (queue *redisQueue) publish() {
+	batch := []string{}
+	for {
+		select {
+		case payload, ok := <-queue.publishChan:
+			if ok { // got payload
+				batch = append(batch, payload)
+
+			} else { // channel closed
+				if len(batch) > 0 {
+					if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch...)) {
+						log.Printf("failed to publish last batch %q", batch)
+					}
+				}
+				queue.publishWg.Done()
+				return
+			}
+
+		default: // channel empty
+			if len(batch) > 0 { // send batch
+				if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch...)) {
+					log.Printf("failed to publish batch %q", batch)
+				}
+				batch = []string{}
+
+			} else { // nothing to publish
+				time.Sleep(queue.publishPollDuration)
+			}
+		}
+	}
+}
+
 // Publish adds a delivery with the given payload to the queue
 func (queue *redisQueue) Publish(payload string) bool {
 	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
+	queue.publishMutex.RLock()
+	defer queue.publishMutex.RUnlock()
+
+	if queue.publishChan != nil { // publish buffered to channel
+		queue.publishChan <- payload
+		return true
+	}
+
 	return !redisErrIsNil(queue.redisClient.LPush(queue.readyKey, payload))
 }
 

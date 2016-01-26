@@ -1,6 +1,9 @@
 package rmq
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type TestConnection struct {
 	queues map[string]*TestQueue
@@ -20,6 +23,9 @@ func (connection TestConnection) OpenQueue(name string) Queue {
 	queue := NewTestQueue(name)
 	connection.queues[name] = queue
 	return queue
+}
+
+func (connection TestConnection) SetPublishBufferSize(size int, pollDuration time.Duration) {
 }
 
 func (connection TestConnection) CollectStats(queueList []string) Stats {

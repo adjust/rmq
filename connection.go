@@ -15,6 +15,7 @@ const heartbeatDuration = time.Minute
 // Connection is an interface that can be used to test publishing
 type Connection interface {
 	OpenQueue(name string) Queue
+	SetPublishBufferSize(size int, pollDuration time.Duration)
 	CollectStats(queueList []string) Stats
 	GetOpenQueues() []string
 }
@@ -74,6 +75,12 @@ func (connection *redisConnection) OpenQueue(name string) Queue {
 	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 	connection.openQueues[name] = queue
 	return queue
+}
+
+func (connection *redisConnection) SetPublishBufferSize(size int, pollDuration time.Duration) {
+	for _, queue := range connection.openQueues {
+		queue.SetPublishBufferSize(size, pollDuration)
+	}
 }
 
 func (connection *redisConnection) CollectStats(queueList []string) Stats {

@@ -17,6 +17,10 @@ func (queue *TestQueue) String() string {
 	return queue.name
 }
 
+func (queue *TestQueue) SetPublishBufferSize(size int, pollDuration time.Duration) {
+	return
+}
+
 func (queue *TestQueue) Publish(payload string) bool {
 	queue.LastDeliveries = append(queue.LastDeliveries, payload)
 	return true
