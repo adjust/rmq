@@ -351,12 +351,13 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 func (queue *redisQueue) consumerConsume(consumer Consumer, context *ConsumerContext) {
 	for {
 		select {
+		case <-context.stopChan:
+			// debug(fmt.Sprintf("consumer stopped %s", consumer)) // COMMENTOUT
+			context.wg.Done()
+			return
 		case delivery := <-queue.deliveryChan:
 			// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 			consumer.Consume(delivery)
-		case <-context.StopChan:
-			// debug(fmt.Sprintf("consumer stopped %s", consumer)) // COMMENTOUT
-			return
 		}
 	}
 }

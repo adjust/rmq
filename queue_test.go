@@ -254,7 +254,7 @@ func (suite *QueueSuite) TestStop(c *C) {
 	c.Check(consumer.LastDeliveries, HasLen, 1)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "stop-d1")
 
-	context.StopChan <- 1
+	context.StopConsuming()
 
 	c.Check(queue.Publish("stop-d2"), Equals, true)
 	time.Sleep(2 * time.Millisecond)
