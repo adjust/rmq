@@ -247,14 +247,14 @@ func (suite *QueueSuite) TestStop(c *C) {
 	consumer := NewTestConsumer("stop-cons")
 
 	queue.StartConsuming(10, time.Millisecond)
-	_, stopper := queue.AddConsumer("stop-cons", consumer)
+	_, context := queue.AddConsumer("stop-cons", consumer)
 
 	c.Check(queue.Publish("stop-d1"), Equals, true)
 	time.Sleep(2 * time.Millisecond)
 	c.Check(consumer.LastDeliveries, HasLen, 1)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "stop-d1")
 
-	stopper <- 1
+	context.StopChan <- 1
 
 	c.Check(queue.Publish("stop-d2"), Equals, true)
 	time.Sleep(2 * time.Millisecond)

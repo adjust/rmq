@@ -37,7 +37,7 @@ func (queue *TestQueue) StopConsuming() bool {
 	return true
 }
 
-func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) (name string, stopper chan<- int) {
+func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) (name string, context *ConsumerContext) {
 	return "", nil
 }
 
