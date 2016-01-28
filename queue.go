@@ -123,16 +123,22 @@ func (queue *redisQueue) SetPublishBufferSize(size int, pollDuration time.Durati
 
 func (queue *redisQueue) publish() {
 	batch := []string{}
+	batchLen := 0
 	for {
 		select {
 		case payload, ok := <-queue.publishChan:
 			if ok { // got payload
-				batch = append(batch, payload)
+				if len(batch) <= batchLen {
+					batch = append(batch, payload)
+				} else {
+					batch[batchLen] = payload
+				}
+				batchLen++
 
 			} else { // channel closed
-				if len(batch) > 0 {
-					if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch...)) {
-						log.Printf("failed to publish last batch %q", batch)
+				if batchLen > 0 {
+					if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch[:batchLen]...)) {
+						log.Printf("failed to publish last batch %q", batch[:batchLen])
 					}
 				}
 				queue.publishWg.Done()
@@ -140,11 +146,11 @@ func (queue *redisQueue) publish() {
 			}
 
 		default: // channel empty
-			if len(batch) > 0 { // send batch
-				if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch...)) {
-					log.Printf("failed to publish batch %q", batch)
+			if batchLen > 0 { // send batch
+				if redisErrIsNil(queue.redisClient.LPush(queue.readyKey, batch[:batchLen]...)) {
+					log.Printf("failed to publish batch %q", batch[:batchLen])
 				}
-				batch = []string{}
+				batchLen = 0
 
 			} else { // nothing to publish
 				time.Sleep(queue.publishPollDuration)
