@@ -98,7 +98,9 @@ func (queue *redisQueue) String() string {
 // change from 10 to 0 to disable buffering again. blocks until buffer is processed
 // changing from 10 to 20 disables buffering (blocking) and then enables it again
 func (queue *redisQueue) SetPublishBufferSize(size int, pollDuration time.Duration) {
+	fmt.Printf("SetPublishBufferSize enter\n")
 	queue.publishMutex.Lock() // make thread safe
+	fmt.Printf("SetPublishBufferSize locked\n")
 	defer queue.publishMutex.Unlock()
 
 	if cap(queue.publishChan) == size {
@@ -108,6 +110,7 @@ func (queue *redisQueue) SetPublishBufferSize(size int, pollDuration time.Durati
 	if queue.publishChan != nil { // stop buffering
 		close(queue.publishChan)
 		queue.publishWg.Wait()
+		fmt.Printf("SetPublishBufferSize waited\n")
 		queue.publishChan = nil
 		queue.publishWg = nil
 	}
