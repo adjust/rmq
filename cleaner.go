@@ -1,6 +1,7 @@
 package rmq
 
 import "fmt"
+import "time"
 
 type Cleaner struct {
 	connection *redisConnection
@@ -24,6 +25,12 @@ func (cleaner *Cleaner) Clean() error {
 	}
 
 	return nil
+}
+
+func (cleaner *Cleaner) KeepConnectionAlive(interval time.Duration) {
+	for _ = range time.Tick(interval) {
+		cleaner.Clean()
+	}
 }
 
 func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
