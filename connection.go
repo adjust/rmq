@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adjust/redis"
 	"github.com/adjust/uniuri"
+	"gopkg.in/redis.v3"
 )
 
 const heartbeatDuration = time.Minute
@@ -158,7 +158,7 @@ func (connection *redisConnection) heartbeat() {
 }
 
 func (connection *redisConnection) updateHeartbeat() bool {
-	return !redisErrIsNil(connection.redisClient.SetEx(connection.heartbeatKey, heartbeatDuration, "1"))
+	return !redisErrIsNil(connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration))
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat

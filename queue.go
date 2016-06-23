@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adjust/redis"
 	"github.com/adjust/uniuri"
+	"gopkg.in/redis.v3"
 )
 
 const (

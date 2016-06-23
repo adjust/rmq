@@ -2,7 +2,8 @@ package rmq
 
 import (
 	"fmt"
-	"github.com/adjust/redis"
+
+	"gopkg.in/redis.v3"
 )
 
 type Delivery interface {
