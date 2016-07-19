@@ -24,6 +24,8 @@ const (
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
+
+	defaultBatchTimeout = time.Second
 )
 
 type Queue interface {
@@ -34,6 +36,7 @@ type Queue interface {
 	StopConsuming() bool
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
+	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
 	PurgeReady() bool
 	PurgeRejected() bool
 	ReturnRejected(count int) int
@@ -254,8 +257,12 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 
 // AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
 func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
+	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
+}
+
+func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string {
 	name := queue.addConsumer(tag)
-	go queue.consumerBatchConsume(batchSize, consumer)
+	go queue.consumerBatchConsume(batchSize, timeout, consumer)
 	return name
 }
 
@@ -353,9 +360,7 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	}
 }
 
-func (queue *redisQueue) consumerBatchConsume(batchSize int, consumer BatchConsumer) {
-	timeout := time.Second // TODO: inject?
-
+func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Duration, consumer BatchConsumer) {
 	batch := []Delivery{}
 	timer := time.NewTimer(timeout)
 	timer.Stop() // timer not active yet

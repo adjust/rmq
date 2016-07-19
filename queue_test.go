@@ -254,7 +254,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 5)
 
 	consumer := NewTestBatchConsumer()
-	queue.AddBatchConsumer("batch-cons", 2, consumer)
+	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 10*time.Millisecond, consumer)
 	time.Sleep(2 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
@@ -280,7 +280,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.UnackedCount(), Equals, 1)
 	c.Check(queue.RejectedCount(), Equals, 2)
 
-	time.Sleep(time.Second)
+	time.Sleep(15 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 1)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
 	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
