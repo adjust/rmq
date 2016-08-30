@@ -55,7 +55,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 3)
 
 	c.Assert(consumer.LastDelivery, NotNil)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del1")
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del2")
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
@@ -65,7 +65,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 2)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del2")
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del1")
 
 	queue.StopConsuming()
 	conn.StopHeartbeat()
@@ -99,14 +99,14 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)
 	c.Check(queue.ReadyCount(), Equals, 4)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del6")
 
 	consumer.Finish() // unacked
 	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 4)
 	c.Check(queue.ReadyCount(), Equals, 3)
 
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del6")
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 3)

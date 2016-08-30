@@ -3,6 +3,7 @@ package rmq
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -318,50 +319,39 @@ func (queue *redisQueue) consume() {
 func (queue *redisQueue) batchSize() int {
 	prefetchCount := len(queue.deliveryChan)
 	prefetchLimit := queue.prefetchLimit - prefetchCount
-	// TODO: ignore ready count here and just return prefetchLimit?
-	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
-		return readyCount
-	}
 	return prefetchLimit
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *redisQueue) consumeBatch(batchSize int) (wantMore bool) {
+func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	if batchSize == 0 {
 		return false
 	}
 
-	results, err := queue.redisClient.Pipelined(func(pipeline *redis.Pipeline) error {
-		for i := 0; i < batchSize; i++ {
-			pipeline.RPopLPush(queue.readyKey, queue.unackedKey)
-		}
-		return nil
-	})
+	keys := []string{queue.readyKey, queue.unackedKey, strconv.Itoa(batchSize)}
+	results, err := luaConsumeScript.Run(queue.redisClient, keys, []string{}).Result()
 	redisErrorIsNil(err) // panics
 
-	wantMore = true
-	for _, result := range results {
-		result, ok := result.(*redis.StringCmd)
+	resultsArray, ok := results.([]interface{})
+	// TODO: inline with the for loop? Maybe assertion costs allocations?
+	if !ok {
+		log.Printf("DEBUG#rmq luaConsumeScript did not return array")
+		return true
+	}
+	if len(resultsArray) == 0 {
+		return false
+	}
+	for _, result := range resultsArray {
+		result, ok := result.(string)
 		if !ok {
 			log.Printf("DEBUG#rmq found non string")
 			continue
 		}
-
-		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, result.Val(), queue)) // COMMENTOUT
-		if redisErrIsNil(result) {
-			wantMore = false
-			continue
-		}
-		if !wantMore {
-			log.Printf("DEBUG#rmq found result after nil")
-		}
-
-		value := result.Val()
-		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
+		queue.deliveryChan <- newDelivery(result, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
-	return wantMore
+	return true
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
