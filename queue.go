@@ -318,8 +318,11 @@ func (queue *redisQueue) consume() {
 
 func (queue *redisQueue) batchSize() int {
 	prefetchCount := len(queue.deliveryChan)
-	prefetchLimit := queue.prefetchLimit - prefetchCount
-	return prefetchLimit
+	batchSize := queue.prefetchLimit - prefetchCount
+	if batchSize < queue.prefetchLimit/2 {
+		return 0
+	}
+	return batchSize
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
