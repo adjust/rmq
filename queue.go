@@ -397,7 +397,9 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Durati
 
 		// reset batch and timer
 		batch = batch[:0]
-		timer.Stop()
+		if !timer.Stop() {
+			<-timer.C
+		}
 	}
 }
 
