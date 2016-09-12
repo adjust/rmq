@@ -363,7 +363,7 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Duration, consumer BatchConsumer) {
 	batch := []Delivery{}
 	timer := time.NewTimer(timeout)
-	timer.Stop() // timer not active yet
+	stopTimer(timer) // timer not active yet
 
 	for {
 		select {
@@ -395,11 +395,19 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Durati
 		// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
 		consumer.Consume(batch)
 
-		// reset batch and timer
-		batch = batch[:0]
-		if !timer.Stop() {
-			<-timer.C
-		}
+		batch = batch[:0] // reset batch
+		stopTimer(timer)  // stop and drain the timer if it fired in between
+	}
+}
+
+func stopTimer(timer *time.Timer) {
+	if timer.Stop() {
+		return
+	}
+
+	select {
+	case <-timer.C:
+	default:
 	}
 }
 
