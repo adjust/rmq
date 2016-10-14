@@ -39,6 +39,7 @@ type Queue interface {
 	ReturnRejected(count int) int
 	ReturnAllRejected() int
 	Close() bool
+	CloseInConnection()
 }
 
 type redisQueue struct {
