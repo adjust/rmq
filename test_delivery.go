@@ -2,19 +2,8 @@ package rmq
 
 import "encoding/json"
 
-//go:generate stringer -type=state
-
-type state int
-
-const (
-	Unacked state = iota
-	Acked
-	Rejected
-	Pushed
-)
-
 type TestDelivery struct {
-	State   state
+	State   State
 	payload string
 }
 

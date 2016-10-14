@@ -265,6 +265,7 @@ list those here, hopefully they will be expanded in the future. :wink:
 
 - Batch Consumers: Use `queue.AddBatchConsumer()` to register a consumer that
   receives batches of deliveries to be consumed at once (database bulk insert)
+  See [`example/batch_consumer.go`][batch_consumer.go]
 - Push Queues: When consuming queue A you can set up its push queue to be queue
   B. The consumer can then call `delivery.Push()` to push this delivery
   (originally from queue A) to the associated push queue B. (useful for
@@ -282,6 +283,7 @@ list those here, hopefully they will be expanded in the future. :wink:
   There's also `queue.PurgeReady` if you want to get a queue clean without
   consuming possibly bad deliveries. See [`example/purger.go`][purger.go]
 
+[batch_consumer.go]: example/batch_consumer.go
 [cleaner.go]: example/cleaner.go
 [returner.go]: example/returner.go
 [purger.go]: example/purger.go
