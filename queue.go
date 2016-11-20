@@ -24,8 +24,6 @@ const (
 	phConnection = "{connection}" // connection name
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
-
-	defaultBatchTimeout = time.Second
 )
 
 type Queue interface {
@@ -35,8 +33,6 @@ type Queue interface {
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	StopConsuming() bool
 	AddConsumer(tag string, consumer Consumer) string
-	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
-	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
 	PurgeReady() bool
 	PurgeRejected() bool
 	ReturnRejected(count int) int
@@ -255,17 +251,6 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 	return name
 }
 
-// AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
-func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
-	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
-}
-
-func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string {
-	name := queue.addConsumer(tag)
-	go queue.consumerBatchConsume(batchSize, timeout, consumer)
-	return name
-}
-
 func (queue *redisQueue) GetConsumers() []string {
 	result := queue.redisClient.SMembers(queue.consumersKey)
 	if redisErrIsNil(result) {
@@ -357,46 +342,6 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
 		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
-	}
-}
-
-func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Duration, consumer BatchConsumer) {
-	batch := []Delivery{}
-	timer := time.NewTimer(timeout)
-	stopTimer(timer) // timer not active yet
-
-	for {
-		select {
-		case <-timer.C:
-			// debug("batch timer fired") // COMMENTOUT
-			// consume batch below
-
-		case delivery, ok := <-queue.deliveryChan:
-			if !ok {
-				// debug("batch channel closed") // COMMENTOUT
-				return
-			}
-
-			batch = append(batch, delivery)
-			// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
-
-			if len(batch) == 1 { // added first delivery
-				timer.Reset(timeout) // set timer to fire
-			}
-
-			if len(batch) < batchSize {
-				// debug(fmt.Sprintf("batch consume wait %d < %d", len(batch), batchSize)) // COMMENTOUT
-				continue
-			}
-
-			// consume batch below
-		}
-
-		// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
-		consumer.Consume(batch)
-
-		batch = batch[:0] // reset batch
-		stopTimer(timer)  // stop and drain the timer if it fired in between
 	}
 }
 

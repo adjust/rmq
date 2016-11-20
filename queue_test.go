@@ -239,55 +239,6 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	connection.StopHeartbeat()
 }
 
-func (suite *QueueSuite) TestBatch(c *C) {
-	connection := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("batch-q").(*redisQueue)
-	queue.PurgeRejected()
-	queue.PurgeReady()
-
-	for i := 0; i < 5; i++ {
-		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), Equals, true)
-	}
-
-	queue.StartConsuming(10, time.Millisecond)
-	time.Sleep(2 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 5)
-
-	consumer := NewTestBatchConsumer()
-	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 10*time.Millisecond, consumer)
-	time.Sleep(2 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 2)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
-	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d1")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.RejectedCount(), Equals, 1)
-
-	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 2)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d2")
-	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d3")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 1)
-	c.Check(queue.RejectedCount(), Equals, 2)
-
-	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
-	c.Check(consumer.LastBatch, HasLen, 0)
-	c.Check(queue.UnackedCount(), Equals, 1)
-	c.Check(queue.RejectedCount(), Equals, 2)
-
-	time.Sleep(15 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 1)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 0)
-	c.Check(queue.RejectedCount(), Equals, 3)
-}
-
 func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("return-q").(*redisQueue)
