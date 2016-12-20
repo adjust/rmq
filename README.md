@@ -169,7 +169,7 @@ If the payload is JSON again, the unmarshalling and check might look like this:
 
 ```go
 var task Task
-err := json.Unmarshal([]byte(suite.testConn.GetDelivery("tasks", 0), &task))
+err := json.Unmarshal([]byte(suite.testConn.GetDelivery("tasks", 0)), &task)
 c.Assert(err, IsNil)
 c.Assert(task, NotNil)
 c.Check(task.Property, Equals, "value")
