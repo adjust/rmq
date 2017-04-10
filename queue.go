@@ -405,12 +405,29 @@ func stopTimer(timer *time.Timer) {
 
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
-func (queue *redisQueue) deleteRedisList(key string) int {
-	result := queue.redisClient.Del(key)
-	if redisErrIsNil(result) {
-		return 0
+func (queue *redisQueue) deleteRedisList(key string) (deleted int) {
+	// get unique new key
+	incrResult := queue.redisClient.Incr("gc::index")
+	newKey := fmt.Sprintf("%s::gc::%d", key, incrResult.Val())
+
+	// rename key
+	renameResult := queue.redisClient.Rename(key, newKey)
+	if err := renameResult.Err(); err != nil && err.Error() == "ERR no such key" {
+		return 0 // key doesn't exist
 	}
-	return int(result.Val())
+
+	// delete elements without blocking
+	for {
+		llenResult := queue.redisClient.LLen(newKey)
+		if len := llenResult.Val(); len == 0 {
+			return deleted // all elements removed
+		} else if deleted == 0 {
+			deleted = int(len) // save original len as number of elements that we will delete
+		}
+
+		// remove up to 100 elements
+		queue.redisClient.LTrim(newKey, 0, -101)
+	}
 }
 
 // redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
@@ -421,7 +438,7 @@ func redisErrIsNil(result redis.Cmder) bool {
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("rmq redis error is not nil %s", result.Err())
+		log.Panicf("rmq redis error is not nil %#v", result.Err())
 		return false
 	}
 }

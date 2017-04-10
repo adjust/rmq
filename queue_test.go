@@ -98,7 +98,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 1)
 	c.Check(queue.Publish("queue-d2"), Equals, true)
 	c.Check(queue.ReadyCount(), Equals, 2)
-	c.Check(queue.PurgeReady(), Equals, 1)
+	c.Check(queue.PurgeReady(), Equals, 2)
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.PurgeReady(), Equals, 0)
 
@@ -181,8 +181,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(queue.ReadyCount(), Equals, 0)
 	c.Check(queue.UnackedCount(), Equals, 0)
 	c.Check(queue.RejectedCount(), Equals, 2)
-
-	c.Check(queue.PurgeRejected(), Equals, 1)
+	c.Check(queue.PurgeRejected(), Equals, 2)
 	c.Check(queue.RejectedCount(), Equals, 0)
 	c.Check(queue.PurgeRejected(), Equals, 0)
 
