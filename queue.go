@@ -26,6 +26,7 @@ const (
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
 
 	defaultBatchTimeout = time.Second
+	purgeBatchSize      = 100
 )
 
 type Queue interface {
@@ -405,29 +406,26 @@ func stopTimer(timer *time.Timer) {
 
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
-func (queue *redisQueue) deleteRedisList(key string) (deleted int) {
-	// get unique new key
-	incrResult := queue.redisClient.Incr("gc::index")
-	newKey := fmt.Sprintf("%s::gc::%d", key, incrResult.Val())
-
-	// rename key
-	renameResult := queue.redisClient.Rename(key, newKey)
-	if err := renameResult.Err(); err != nil && err.Error() == "ERR no such key" {
-		return 0 // key doesn't exist
+func (queue *redisQueue) deleteRedisList(key string) int {
+	llenResult := queue.redisClient.LLen(key)
+	total := int(llenResult.Val())
+	if total == 0 {
+		return 0 // nothing to do
 	}
 
 	// delete elements without blocking
-	for {
-		llenResult := queue.redisClient.LLen(newKey)
-		if len := llenResult.Val(); len == 0 {
-			return deleted // all elements removed
-		} else if deleted == 0 {
-			deleted = int(len) // save original len as number of elements that we will delete
+	for todo := total; todo > 0; todo -= purgeBatchSize {
+		// minimum of purgeBatchSize and todo
+		batchSize := purgeBatchSize
+		if batchSize > todo {
+			batchSize = todo
 		}
 
-		// remove up to 100 elements
-		queue.redisClient.LTrim(newKey, 0, -101)
+		// remove one batch
+		queue.redisClient.LTrim(key, 0, int64(-1-batchSize))
 	}
+
+	return total
 }
 
 // redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
