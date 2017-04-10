@@ -37,8 +37,8 @@ type Queue interface {
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
-	PurgeReady() bool
-	PurgeRejected() bool
+	PurgeReady() int
+	PurgeRejected() int
 	ReturnRejected(count int) int
 	ReturnAllRejected() int
 	Close() bool
@@ -99,13 +99,13 @@ func (queue *redisQueue) PublishBytes(payload []byte) bool {
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeReady() bool {
-	return queue.deleteRedisList(queue.readyKey) > 0
+func (queue *redisQueue) PurgeReady() int {
+	return queue.deleteRedisList(queue.readyKey)
 }
 
 // PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeRejected() bool {
-	return queue.deleteRedisList(queue.rejectedKey) > 0
+func (queue *redisQueue) PurgeRejected() int {
+	return queue.deleteRedisList(queue.rejectedKey)
 }
 
 // Close purges and removes the queue from the list of queues
