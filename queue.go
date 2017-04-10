@@ -100,20 +100,12 @@ func (queue *redisQueue) PublishBytes(payload []byte) bool {
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
 func (queue *redisQueue) PurgeReady() bool {
-	result := queue.redisClient.Del(queue.readyKey)
-	if redisErrIsNil(result) {
-		return false
-	}
-	return result.Val() > 0
+	return queue.deleteRedisList(queue.readyKey) > 0
 }
 
 // PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
 func (queue *redisQueue) PurgeRejected() bool {
-	result := queue.redisClient.Del(queue.rejectedKey)
-	if redisErrIsNil(result) {
-		return false
-	}
-	return result.Val() > 0
+	return queue.deleteRedisList(queue.rejectedKey) > 0
 }
 
 // Close purges and removes the queue from the list of queues
@@ -409,6 +401,16 @@ func stopTimer(timer *time.Timer) {
 	case <-timer.C:
 	default:
 	}
+}
+
+// return number of deleted list items
+// https://www.redisgreen.net/blog/deleting-large-lists
+func (queue *redisQueue) deleteRedisList(key string) int {
+	result := queue.redisClient.Del(key)
+	if redisErrIsNil(result) {
+		return 0
+	}
+	return int(result.Val())
 }
 
 // redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
