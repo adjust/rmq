@@ -26,6 +26,7 @@ const (
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
 
 	defaultBatchTimeout = time.Second
+	purgeBatchSize      = 100
 )
 
 type Queue interface {
@@ -37,8 +38,8 @@ type Queue interface {
 	AddConsumer(tag string, consumer Consumer) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
-	PurgeReady() bool
-	PurgeRejected() bool
+	PurgeReady() int
+	PurgeRejected() int
 	ReturnRejected(count int) int
 	ReturnAllRejected() int
 	Close() bool
@@ -99,21 +100,13 @@ func (queue *redisQueue) PublishBytes(payload []byte) bool {
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeReady() bool {
-	result := queue.redisClient.Del(queue.readyKey)
-	if redisErrIsNil(result) {
-		return false
-	}
-	return result.Val() > 0
+func (queue *redisQueue) PurgeReady() int {
+	return queue.deleteRedisList(queue.readyKey)
 }
 
 // PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeRejected() bool {
-	result := queue.redisClient.Del(queue.rejectedKey)
-	if redisErrIsNil(result) {
-		return false
-	}
-	return result.Val() > 0
+func (queue *redisQueue) PurgeRejected() int {
+	return queue.deleteRedisList(queue.rejectedKey)
 }
 
 // Close purges and removes the queue from the list of queues
@@ -411,6 +404,30 @@ func stopTimer(timer *time.Timer) {
 	}
 }
 
+// return number of deleted list items
+// https://www.redisgreen.net/blog/deleting-large-lists
+func (queue *redisQueue) deleteRedisList(key string) int {
+	llenResult := queue.redisClient.LLen(key)
+	total := int(llenResult.Val())
+	if total == 0 {
+		return 0 // nothing to do
+	}
+
+	// delete elements without blocking
+	for todo := total; todo > 0; todo -= purgeBatchSize {
+		// minimum of purgeBatchSize and todo
+		batchSize := purgeBatchSize
+		if batchSize > todo {
+			batchSize = todo
+		}
+
+		// remove one batch
+		queue.redisClient.LTrim(key, 0, int64(-1-batchSize))
+	}
+
+	return total
+}
+
 // redisErrIsNil returns false if there is no error, true if the result error is nil and panics if there's another error
 func redisErrIsNil(result redis.Cmder) bool {
 	switch result.Err() {
@@ -419,7 +436,7 @@ func redisErrIsNil(result redis.Cmder) bool {
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("rmq redis error is not nil %s", result.Err())
+		log.Panicf("rmq redis error is not nil %#v", result.Err())
 		return false
 	}
 }
