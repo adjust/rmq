@@ -235,6 +235,8 @@ func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer Ba
 	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
 }
 
+// Timeout limits the amount of time waiting to fill an entire batch
+// The timer is only started when the first message in a batch is received
 func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string {
 	name := queue.addConsumer(tag)
 	go queue.consumerBatchConsume(batchSize, timeout, consumer)
