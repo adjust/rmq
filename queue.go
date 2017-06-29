@@ -436,7 +436,7 @@ func redisErrIsNil(result redis.Cmder) bool {
 	case redis.Nil:
 		return true
 	default:
-		log.Panicf("rmq redis error is not nil %#v", result.Err())
+		log.Panicf("rmq redis error is not nil %s", result.Err())
 		return false
 	}
 }
