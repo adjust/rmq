@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/adjust/uniuri"
-	"gopkg.in/redis.v3"
+	"github.com/go-redis/redis"
 )
 
 const (
