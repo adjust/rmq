@@ -1,3 +1,34 @@
+[![Build Status](https://travis-ci.org/adjust/rmq.svg?branch=master)](https://travis-ci.org/adjust/rmq)
+[![GoDoc](https://godoc.org/github.com/adjust/rmq?status.svg)](https://godoc.org/github.com/adjust/rmq)
+
+---
+
+**Note**: We recently updated rmq to use latest go-redis client [`github.com/go-redis/redis`][go-redis].
+If you don't want to upgrade yet, you can continue using rmq branch `v1`:
+
+1. Using a dependency manager, i.e. [dep][]
+
+    ```toml
+    # Gopkg.toml
+    [[constraint]]
+      name = "github.com/adjust/rmq"
+      branch = "v1"
+    ```
+
+2. Using [gopkg.in][gopkg]
+
+    ```go
+    import "gopkg.in/adjust/rmq.v1"
+    ```
+
+    See https://gopkg.in/adjust/rmq.v1
+
+[go-redis]: https://github.com/go-redis/redis
+[dep]: https://golang.github.io/dep/
+[gopkg]: https://gopkg.in
+
+---
+
 ## Overview
 
 rmq is short for Redis message queue. It's a message queue system written in Go
