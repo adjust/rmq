@@ -2,6 +2,7 @@ package rmq
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -402,6 +403,38 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 	queue.StartConsuming(10, time.Millisecond)
 	c.Check(queue.StopConsuming(), Equals, true)
 	c.Check(queue.StopConsuming(), Equals, false)
+}
+
+func (suite *QueueSuite) TestStopConsuming(c *C) {
+	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("consume-q").(*redisQueue)
+
+	deliveryCount := 30
+
+	for i := 0; i < deliveryCount; i++ {
+		queue.Publish("d" + strconv.Itoa(i))
+	}
+
+	queue.StartConsuming(20, time.Millisecond)
+	var consumers []*TestConsumer
+	for i := 0; i < 10; i++ {
+		consumer := NewTestConsumer("c" + strconv.Itoa(i))
+		consumers = append(consumers, consumer)
+		queue.AddConsumer("consume", consumer)
+	}
+
+	c.Check(queue.StopConsuming(), Equals, true)
+
+	queue.stopWg.Wait()
+
+	var consumedCount int
+	for i := 0; i < 10; i++ {
+		consumedCount += len(consumers[i].LastDeliveries)
+	}
+
+	// make sure all fetched deliveries are consumed
+	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
+	c.Check(queue.deliveryChan, HasLen, 0)
 }
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
