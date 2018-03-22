@@ -224,12 +224,15 @@ func (queue *redisQueue) StopConsuming() <-chan struct{} {
 		return nil // not consuming or already stopped
 	}
 
+	// log.Printf("rmq queue stopping %s", queue)
 	atomic.StoreInt32(&queue.consumingStopped, 1)
 	finishedChan := make(chan struct{})
 	go func() {
 		queue.stopWg.Wait()
 		close(finishedChan)
+		// log.Printf("rmq queue stopped consuming %s", queue)
 	}()
+
 	return finishedChan
 }
 
@@ -302,6 +305,7 @@ func (queue *redisQueue) consume() {
 		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
 			// log.Printf("rmq queue stopped consuming %s", queue)
 			close(queue.deliveryChan)
+			// log.Printf("rmq queue stopped fetching %s", queue)
 			return
 		}
 	}
