@@ -1,9 +1,6 @@
 package rmq
 
-import (
-	"sync"
-	"time"
-)
+import "time"
 
 type TestQueue struct {
 	name           string
@@ -36,7 +33,7 @@ func (queue *TestQueue) StartConsuming(prefetchLimit int, pollDuration time.Dura
 	return true
 }
 
-func (queue *TestQueue) StopConsuming() *sync.WaitGroup {
+func (queue *TestQueue) StopConsuming() <-chan struct{} {
 	return nil
 }
 
