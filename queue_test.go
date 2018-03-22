@@ -405,9 +405,10 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 	c.Check(queue.StopConsuming(), NotNil)
 }
 
-func (suite *QueueSuite) TestStopConsuming(c *C) {
+func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("consume-q").(*redisQueue)
+	queue.PurgeReady()
 
 	deliveryCount := 30
 
@@ -436,6 +437,36 @@ func (suite *QueueSuite) TestStopConsuming(c *C) {
 	// make sure all fetched deliveries are consumed
 	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
 	c.Check(queue.deliveryChan, HasLen, 0)
+
+	connection.StopHeartbeat()
+}
+
+func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
+	connection := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("batchConsume-q").(*redisQueue)
+	queue.PurgeReady()
+
+	deliveryCount := 30
+
+	for i := 0; i < deliveryCount; i++ {
+		queue.Publish("d" + strconv.Itoa(i))
+	}
+
+	queue.StartConsuming(20, time.Millisecond)
+	consumer := NewTestBatchConsumer()
+	consumer.AutoFinish = true
+	queue.AddBatchConsumer("consume", 50, consumer)
+
+	wg := queue.StopConsuming()
+	c.Assert(wg, NotNil)
+
+	wg.Wait()
+
+	// make sure all fetched deliveries are consumed
+	c.Check(consumer.ConsumedCount, Equals, deliveryCount-queue.ReadyCount())
+	c.Check(queue.deliveryChan, HasLen, 0)
+
+	connection.StopHeartbeat()
 }
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
