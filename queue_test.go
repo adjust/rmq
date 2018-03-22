@@ -398,11 +398,11 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("consume-q").(*redisQueue)
 
-	c.Check(queue.StopConsuming(), Equals, false)
+	wg := queue.StopConsuming()
+	c.Check(wg, NotNil)
 
 	queue.StartConsuming(10, time.Millisecond)
-	c.Check(queue.StopConsuming(), Equals, true)
-	c.Check(queue.StopConsuming(), Equals, false)
+	c.Check(queue.StopConsuming(), NotNil)
 }
 
 func (suite *QueueSuite) TestStopConsuming(c *C) {
@@ -423,9 +423,10 @@ func (suite *QueueSuite) TestStopConsuming(c *C) {
 		queue.AddConsumer("consume", consumer)
 	}
 
-	c.Check(queue.StopConsuming(), Equals, true)
+	wg := queue.StopConsuming()
+	c.Assert(wg, NotNil)
 
-	queue.stopWg.Wait()
+	wg.Wait()
 
 	var consumedCount int
 	for i := 0; i < 10; i++ {
