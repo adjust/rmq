@@ -31,13 +31,23 @@ type redisConnection struct {
 
 // OpenConnectionWithRedisClient opens and returns a new connection
 func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redisConnection {
+	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient})
+}
+
+// OpenConnectionWithTestRedisClient opens and returns a new connection which
+// uses a test redis client internally. This is useful in integration tests.
+func OpenConnectionWithTestRedisClient(tag string) *redisConnection {
+	return openConnectionWithRedisClient(tag, NewTestRedisClient())
+}
+
+func openConnectionWithRedisClient(tag string, redisClient RedisClient) *redisConnection {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
 		Name:         name,
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
-		redisClient:  RedisWrapper{redisClient},
+		redisClient:  redisClient,
 	}
 
 	if !connection.updateHeartbeat() { // checks the connection
