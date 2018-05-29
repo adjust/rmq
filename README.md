@@ -272,6 +272,15 @@ task := Task{Property: "bad value"}
 delivery := rmq.NewTestDelivery(task)
 ```
 
+### Integration tests
+
+If you want to write integration tests which exercise both producers and
+consumers at the same time, you can use the `OpenConnectionWithTestRedisClient`
+constructor. It returns a real `rmq.Connection` instance which is backed by an
+in memory Redis client implementation. That way it behaves exactly as in
+production, just without the durability of a real Redis client. Don't use this
+in production!
+
 ## Statistics
 
 Given a connection, you can call `connection.CollectStats` to receive
