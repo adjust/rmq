@@ -86,7 +86,7 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, ok bool) {
 	if found {
 
 		//It was there, but it expired; removing it now
-		if expiration.(int64) > time.Now().Unix() {
+		if expiration.(int64) < time.Now().Unix() {
 			client.ttl.Delete(key)
 			return -2, false
 		}
@@ -233,9 +233,15 @@ func (client *TestRedisClient) LTrim(key string, start, stop int) {
 		return
 	}
 
-	//invalid values cause the remove of the key
-	if start > stop && start < 0 || start > len(list) || stop > len(list) {
+	if start < 0 {
+		start += len(list)
+	}
+	if stop < 0 {
+		stop += len(list)
+	}
 
+	//invalid values cause the remove of the key
+	if start > stop {
 		client.store.Delete(key)
 		return
 	}
