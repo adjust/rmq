@@ -25,12 +25,22 @@ type redisConnection struct {
 	Name             string
 	heartbeatKey     string // key to keep alive
 	queuesKey        string // key to list of queues consumed by this connection
-	redisClient      *redis.Client
+	redisClient      RedisClient
 	heartbeatStopped bool
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
 func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redisConnection {
+	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient})
+}
+
+// OpenConnectionWithTestRedisClient opens and returns a new connection which
+// uses a test redis client internally. This is useful in integration tests.
+func OpenConnectionWithTestRedisClient(tag string) *redisConnection {
+	return openConnectionWithRedisClient(tag, NewTestRedisClient())
+}
+
+func openConnectionWithRedisClient(tag string, redisClient RedisClient) *redisConnection {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
@@ -45,7 +55,7 @@ func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redis
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	redisErrIsNil(redisClient.SAdd(connectionsKey, name))
+	redisClient.SAdd(connectionsKey, name)
 
 	go connection.heartbeat()
 	// log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
@@ -64,7 +74,7 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) Queue {
-	redisErrIsNil(connection.redisClient.SAdd(queuesKey, name))
+	connection.redisClient.SAdd(queuesKey, name)
 	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 	return queue
 }
@@ -79,66 +89,50 @@ func (connection *redisConnection) String() string {
 
 // GetConnections returns a list of all open connections
 func (connection *redisConnection) GetConnections() []string {
-	result := connection.redisClient.SMembers(connectionsKey)
-	if redisErrIsNil(result) {
-		return []string{}
-	}
-	return result.Val()
+	return connection.redisClient.SMembers(connectionsKey)
 }
 
 // Check retuns true if the connection is currently active in terms of heartbeat
 func (connection *redisConnection) Check() bool {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	result := connection.redisClient.TTL(heartbeatKey)
-	if redisErrIsNil(result) {
-		return false
-	}
-	return result.Val() > 0
+	ttl, _ := connection.redisClient.TTL(heartbeatKey)
+	return ttl > 0
 }
 
 // StopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
 func (connection *redisConnection) StopHeartbeat() bool {
 	connection.heartbeatStopped = true
-	return !redisErrIsNil(connection.redisClient.Del(connection.heartbeatKey))
+	_, ok := connection.redisClient.Del(connection.heartbeatKey)
+	return ok
 }
 
 func (connection *redisConnection) Close() bool {
-	return !redisErrIsNil(connection.redisClient.SRem(connectionsKey, connection.Name))
+	_, ok := connection.redisClient.SRem(connectionsKey, connection.Name)
+	return ok
 }
 
 // GetOpenQueues returns a list of all open queues
 func (connection *redisConnection) GetOpenQueues() []string {
-	result := connection.redisClient.SMembers(queuesKey)
-	if redisErrIsNil(result) {
-		return []string{}
-	}
-	return result.Val()
+	return connection.redisClient.SMembers(queuesKey)
 }
 
 // CloseAllQueues closes all queues by removing them from the global list
 func (connection *redisConnection) CloseAllQueues() int {
-	result := connection.redisClient.Del(queuesKey)
-	if redisErrIsNil(result) {
-		return 0
-	}
-	return int(result.Val())
+	count, _ := connection.redisClient.Del(queuesKey)
+	return count
 }
 
 // CloseAllQueuesInConnection closes all queues in the associated connection by removing all related keys
 func (connection *redisConnection) CloseAllQueuesInConnection() error {
-	redisErrIsNil(connection.redisClient.Del(connection.queuesKey))
+	connection.redisClient.Del(connection.queuesKey)
 	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return nil
 }
 
 // GetConsumingQueues returns a list of all queues consumed by this connection
 func (connection *redisConnection) GetConsumingQueues() []string {
-	result := connection.redisClient.SMembers(connection.queuesKey)
-	if redisErrIsNil(result) {
-		return []string{}
-	}
-	return result.Val()
+	return connection.redisClient.SMembers(connection.queuesKey)
 }
 
 // heartbeat keeps the heartbeat key alive
@@ -158,7 +152,8 @@ func (connection *redisConnection) heartbeat() {
 }
 
 func (connection *redisConnection) updateHeartbeat() bool {
-	return !redisErrIsNil(connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration))
+	ok := connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
+	return ok
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
