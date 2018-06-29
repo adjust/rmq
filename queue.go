@@ -339,11 +339,11 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Durati
 		batch = append(batch, delivery)
 		// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
 		batch, ok = queue.batchTimeout(batchSize, batch, timeout)
+		consumer.Consume(batch)
 		if !ok {
 			// debug("batch channel closed") // COMMENTOUT
 			return
 		}
-		consumer.Consume(batch)
 		batch = batch[:0] // reset batch
 	}
 }
@@ -360,7 +360,7 @@ func (queue *redisQueue) batchTimeout(batchSize int, batch []Delivery, timeout t
 		case delivery, ok := <-queue.deliveryChan:
 			if !ok {
 				// debug("batch channel closed") // COMMENTOUT
-				return nil, false
+				return batch, false
 			}
 			batch = append(batch, delivery)
 			// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
