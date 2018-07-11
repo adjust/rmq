@@ -235,6 +235,8 @@ func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer Ba
 	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
 }
 
+// Timeout limits the amount of time waiting to fill an entire batch
+// The timer is only started when the first message in a batch is received
 func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string {
 	name := queue.addConsumer(tag)
 	go queue.consumerBatchConsume(batchSize, timeout, consumer)
@@ -327,52 +329,46 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 
 func (queue *redisQueue) consumerBatchConsume(batchSize int, timeout time.Duration, consumer BatchConsumer) {
 	batch := []Delivery{}
-	timer := time.NewTimer(timeout)
-	stopTimer(timer) // timer not active yet
+	for {
+		// Wait for first delivery
+		delivery, ok := <-queue.deliveryChan
+		if !ok {
+			// debug("batch channel closed") // COMMENTOUT
+			return
+		}
+		batch = append(batch, delivery)
+		// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
+		batch, ok = queue.batchTimeout(batchSize, batch, timeout)
+		consumer.Consume(batch)
+		if !ok {
+			// debug("batch channel closed") // COMMENTOUT
+			return
+		}
+		batch = batch[:0] // reset batch
+	}
+}
 
+func (queue *redisQueue) batchTimeout(batchSize int, batch []Delivery, timeout time.Duration) (fullBatch []Delivery, ok bool) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-timer.C:
 			// debug("batch timer fired") // COMMENTOUT
-			// consume batch below
-
+			// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
+			return batch, true
 		case delivery, ok := <-queue.deliveryChan:
 			if !ok {
 				// debug("batch channel closed") // COMMENTOUT
-				return
+				return batch, false
 			}
-
 			batch = append(batch, delivery)
 			// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
-
-			if len(batch) == 1 { // added first delivery
-				timer.Reset(timeout) // set timer to fire
-			}
-
-			if len(batch) < batchSize {
+			if len(batch) >= batchSize {
 				// debug(fmt.Sprintf("batch consume wait %d < %d", len(batch), batchSize)) // COMMENTOUT
-				continue
+				return batch, true
 			}
-
-			// consume batch below
 		}
-
-		// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
-		consumer.Consume(batch)
-
-		batch = batch[:0] // reset batch
-		stopTimer(timer)  // stop and drain the timer if it fired in between
-	}
-}
-
-func stopTimer(timer *time.Timer) {
-	if timer.Stop() {
-		return
-	}
-
-	select {
-	case <-timer.C:
-	default:
 	}
 }
 
