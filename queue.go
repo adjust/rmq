@@ -35,6 +35,7 @@ type Queue interface {
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	StopConsuming() bool
 	AddConsumer(tag string, consumer Consumer) string
+	AddConsumerFunc(tag string, consumerFunc func(delivery Delivery)) string
 	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
 	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
 	PurgeReady() int
@@ -228,6 +229,10 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
 	name := queue.addConsumer(tag)
 	go queue.consumerConsume(consumer)
 	return name
+}
+
+func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc func(Delivery)) string {
+	return queue.AddConsumer(tag, ConsumerFunc(consumerFunc))
 }
 
 // AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
