@@ -190,12 +190,11 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	payloadChan := make(chan string, 1)
 	payload := "cons-func-payload"
-	consumerFunc := func(delivery Delivery) {
+
+	queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
 		delivery.Ack()
 		payloadChan <- delivery.Payload()
-	}
-
-	queue2.AddConsumerFunc("cons-func", consumerFunc)
+	})
 
 	c.Check(queue2.Publish(payload), Equals, true)
 	time.Sleep(2 * time.Millisecond)
