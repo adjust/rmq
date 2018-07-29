@@ -72,6 +72,17 @@ func OpenConnection(tag, network, address string, db int) *redisConnection {
 	return OpenConnectionWithRedisClient(tag, redisClient)
 }
 
+// OpenConnectionWithAuth opens (with authentication) and returns a new connection
+func OpenConnectionWithAuth(tag, network, address string, db int, password string) *redisConnection {
+	redisClient := redis.NewClient(&redis.Options{
+		Network:  network,
+		Addr:     address,
+		DB:       db,
+		Password: password,
+	})
+	return OpenConnectionWithRedisClient(tag, redisClient)
+}
+
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) Queue {
 	connection.redisClient.SAdd(queuesKey, name)
