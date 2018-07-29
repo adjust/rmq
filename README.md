@@ -155,17 +155,12 @@ func (consumer *TaskConsumer) Consume(delivery rmq.Delivery) {
 First we unmarshal the JSON package found in the delivery payload. If this fails
 we reject the delivery, otherwise we perform the task and ack the delivery.
 
-If you don't need to create a whole struct you could use any function with
-`rmq.Delivery` argument and cast it to `rmq.ConsumerFunc` type or you could add
-it without casting using `AddConsumerFunc`, for example:
+If you don't actually need a consumer struct you can just call `AddConsumerFunc`
+instead and pass in a consumer function which directly handles an `rmq.Delivery`:
 
 ```go
-taskQueue.AddConsumer(rmq.ConsumerFunc(func(delivery rmq.Delivery) {
-  // ...
-}))
-
 taskQueue.AddConsumerFunc(func(delivery rmq.Delivery) {
-  // ...
+    // handle delivery and call Ack() or Reject() on it
 })
 ```
 
