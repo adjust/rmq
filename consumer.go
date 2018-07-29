@@ -6,6 +6,6 @@ type Consumer interface {
 
 type ConsumerFunc func(Delivery)
 
-func (cf ConsumerFunc) Consume(delivery Delivery) {
-	cf(delivery)
+func (consumerFunc ConsumerFunc) Consume(delivery Delivery) {
+	consumerFunc(delivery)
 }

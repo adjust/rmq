@@ -41,7 +41,7 @@ func (queue *TestQueue) AddConsumer(tag string, consumer Consumer) string {
 	return ""
 }
 
-func (queue *TestQueue) AddConsumerFunc(tag string, consumerFunc func(delivery Delivery)) string {
+func (queue *TestQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) string {
 	return ""
 }
 
