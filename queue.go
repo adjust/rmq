@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/adjust/uniuri"
@@ -58,7 +59,7 @@ type redisQueue struct {
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int           // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	pollDuration     time.Duration
-	consumingStopped bool
+	consumingStopped int32 // queue status, 1 for stopped, 0 for consuming
 }
 
 func newQueue(name, connectionName, queuesKey string, redisClient RedisClient) *redisQueue {
@@ -72,14 +73,15 @@ func newQueue(name, connectionName, queuesKey string, redisClient RedisClient) *
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
 	queue := &redisQueue{
-		name:           name,
-		connectionName: connectionName,
-		queuesKey:      queuesKey,
-		consumersKey:   consumersKey,
-		readyKey:       readyKey,
-		rejectedKey:    rejectedKey,
-		unackedKey:     unackedKey,
-		redisClient:    redisClient,
+		name:             name,
+		connectionName:   connectionName,
+		queuesKey:        queuesKey,
+		consumersKey:     consumersKey,
+		readyKey:         readyKey,
+		rejectedKey:      rejectedKey,
+		unackedKey:       unackedKey,
+		redisClient:      redisClient,
+		consumingStopped: 1, // start with stopped status
 	}
 	return queue
 }
@@ -209,17 +211,18 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
+	atomic.StoreInt32(&queue.consumingStopped, 0)
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return true
 }
 
 func (queue *redisQueue) StopConsuming() bool {
-	if queue.deliveryChan == nil || queue.consumingStopped {
+	if queue.deliveryChan == nil || atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
 		return false // not consuming or already stopped
 	}
 
-	queue.consumingStopped = true
+	atomic.StoreInt32(&queue.consumingStopped, 1)
 	return true
 }
 
@@ -287,7 +290,7 @@ func (queue *redisQueue) consume() {
 			time.Sleep(queue.pollDuration)
 		}
 
-		if queue.consumingStopped {
+		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
 			// log.Printf("rmq queue stopped consuming %s", queue)
 			return
 		}
