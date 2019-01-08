@@ -220,13 +220,14 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 }
 
 func (queue *redisQueue) StopConsuming() <-chan struct{} {
+	finishedChan := make(chan struct{})
 	if queue.deliveryChan == nil || atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
-		return nil // not consuming or already stopped
+		close(finishedChan) // not consuming or already stopped
+		return finishedChan
 	}
 
 	// log.Printf("rmq queue stopping %s", queue)
 	atomic.StoreInt32(&queue.consumingStopped, 1)
-	finishedChan := make(chan struct{})
 	go func() {
 		queue.stopWg.Wait()
 		close(finishedChan)

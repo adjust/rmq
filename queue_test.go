@@ -398,12 +398,23 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("consume-q").(*redisQueue)
 
-	c.Check(queue.StopConsuming(), IsNil)
+	finishedChan := queue.StopConsuming()
+	c.Check(finishedChan, NotNil)
+	select {
+	case <-finishedChan:
+	default:
+		c.FailNow() // should return closed finishedChan
+	}
 
 	queue.StartConsuming(10, time.Millisecond)
 	c.Check(queue.StopConsuming(), NotNil)
 	// already stopped
-	c.Check(queue.StopConsuming(), IsNil)
+	c.Check(queue.StopConsuming(), NotNil)
+	select {
+	case <-finishedChan:
+	default:
+		c.FailNow() // should return closed finishedChan
+	}
 }
 
 func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
