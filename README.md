@@ -168,6 +168,31 @@ For a full example see [`example/consumer`][consumer.go]
 
 [consumer.go]: example/consumer/main.go
 
+### Stop Consuming
+
+If you want to stop consuming from the queue, you can call `StopConsuming`:
+
+```go
+finishedChan := taskQueue.StopConsuming()
+```
+
+When `StopConsuming` is called, it will continue fetching its current batch of
+deliveries. After that the consumers continue to consume the fetched deliveries
+until all unacked deliveries are fully consumed. If `StopConsuming` is called
+before consuming or after already stopped, it will return a closed channel. If
+you want to wait until all consumers are idle you can wait on the `finishedChan`:
+
+```go
+  <-finishedChan
+```
+
+This is useful to implement a graceful shutdown of a consumer service. Please
+note that after calling `StopConsuming` the queue might not be in a state where
+you can add consumers and call `StartConsuming` again. If you have a use case
+where you actually need that sort of flexibility, please let us know. Currently
+for each queue you are only supposed to call `StartConsuming` and
+`StopConsuming` at most once.
+
 ## Testing Included
 
 To simplify testing of queue producers and consumers we include test mocks.

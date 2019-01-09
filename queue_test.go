@@ -2,6 +2,7 @@ package rmq
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -228,27 +229,27 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	consumer.AutoFinish = false
 
 	queue.AddConsumer("multi-cons", consumer)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 9)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 9)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 8)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 8)
 	c.Check(queue.UnackedCount(), Equals, 10)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.ReadyCount(), Equals, 7)
 	c.Check(queue.UnackedCount(), Equals, 11)
 
@@ -267,12 +268,12 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	}
 
 	queue.StartConsuming(10, time.Millisecond)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 5)
 
 	consumer := NewTestBatchConsumer()
-	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 10*time.Millisecond, consumer)
-	time.Sleep(2 * time.Millisecond)
+	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 50*time.Millisecond, consumer)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
 	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d1")
@@ -282,7 +283,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 1)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d2")
 	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d3")
@@ -292,12 +293,12 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	c.Check(queue.RejectedCount(), Equals, 2)
 
 	consumer.Finish()
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	c.Check(consumer.LastBatch, HasLen, 0)
 	c.Check(queue.UnackedCount(), Equals, 1)
 	c.Check(queue.RejectedCount(), Equals, 2)
 
-	time.Sleep(15 * time.Millisecond)
+	time.Sleep(60 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 1)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
 	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
@@ -397,11 +398,99 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	queue := connection.OpenQueue("consume-q").(*redisQueue)
 
-	c.Check(queue.StopConsuming(), Equals, false)
+	finishedChan := queue.StopConsuming()
+	c.Check(finishedChan, NotNil)
+	select {
+	case <-finishedChan:
+	default:
+		c.FailNow() // should return closed finishedChan
+	}
 
 	queue.StartConsuming(10, time.Millisecond)
-	c.Check(queue.StopConsuming(), Equals, true)
-	c.Check(queue.StopConsuming(), Equals, false)
+	c.Check(queue.StopConsuming(), NotNil)
+	// already stopped
+	c.Check(queue.StopConsuming(), NotNil)
+	select {
+	case <-finishedChan:
+	default:
+		c.FailNow() // should return closed finishedChan
+	}
+}
+
+func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
+	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("consume-q").(*redisQueue)
+	queue.PurgeReady()
+
+	deliveryCount := 30
+
+	for i := 0; i < deliveryCount; i++ {
+		queue.Publish("d" + strconv.Itoa(i))
+	}
+
+	queue.StartConsuming(20, time.Millisecond)
+	var consumers []*TestConsumer
+	for i := 0; i < 10; i++ {
+		consumer := NewTestConsumer("c" + strconv.Itoa(i))
+		consumers = append(consumers, consumer)
+		queue.AddConsumer("consume", consumer)
+	}
+
+	finishedChan := queue.StopConsuming()
+	c.Assert(finishedChan, NotNil)
+
+	<-finishedChan
+
+	var consumedCount int
+	for i := 0; i < 10; i++ {
+		consumedCount += len(consumers[i].LastDeliveries)
+	}
+
+	// make sure all fetched deliveries are consumed
+	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
+	c.Check(queue.deliveryChan, HasLen, 0)
+
+	connection.StopHeartbeat()
+}
+
+func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
+	connection := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
+	queue := connection.OpenQueue("batchConsume-q").(*redisQueue)
+	queue.PurgeReady()
+
+	deliveryCount := 50
+
+	for i := 0; i < deliveryCount; i++ {
+		queue.Publish("d" + strconv.Itoa(i))
+	}
+
+	queue.StartConsuming(20, time.Millisecond)
+
+	var consumers []*TestBatchConsumer
+	for i := 0; i < 10; i++ {
+		consumer := NewTestBatchConsumer()
+		consumer.AutoFinish = true
+		consumers = append(consumers, consumer)
+		queue.AddBatchConsumer("consume", 5, consumer)
+	}
+	consumer := NewTestBatchConsumer()
+	consumer.AutoFinish = true
+
+	finishedChan := queue.StopConsuming()
+	c.Assert(finishedChan, NotNil)
+
+	<-finishedChan
+
+	var consumedCount int
+	for i := 0; i < 10; i++ {
+		consumedCount += consumers[i].ConsumedCount
+	}
+
+	// make sure all fetched deliveries are consumed
+	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
+	c.Check(queue.deliveryChan, HasLen, 0)
+
+	connection.StopHeartbeat()
 }
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
