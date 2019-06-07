@@ -2,7 +2,6 @@ package rmq
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -207,7 +206,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 
 	// add queue to list of queues consumed on this connection
 	if ok := queue.redisClient.SAdd(queue.queuesKey, queue.name); !ok {
-		log.Panicf("rmq queue failed to start consuming %s", queue)
+		Panicf("rmq queue failed to start consuming %s", queue)
 	}
 
 	queue.prefetchLimit = prefetchLimit
@@ -275,14 +274,14 @@ func (queue *redisQueue) RemoveConsumer(name string) bool {
 
 func (queue *redisQueue) addConsumer(tag string) string {
 	if queue.deliveryChan == nil {
-		log.Panicf("rmq queue failed to add consumer, call StartConsuming first! %s", queue)
+		Panicf("rmq queue failed to add consumer, call StartConsuming first! %s", queue)
 	}
 
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
 	if ok := queue.redisClient.SAdd(queue.consumersKey, name); !ok {
-		log.Panicf("rmq queue failed to add consumer %s %s", queue, tag)
+		Panicf("rmq queue failed to add consumer %s %s", queue, tag)
 	}
 
 	// log.Printf("rmq queue added consumer %s %s", queue, name)

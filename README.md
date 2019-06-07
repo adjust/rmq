@@ -67,8 +67,14 @@ connection := rmq.OpenConnection("my service", "unix", "/tmp/redis.sock", 1)
 ```
 
 Note: rmq panics on Redis connection errors. Your producers and consumers will
-crash if Redis goes down. Please let us know if you would see this handled
-differently.
+crash if Redis goes down. However you can override this behaviour by setting
+`Panicf` to a different handler:
+
+```go
+rmq.Panicf = func(format string, v... interface{}) {
+	// Handle otherwise fatal errors with custom recovery logic
+}
+```
 
 ### Queue
 
