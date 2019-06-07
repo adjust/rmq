@@ -30,26 +30,26 @@ func (delivery *TestDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *TestDelivery) Ack() bool {
+func (delivery *TestDelivery) Ack() (bool, error) {
 	if delivery.State == Unacked {
 		delivery.State = Acked
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
-func (delivery *TestDelivery) Reject() bool {
+func (delivery *TestDelivery) Reject() (bool, error) {
 	if delivery.State == Unacked {
 		delivery.State = Rejected
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
-func (delivery *TestDelivery) Push() bool {
+func (delivery *TestDelivery) Push() (bool, error) {
 	if delivery.State == Unacked {
 		delivery.State = Pushed
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }

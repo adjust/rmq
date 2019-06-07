@@ -15,10 +15,19 @@ func (cleaner *Cleaner) Clean() error {
 	if !ok {
 		return nil
 	}
-	connectionNames := cleanerConnection.GetConnections()
+	connectionNames, err := cleanerConnection.GetConnections()
+	if err != nil {
+		return err
+	}
+
 	for _, connectionName := range connectionNames {
 		connection := cleanerConnection.hijackConnection(connectionName)
-		if connection.Check() {
+		ok, err := connection.Check()
+		if err != nil {
+			return err
+		}
+
+		if ok {
 			continue // skip active connections!
 		}
 
@@ -31,9 +40,17 @@ func (cleaner *Cleaner) Clean() error {
 }
 
 func CleanConnection(connection *redisConnection) error {
-	queueNames := connection.GetConsumingQueues()
+	queueNames, err := connection.GetConsumingQueues()
+	if err != nil {
+		return err
+	}
+
 	for _, queueName := range queueNames {
 		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
+		// TODO: these would merge if we returned redis.nil
+		if err != nil {
+			return err
+		}
 		if !ok {
 			return fmt.Errorf("rmq cleaner failed to open queue %s", queueName)
 		}
@@ -41,7 +58,12 @@ func CleanConnection(connection *redisConnection) error {
 		CleanQueue(queue)
 	}
 
-	if !connection.Close() {
+	ok, err := connection.Close()
+	if err != nil {
+		return err
+	}
+
+	if !ok {
 		return fmt.Errorf("rmq cleaner failed to close connection %s", connection)
 	}
 
@@ -53,9 +75,13 @@ func CleanConnection(connection *redisConnection) error {
 	return nil
 }
 
-func CleanQueue(queue *redisQueue) {
-	returned := queue.ReturnAllUnacked()
+func CleanQueue(queue *redisQueue) error {
+	returned, err := queue.ReturnAllUnacked()
+	if err != nil {
+		return err
+	}
 	queue.CloseInConnection()
 	_ = returned
 	// log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
+	return nil
 }

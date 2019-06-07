@@ -16,28 +16,42 @@ type DeliverySuite struct {
 func (suite *DeliverySuite) TestDeliveryPayload(c *C) {
 	var delivery Delivery
 	delivery = NewTestDelivery("p23")
-	c.Check(delivery.Ack(), Equals, true)
+	ok, err := delivery.Ack()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, true)
 	c.Check(delivery.Payload(), Equals, "p23")
 }
 
 func (suite *DeliverySuite) TestDeliveryAck(c *C) {
 	delivery := NewTestDelivery("p")
 	c.Check(delivery.State, Equals, Unacked)
-	c.Check(delivery.Ack(), Equals, true)
+	ok, err := delivery.Ack()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, true)
 	c.Check(delivery.State, Equals, Acked)
 
-	c.Check(delivery.Ack(), Equals, false)
-	c.Check(delivery.Reject(), Equals, false)
+	ok, err = delivery.Ack()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, false)
+	ok, err = delivery.Reject()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, false)
 	c.Check(delivery.State, Equals, Acked)
 }
 
 func (suite *DeliverySuite) TestDeliveryReject(c *C) {
 	delivery := NewTestDelivery("p")
 	c.Check(delivery.State, Equals, Unacked)
-	c.Check(delivery.Reject(), Equals, true)
+	ok, err := delivery.Reject()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, true)
 	c.Check(delivery.State, Equals, Rejected)
 
-	c.Check(delivery.Reject(), Equals, false)
-	c.Check(delivery.Ack(), Equals, false)
+	ok, err = delivery.Reject()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, false)
+	ok, err = delivery.Ack()
+	c.Check(err, IsNil)
+	c.Check(ok, Equals, false)
 	c.Check(delivery.State, Equals, Rejected)
 }

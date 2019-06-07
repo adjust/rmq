@@ -77,19 +77,37 @@ func NewStats() Stats {
 	}
 }
 
-func CollectStats(queueList []string, mainConnection *redisConnection) Stats {
+func CollectStats(queueList []string, mainConnection *redisConnection) (Stats, error) {
 	stats := NewStats()
 	for _, queueName := range queueList {
 		queue := mainConnection.openQueue(queueName)
-		stats.QueueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
+		readyCount, err := queue.ReadyCount()
+		if err != nil {
+			return stats, err
+		}
+		rejectedCount, err := queue.RejectedCount()
+		if err != nil {
+			return stats, err
+		}
+		stats.QueueStats[queueName] = NewQueueStat(readyCount, rejectedCount)
 	}
 
-	connectionNames := mainConnection.GetConnections()
+	connectionNames, err := mainConnection.GetConnections()
+	if err != nil {
+		return stats, err
+	}
+
 	for _, connectionName := range connectionNames {
 		connection := mainConnection.hijackConnection(connectionName)
-		connectionActive := connection.Check()
+		connectionActive, err := connection.Check()
+		if err != nil {
+			return stats, err
+		}
 
-		queueNames := connection.GetConsumingQueues()
+		queueNames, err := connection.GetConsumingQueues()
+		if err != nil {
+			return stats, err
+		}
 		if len(queueNames) == 0 {
 			stats.otherConnections[connectionName] = connectionActive
 			continue
@@ -97,20 +115,27 @@ func CollectStats(queueList []string, mainConnection *redisConnection) Stats {
 
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
-			consumers := queue.GetConsumers()
+			consumers, err := queue.GetConsumers()
+			if err != nil {
+				return stats, err
+			}
 			openQueueStat, ok := stats.QueueStats[queueName]
 			if !ok {
 				continue
 			}
+			unackedCount, err := queue.UnackedCount()
+			if err != nil {
+				return stats, err
+			}
 			openQueueStat.connectionStats[connectionName] = ConnectionStat{
 				active:       connectionActive,
-				unackedCount: queue.UnackedCount(),
+				unackedCount: unackedCount,
 				consumers:    consumers,
 			}
 		}
 	}
 
-	return stats
+	return stats, nil
 }
 
 func (stats Stats) String() string {

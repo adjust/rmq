@@ -14,11 +14,14 @@ func TestStatsSuite(t *testing.T) {
 type StatsSuite struct{}
 
 func (suite *StatsSuite) TestStats(c *C) {
-	connection := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
+	c.Check(err, IsNil)
 	c.Assert(NewCleaner(connection).Clean(), IsNil)
 
-	conn1 := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
-	conn2 := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
+	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
+	c.Check(err, IsNil)
+	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
+	c.Check(err, IsNil)
 	q1 := conn2.OpenQueue("stats-q1").(*redisQueue)
 	q1.PurgeReady()
 	q1.Publish("stats-d1")
@@ -36,13 +39,17 @@ func (suite *StatsSuite) TestStats(c *C) {
 	consumer.LastDeliveries[1].Reject()
 	q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 
-	stats := CollectStats(connection.GetOpenQueues(), connection)
+	queues, err := connection.GetOpenQueues()
+	c.Check(err, IsNil)
+	stats, err := CollectStats(queues, connection)
+	c.Check(err, IsNil)
 	// log.Printf("stats\n%s", stats)
 	html := stats.GetHtml("", "")
 	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
 	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*1.*2.*conn2.*1.*2.*")
 
-	stats = CollectStats([]string{"stats-q1", "stats-q2"}, connection)
+	stats, err = CollectStats([]string{"stats-q1", "stats-q2"}, connection)
+	c.Check(err, IsNil)
 
 	for key, _ := range stats.QueueStats {
 		c.Check(key, Matches, "stats.*")

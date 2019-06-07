@@ -2,7 +2,6 @@ package rmq
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -15,8 +14,8 @@ const heartbeatDuration = time.Minute
 // Connection is an interface that can be used to test publishing
 type Connection interface {
 	OpenQueue(name string) Queue
-	CollectStats(queueList []string) Stats
-	GetOpenQueues() []string
+	CollectStats(queueList []string) (Stats, error)
+	GetOpenQueues() ([]string, error)
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
@@ -30,17 +29,17 @@ type redisConnection struct {
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) *redisConnection {
+func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) (*redisConnection, error) {
 	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient})
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
-func OpenConnectionWithTestRedisClient(tag string) *redisConnection {
+func OpenConnectionWithTestRedisClient(tag string) (*redisConnection, error) {
 	return openConnectionWithRedisClient(tag, NewTestRedisClient())
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient) *redisConnection {
+func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisConnection, error) {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
@@ -50,20 +49,25 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) *redisCo
 		redisClient:  redisClient,
 	}
 
-	if !connection.updateHeartbeat() { // checks the connection
-		log.Panicf("rmq connection failed to update heartbeat %s", connection)
+	ok, err := connection.updateHeartbeat()
+	// TODO: do it like this in more places?
+	if !ok || err != nil { // checks the connection
+		return nil, err
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	redisClient.SAdd(connectionsKey, name)
+	ok, err = redisClient.SAdd(connectionsKey, name)
+	if !ok {
+		return nil, err
+	}
 
 	go connection.heartbeat()
 	// log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
-	return connection
+	return connection, nil
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int) *redisConnection {
+func OpenConnection(tag, network, address string, db int) (*redisConnection, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Network: network,
 		Addr:    address,
@@ -79,7 +83,7 @@ func (connection *redisConnection) OpenQueue(name string) Queue {
 	return queue
 }
 
-func (connection *redisConnection) CollectStats(queueList []string) Stats {
+func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
 	return CollectStats(queueList, connection)
 }
 
@@ -88,39 +92,39 @@ func (connection *redisConnection) String() string {
 }
 
 // GetConnections returns a list of all open connections
-func (connection *redisConnection) GetConnections() []string {
+func (connection *redisConnection) GetConnections() ([]string, error) {
 	return connection.redisClient.SMembers(connectionsKey)
 }
 
 // Check retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) Check() bool {
+func (connection *redisConnection) Check() (bool, error) {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	ttl, _ := connection.redisClient.TTL(heartbeatKey)
-	return ttl > 0
+	ttl, _, err := connection.redisClient.TTL(heartbeatKey)
+	return ttl > 0, err
 }
 
 // StopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *redisConnection) StopHeartbeat() bool {
+func (connection *redisConnection) StopHeartbeat() (bool, error) {
 	connection.heartbeatStopped = true
-	_, ok := connection.redisClient.Del(connection.heartbeatKey)
-	return ok
+	_, ok, err := connection.redisClient.Del(connection.heartbeatKey)
+	return ok, err
 }
 
-func (connection *redisConnection) Close() bool {
-	_, ok := connection.redisClient.SRem(connectionsKey, connection.Name)
-	return ok
+func (connection *redisConnection) Close() (bool, error) {
+	_, ok, err := connection.redisClient.SRem(connectionsKey, connection.Name)
+	return ok, err
 }
 
 // GetOpenQueues returns a list of all open queues
-func (connection *redisConnection) GetOpenQueues() []string {
+func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
 }
 
 // CloseAllQueues closes all queues by removing them from the global list
-func (connection *redisConnection) CloseAllQueues() int {
-	count, _ := connection.redisClient.Del(queuesKey)
-	return count
+func (connection *redisConnection) CloseAllQueues() (int, error) {
+	count, _, err := connection.redisClient.Del(queuesKey)
+	return count, err
 }
 
 // CloseAllQueuesInConnection closes all queues in the associated connection by removing all related keys
@@ -131,14 +135,21 @@ func (connection *redisConnection) CloseAllQueuesInConnection() error {
 }
 
 // GetConsumingQueues returns a list of all queues consumed by this connection
-func (connection *redisConnection) GetConsumingQueues() []string {
+func (connection *redisConnection) GetConsumingQueues() ([]string, error) {
 	return connection.redisClient.SMembers(connection.queuesKey)
 }
 
 // heartbeat keeps the heartbeat key alive
 func (connection *redisConnection) heartbeat() {
 	for {
-		if !connection.updateHeartbeat() {
+		ok, err := connection.updateHeartbeat()
+		if err != nil {
+			// TODO: what to do here???
+			// one idea was to wait a bit and retry, but make sure the key wasn't expired in between
+			// if it was, do panic
+		}
+
+		if !ok {
 			// log.Printf("rmq connection failed to update heartbeat %s", connection)
 		}
 
@@ -151,9 +162,8 @@ func (connection *redisConnection) heartbeat() {
 	}
 }
 
-func (connection *redisConnection) updateHeartbeat() bool {
-	ok := connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
-	return ok
+func (connection *redisConnection) updateHeartbeat() (bool, error) {
+	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat

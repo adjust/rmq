@@ -1,14 +1,20 @@
 package rmq
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/adjust/uniuri"
+)
+
+var (
+	// TODO:
+	ErrorNotConsuming     = errors.New("aoeu")
+	ErrorAlreadyConsuming = errors.New("aoeu")
 )
 
 const (
@@ -31,20 +37,20 @@ const (
 )
 
 type Queue interface {
-	Publish(payload ...string) bool
-	PublishBytes(payload ...[]byte) bool
+	Publish(payload ...string) (bool, error)
+	PublishBytes(payload ...[]byte) (bool, error)
 	SetPushQueue(pushQueue Queue)
-	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
+	StartConsuming(prefetchLimit int, pollDuration time.Duration) error
 	StopConsuming() <-chan struct{}
-	AddConsumer(tag string, consumer Consumer) string
-	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) string
-	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string
-	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string
-	PurgeReady() int
-	PurgeRejected() int
-	ReturnRejected(count int) int
-	ReturnAllRejected() int
-	Close() bool
+	AddConsumer(tag string, consumer Consumer) (string, error)
+	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error)
+	AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) (string, error)
+	AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) (string, error)
+	PurgeReady() (int, error)
+	PurgeRejected() (int, error)
+	ReturnRejected(count int) (int, error)
+	ReturnAllRejected() (int, error)
+	Close() (bool, error)
 }
 
 type redisQueue struct {
@@ -93,12 +99,12 @@ func (queue *redisQueue) String() string {
 }
 
 // Publish adds a delivery with the given payload to the queue
-func (queue *redisQueue) Publish(payload ...string) bool {
+func (queue *redisQueue) Publish(payload ...string) (bool, error) {
 	return queue.redisClient.LPush(queue.readyKey, payload...)
 }
 
 // PublishBytes just casts the bytes and calls Publish
-func (queue *redisQueue) PublishBytes(payload ...[]byte) bool {
+func (queue *redisQueue) PublishBytes(payload ...[]byte) (bool, error) {
 	stringifiedBytes := make([]string, len(payload))
 	for i, b := range payload {
 		stringifiedBytes[i] = string(b)
@@ -107,81 +113,84 @@ func (queue *redisQueue) PublishBytes(payload ...[]byte) bool {
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeReady() int {
+func (queue *redisQueue) PurgeReady() (int, error) {
 	return queue.deleteRedisList(queue.readyKey)
 }
 
 // PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeRejected() int {
+func (queue *redisQueue) PurgeRejected() (int, error) {
 	return queue.deleteRedisList(queue.rejectedKey)
 }
 
 // Close purges and removes the queue from the list of queues
-func (queue *redisQueue) Close() bool {
+func (queue *redisQueue) Close() (bool, error) {
 	queue.PurgeRejected()
 	queue.PurgeReady()
-	count, _ := queue.redisClient.SRem(queuesKey, queue.name)
-	return count > 0
+	count, _, err := queue.redisClient.SRem(queuesKey, queue.name)
+	return count > 0, err
 }
 
-func (queue *redisQueue) ReadyCount() int {
-	count, _ := queue.redisClient.LLen(queue.readyKey)
-	return count
+func (queue *redisQueue) ReadyCount() (int, error) {
+	count, _, err := queue.redisClient.LLen(queue.readyKey)
+	return count, err
 }
 
-func (queue *redisQueue) UnackedCount() int {
-	count, _ := queue.redisClient.LLen(queue.unackedKey)
-	return count
+func (queue *redisQueue) UnackedCount() (int, error) {
+	count, _, err := queue.redisClient.LLen(queue.unackedKey)
+	return count, err
 }
 
-func (queue *redisQueue) RejectedCount() int {
-	count, _ := queue.redisClient.LLen(queue.rejectedKey)
-	return count
+func (queue *redisQueue) RejectedCount() (int, error) {
+	count, _, err := queue.redisClient.LLen(queue.rejectedKey)
+	return count, err
 }
 
 // ReturnAllUnacked moves all unacked deliveries back to the ready
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
-func (queue *redisQueue) ReturnAllUnacked() int {
-	count, ok := queue.redisClient.LLen(queue.unackedKey)
+func (queue *redisQueue) ReturnAllUnacked() (int, error) {
+	count, ok, err := queue.redisClient.LLen(queue.unackedKey)
 	if !ok {
-		return 0
+		return 0, err
 	}
 
 	unackedCount := count
 	for i := 0; i < unackedCount; i++ {
-		if _, ok := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); !ok {
-			return i
+		if _, ok, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); !ok {
+			return i, err
 		}
 		// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", count, queue.readyKey)) // COMMENTOUT
 	}
 
-	return unackedCount
+	return unackedCount, nil
 }
 
 // ReturnAllRejected moves all rejected deliveries back to the ready
 // list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnAllRejected() int {
-	rejectedCount, _ := queue.redisClient.LLen(queue.rejectedKey)
+func (queue *redisQueue) ReturnAllRejected() (int, error) {
+	rejectedCount, _, err := queue.redisClient.LLen(queue.rejectedKey)
+	if err != nil {
+		return 0, err
+	}
 	return queue.ReturnRejected(rejectedCount)
 }
 
 // ReturnRejected tries to return count rejected deliveries back to
 // the ready list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnRejected(count int) int {
+func (queue *redisQueue) ReturnRejected(count int) (int, error) {
 	if count == 0 {
-		return 0
+		return 0, nil
 	}
 
 	for i := 0; i < count; i++ {
-		_, ok := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
+		_, ok, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
 		if !ok {
-			return i
+			return i, err
 		}
 		// debug(fmt.Sprintf("rmq queue returned rejected delivery %s %s", value, queue.readyKey)) // COMMENTOUT
 	}
 
-	return count
+	return count, nil
 }
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
@@ -203,14 +212,14 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
-func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) bool {
+func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Duration) error {
 	if queue.deliveryChan != nil {
-		return false // already consuming
+		return ErrorAlreadyConsuming
 	}
 
 	// add queue to list of queues consumed on this connection
-	if ok := queue.redisClient.SAdd(queue.queuesKey, queue.name); !ok {
-		log.Panicf("rmq queue failed to start consuming %s", queue)
+	if ok, err := queue.redisClient.SAdd(queue.queuesKey, queue.name); !ok {
+		return err
 	}
 
 	queue.prefetchLimit = prefetchLimit
@@ -219,7 +228,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int, pollDuration time.Dur
 	atomic.StoreInt32(&queue.consumingStopped, 0)
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
-	return true
+	return nil
 }
 
 func (queue *redisQueue) StopConsuming() <-chan struct{} {
@@ -241,66 +250,78 @@ func (queue *redisQueue) StopConsuming() <-chan struct{} {
 }
 
 // AddConsumer adds a consumer to the queue and returns its internal name
-// panics if StartConsuming wasn't called before!
-func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) string {
+func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string, err error) {
 	queue.stopWg.Add(1)
-	name := queue.addConsumer(tag)
+	name, err = queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
 	go queue.consumerConsume(consumer)
-	return name
+	return name, nil
 }
 
-func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) string {
+func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error) {
 	return queue.AddConsumer(tag, consumerFunc)
 }
 
 // AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
-func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) string {
+func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int, consumer BatchConsumer) (string, error) {
 	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
 }
 
 // Timeout limits the amount of time waiting to fill an entire batch
 // The timer is only started when the first message in a batch is received
-func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) string {
+func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int, timeout time.Duration, consumer BatchConsumer) (string, error) {
 	queue.stopWg.Add(1)
-	name := queue.addConsumer(tag)
+	name, err := queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
 	go queue.consumerBatchConsume(batchSize, timeout, consumer)
-	return name
+	return name, nil
 }
 
-func (queue *redisQueue) GetConsumers() []string {
+func (queue *redisQueue) GetConsumers() ([]string, error) {
 	return queue.redisClient.SMembers(queue.consumersKey)
 }
 
-func (queue *redisQueue) RemoveConsumer(name string) bool {
-	count, _ := queue.redisClient.SRem(queue.consumersKey, name)
-	return count > 0
+func (queue *redisQueue) RemoveConsumer(name string) (bool, error) {
+	count, _, err := queue.redisClient.SRem(queue.consumersKey, name)
+	return count > 0, err
 }
 
-func (queue *redisQueue) addConsumer(tag string) string {
+func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	if queue.deliveryChan == nil {
-		log.Panicf("rmq queue failed to add consumer, call StartConsuming first! %s", queue)
+		return "", ErrorNotConsuming
 	}
 
-	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
-	if ok := queue.redisClient.SAdd(queue.consumersKey, name); !ok {
-		log.Panicf("rmq queue failed to add consumer %s %s", queue, tag)
+	if ok, err := queue.redisClient.SAdd(queue.consumersKey, name); !ok {
+		return "", err
 	}
 
 	// log.Printf("rmq queue added consumer %s %s", queue, name)
-	return name
+	return name, nil
 }
 
-func (queue *redisQueue) RemoveAllConsumers() int {
-	count, _ := queue.redisClient.Del(queue.consumersKey)
-	return count
+func (queue *redisQueue) RemoveAllConsumers() (int, error) {
+	count, _, err := queue.redisClient.Del(queue.consumersKey)
+	return count, err
 }
 
 func (queue *redisQueue) consume() {
 	for {
-		batchSize := queue.batchSize()
-		wantMore := queue.consumeBatch(batchSize)
+		batchSize, err := queue.batchSize()
+		if err != nil {
+			// TODO
+		}
+
+		wantMore, err := queue.consumeBatch(batchSize)
+		if err != nil {
+			// TODO
+		}
 
 		if !wantMore {
 			time.Sleep(queue.pollDuration)
@@ -315,29 +336,35 @@ func (queue *redisQueue) consume() {
 	}
 }
 
-func (queue *redisQueue) batchSize() int {
-	// prefetchCount := len(queue.deliveryChan)
-	// prefetchLimit := queue.prefetchLimit - prefetchCount
-	prefetchLimit := queue.prefetchLimit - queue.UnackedCount() 
+func (queue *redisQueue) batchSize() (int, error) {
+	unackedCount, err := queue.UnackedCount()
+	if err != nil {
+		return 0, err
+	}
+	prefetchLimit := queue.prefetchLimit - unackedCount
 
 	// TODO: ignore ready count here and just return prefetchLimit?
-	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
-		return readyCount
+	readyCount, err := queue.ReadyCount()
+	if err != nil {
+		return 0, err
 	}
-	return prefetchLimit
+	if readyCount < prefetchLimit {
+		return readyCount, nil
+	}
+	return prefetchLimit, nil
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *redisQueue) consumeBatch(batchSize int) bool {
+func (queue *redisQueue) consumeBatch(batchSize int) (bool, error) {
 	if batchSize == 0 {
-		return false
+		return false, nil
 	}
 
 	for i := 0; i < batchSize; i++ {
-		value, ok := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		value, ok, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if !ok {
 			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
-			return false
+			return false, err
 		}
 
 		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
@@ -345,7 +372,7 @@ func (queue *redisQueue) consumeBatch(batchSize int) bool {
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
-	return true
+	return true, nil
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
@@ -404,10 +431,10 @@ func (queue *redisQueue) batchTimeout(batchSize int, batch []Delivery, timeout t
 
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
-func (queue *redisQueue) deleteRedisList(key string) int {
-	total, _ := queue.redisClient.LLen(key)
+func (queue *redisQueue) deleteRedisList(key string) (int, error) {
+	total, _, err := queue.redisClient.LLen(key)
 	if total == 0 {
-		return 0 // nothing to do
+		return 0, err // nothing to do
 	}
 
 	// delete elements without blocking
@@ -419,10 +446,13 @@ func (queue *redisQueue) deleteRedisList(key string) int {
 		}
 
 		// remove one batch
-		queue.redisClient.LTrim(key, 0, -1-batchSize)
+		_, err := queue.redisClient.LTrim(key, 0, -1-batchSize)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return total
+	return total, nil
 }
 
 func debug(message string) {

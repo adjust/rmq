@@ -20,8 +20,8 @@ func (connection TestConnection) OpenQueue(name string) Queue {
 	return queue.(*TestQueue)
 }
 
-func (connection TestConnection) CollectStats(queueList []string) Stats {
-	return Stats{}
+func (connection TestConnection) CollectStats(queueList []string) (Stats, error) {
+	return Stats{}, nil
 }
 
 func (connection TestConnection) GetDeliveries(queueName string) []string {
@@ -49,6 +49,6 @@ func (connection TestConnection) Reset() {
 	})
 }
 
-func (connection TestConnection) GetOpenQueues() []string {
-	return []string{}
+func (connection TestConnection) GetOpenQueues() ([]string, error) {
+	return []string{}, nil
 }
