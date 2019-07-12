@@ -52,3 +52,7 @@ func (connection TestConnection) Reset() {
 func (connection TestConnection) GetOpenQueues() []string {
 	return []string{}
 }
+
+func (connection TestConnection) Close() bool {
+	return true
+}

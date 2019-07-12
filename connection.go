@@ -17,6 +17,7 @@ type Connection interface {
 	OpenQueue(name string) Queue
 	CollectStats(queueList []string) Stats
 	GetOpenQueues() []string
+	Close() bool
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
@@ -109,7 +110,7 @@ func (connection *redisConnection) StopHeartbeat() bool {
 
 func (connection *redisConnection) Close() bool {
 	_, ok := connection.redisClient.SRem(connectionsKey, connection.Name)
-	return ok
+	return ok && connection.StopHeartbeat()
 }
 
 // GetOpenQueues returns a list of all open queues
