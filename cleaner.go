@@ -3,22 +3,26 @@ package rmq
 import "fmt"
 
 type Cleaner struct {
-	connection *redisConnection
+	connection Connection
 }
 
-func NewCleaner(connection *redisConnection) *Cleaner {
+func NewCleaner(connection Connection) *Cleaner {
 	return &Cleaner{connection: connection}
 }
 
 func (cleaner *Cleaner) Clean() error {
-	connectionNames := cleaner.connection.GetConnections()
+	cleanerConnection, ok := cleaner.connection.(*redisConnection)
+	if !ok {
+		return nil
+	}
+	connectionNames := cleanerConnection.GetConnections()
 	for _, connectionName := range connectionNames {
-		connection := cleaner.connection.hijackConnection(connectionName)
+		connection := cleanerConnection.hijackConnection(connectionName)
 		if connection.Check() {
 			continue // skip active connections!
 		}
 
-		if err := cleaner.CleanConnection(connection); err != nil {
+		if err := CleanConnection(connection); err != nil {
 			return err
 		}
 	}
@@ -26,7 +30,7 @@ func (cleaner *Cleaner) Clean() error {
 	return nil
 }
 
-func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
+func CleanConnection(connection *redisConnection) error {
 	queueNames := connection.GetConsumingQueues()
 	for _, queueName := range queueNames {
 		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
@@ -34,7 +38,7 @@ func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 			return fmt.Errorf("rmq cleaner failed to open queue %s", queueName)
 		}
 
-		cleaner.CleanQueue(queue)
+		CleanQueue(queue)
 	}
 
 	if !connection.Close() {
@@ -49,7 +53,7 @@ func (cleaner *Cleaner) CleanConnection(connection *redisConnection) error {
 	return nil
 }
 
-func (cleaner *Cleaner) CleanQueue(queue *redisQueue) {
+func CleanQueue(queue *redisQueue) {
 	returned := queue.ReturnAllUnacked()
 	queue.CloseInConnection()
 	_ = returned
