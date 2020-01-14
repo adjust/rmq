@@ -9,7 +9,7 @@ type RedisClient interface {
 	TTL(key string) (ttl time.Duration, ok bool) // default ttl: 0
 
 	// lists
-	LPush(key, value string) bool
+	LPush(key string, value ...string) bool
 	LLen(key string) (affected int, ok bool)
 	LRem(key string, count int, value string) (affected int, ok bool)
 	LTrim(key string, start, stop int)

@@ -31,8 +31,8 @@ const (
 )
 
 type Queue interface {
-	Publish(payload string) bool
-	PublishBytes(payload []byte) bool
+	Publish(payload ...string) bool
+	PublishBytes(payload ...[]byte) bool
 	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int, pollDuration time.Duration) bool
 	StopConsuming() <-chan struct{}
@@ -93,14 +93,17 @@ func (queue *redisQueue) String() string {
 }
 
 // Publish adds a delivery with the given payload to the queue
-func (queue *redisQueue) Publish(payload string) bool {
-	// debug(fmt.Sprintf("publish %s %s", payload, queue)) // COMMENTOUT
-	return queue.redisClient.LPush(queue.readyKey, payload)
+func (queue *redisQueue) Publish(payload ...string) bool {
+	return queue.redisClient.LPush(queue.readyKey, payload...)
 }
 
 // PublishBytes just casts the bytes and calls Publish
-func (queue *redisQueue) PublishBytes(payload []byte) bool {
-	return queue.Publish(string(payload))
+func (queue *redisQueue) PublishBytes(payload ...[]byte) bool {
+	stringifiedBytes := make([]string, len(payload))
+	for i, b := range payload {
+		stringifiedBytes[i] = string(b)
+	}
+	return queue.Publish(stringifiedBytes...)
 }
 
 // PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries

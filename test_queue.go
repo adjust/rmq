@@ -17,13 +17,17 @@ func (queue *TestQueue) String() string {
 	return queue.name
 }
 
-func (queue *TestQueue) Publish(payload string) bool {
-	queue.LastDeliveries = append(queue.LastDeliveries, payload)
+func (queue *TestQueue) Publish(payload ...string) bool {
+	queue.LastDeliveries = append(queue.LastDeliveries, payload...)
 	return true
 }
 
-func (queue *TestQueue) PublishBytes(payload []byte) bool {
-	return queue.Publish(string(payload))
+func (queue *TestQueue) PublishBytes(payload ...[]byte) bool {
+	stringifiedBytes := make([]string, len(payload))
+	for i, b := range payload {
+		stringifiedBytes[i] = string(b)
+	}
+	return queue.Publish(stringifiedBytes...)
 }
 
 func (queue *TestQueue) SetPushQueue(pushQueue Queue) {
