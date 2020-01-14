@@ -22,8 +22,12 @@ func (queue *TestQueue) Publish(payload ...string) bool {
 	return true
 }
 
-func (queue *TestQueue) PublishBytes(payload []byte) bool {
-	return queue.Publish(string(payload))
+func (queue *TestQueue) PublishBytes(payload ...[]byte) bool {
+	stringifiedBytes := make([]string, len(payload))
+	for i, b := range payload {
+		stringifiedBytes[i] = string(b)
+	}
+	return queue.Publish(stringifiedBytes...)
 }
 
 func (queue *TestQueue) SetPushQueue(pushQueue Queue) {
