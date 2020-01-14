@@ -17,8 +17,8 @@ func (queue *TestQueue) String() string {
 	return queue.name
 }
 
-func (queue *TestQueue) Publish(payload string) bool {
-	queue.LastDeliveries = append(queue.LastDeliveries, payload)
+func (queue *TestQueue) Publish(payload ...string) bool {
+	queue.LastDeliveries = append(queue.LastDeliveries, payload...)
 	return true
 }
 

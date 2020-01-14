@@ -33,7 +33,7 @@ func (wrapper RedisWrapper) TTL(key string) (ttl time.Duration, ok bool) {
 	return ttl, ok
 }
 
-func (wrapper RedisWrapper) LPush(key, value string) bool {
+func (wrapper RedisWrapper) LPush(key string, value ...string) bool {
 	return checkErr(wrapper.rawClient.LPush(key, value).Err())
 }
 
