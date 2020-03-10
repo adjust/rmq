@@ -82,7 +82,7 @@ func (wrapper RedisWrapper) SRem(key, value string) (affected int, ok bool) {
 }
 
 func (wrapper RedisWrapper) FlushDb() {
-	wrapper.rawClient.FlushDb()
+	wrapper.rawClient.FlushDB()
 }
 
 // checkErr returns true if there is no error, false if the result error is nil and panics if there's another error
