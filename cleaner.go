@@ -46,6 +46,7 @@ func CleanConnection(connection *redisConnection) error {
 	}
 
 	for _, queueName := range queueNames {
+		// TODO: can we avoid this type assertion/check?
 		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
 		// TODO: these would merge if we returned redis.nil
 		if err != nil {
@@ -58,13 +59,8 @@ func CleanConnection(connection *redisConnection) error {
 		CleanQueue(queue)
 	}
 
-	ok, err := connection.Close()
-	if err != nil {
+	if err := connection.Close(); err != nil {
 		return err
-	}
-
-	if !ok {
-		return fmt.Errorf("rmq cleaner failed to close connection %s", connection)
 	}
 
 	if err := connection.CloseAllQueuesInConnection(); err != nil {

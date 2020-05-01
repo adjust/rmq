@@ -18,6 +18,8 @@ func main() {
 	for _ = range time.Tick(time.Second) {
 		if err := cleaner.Clean(); err != nil {
 			log.Printf("failed to clean: %s", err)
+			continue
 		}
+		log.Printf("cleaned")
 	}
 }

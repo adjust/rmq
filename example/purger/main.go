@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/adjust/rmq/v2"
+	"log"
 )
 
 func main() {
@@ -11,5 +12,11 @@ func main() {
 	}
 
 	queue := connection.OpenQueue("things")
-	queue.PurgeReady()
+	count, err := queue.PurgeReady()
+	if err != nil {
+		log.Printf("failed to purge: %s", err)
+		return
+	}
+
+	log.Printf("purged %d", count)
 }

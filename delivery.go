@@ -40,8 +40,11 @@ func (delivery *wrapDelivery) Payload() string {
 func (delivery *wrapDelivery) Ack() (bool, error) {
 	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
-	count, ok, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	return ok && count == 1, err
+	// TODO: check for other places where we get a returned affectedCount but
+	// ignore it. consider checking the value
+	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+	// TODO: return error only, different error if count != 1?
+	return count == 1, err
 }
 
 func (delivery *wrapDelivery) Reject() (bool, error) {
@@ -57,11 +60,11 @@ func (delivery *wrapDelivery) Push() (bool, error) {
 }
 
 func (delivery *wrapDelivery) move(key string) (bool, error) {
-	if ok, err := delivery.redisClient.LPush(key, delivery.payload); !ok {
+	if err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
 		return false, err
 	}
 
-	if _, ok, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload); !ok {
+	if _, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload); err != nil {
 		return false, err
 	}
 

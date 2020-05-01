@@ -8,7 +8,7 @@ import (
 
 type ConnectionStat struct {
 	active       bool
-	unackedCount int
+	unackedCount int64
 	consumers    []string
 }
 
@@ -22,12 +22,12 @@ func (stat ConnectionStat) String() string {
 type ConnectionStats map[string]ConnectionStat
 
 type QueueStat struct {
-	ReadyCount      int `json:"ready"`
-	RejectedCount   int `json:"rejected"`
+	ReadyCount      int64 `json:"ready"`
+	RejectedCount   int64 `json:"rejected"`
 	connectionStats ConnectionStats
 }
 
-func NewQueueStat(readyCount, rejectedCount int) QueueStat {
+func NewQueueStat(readyCount, rejectedCount int64) QueueStat {
 	return QueueStat{
 		ReadyCount:      readyCount,
 		RejectedCount:   rejectedCount,
@@ -43,24 +43,24 @@ func (stat QueueStat) String() string {
 	)
 }
 
-func (stat QueueStat) UnackedCount() int {
-	unacked := 0
+func (stat QueueStat) UnackedCount() int64 {
+	unacked := int64(0)
 	for _, connectionStat := range stat.connectionStats {
 		unacked += connectionStat.unackedCount
 	}
 	return unacked
 }
 
-func (stat QueueStat) ConsumerCount() int {
-	consumer := 0
+func (stat QueueStat) ConsumerCount() int64 {
+	consumer := int64(0)
 	for _, connectionStat := range stat.connectionStats {
-		consumer += len(connectionStat.consumers)
+		consumer += int64(len(connectionStat.consumers))
 	}
 	return consumer
 }
 
-func (stat QueueStat) ConnectionCount() int {
-	return len(stat.connectionStats)
+func (stat QueueStat) ConnectionCount() int64 {
+	return int64(len(stat.connectionStats))
 }
 
 type QueueStats map[string]QueueStat

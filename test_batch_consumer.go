@@ -2,7 +2,7 @@ package rmq
 
 type TestBatchConsumer struct {
 	LastBatch     Deliveries
-	ConsumedCount int
+	ConsumedCount int64
 	AutoFinish    bool
 
 	finish chan int
@@ -17,7 +17,7 @@ func NewTestBatchConsumer() *TestBatchConsumer {
 func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
 	// log.Printf("TestBatchConsumer.Consume(%d)", len(batch))
 	consumer.LastBatch = batch
-	consumer.ConsumedCount += len(batch)
+	consumer.ConsumedCount += int64(len(batch))
 	if !consumer.AutoFinish {
 		<-consumer.finish
 		// log.Printf("TestBatchConsumer.Consume() finished")

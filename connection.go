@@ -49,15 +49,12 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisC
 		redisClient:  redisClient,
 	}
 
-	ok, err := connection.updateHeartbeat()
-	// TODO: do it like this in more places?
-	if !ok || err != nil { // checks the connection
+	if err := connection.updateHeartbeat(); err != nil { // checks the connection
 		return nil, err
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	ok, err = redisClient.SAdd(connectionsKey, name)
-	if !ok {
+	if err := redisClient.SAdd(connectionsKey, name); err != nil {
 		return nil, err
 	}
 
@@ -99,21 +96,21 @@ func (connection *redisConnection) GetConnections() ([]string, error) {
 // Check retuns true if the connection is currently active in terms of heartbeat
 func (connection *redisConnection) Check() (bool, error) {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	ttl, _, err := connection.redisClient.TTL(heartbeatKey)
+	ttl, err := connection.redisClient.TTL(heartbeatKey)
 	return ttl > 0, err
 }
 
 // StopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *redisConnection) StopHeartbeat() (bool, error) {
+func (connection *redisConnection) StopHeartbeat() error {
 	connection.heartbeatStopped = true
-	_, ok, err := connection.redisClient.Del(connection.heartbeatKey)
-	return ok, err
+	_, err := connection.redisClient.Del(connection.heartbeatKey)
+	return err
 }
 
-func (connection *redisConnection) Close() (bool, error) {
-	_, ok, err := connection.redisClient.SRem(connectionsKey, connection.Name)
-	return ok, err
+func (connection *redisConnection) Close() error {
+	_, err := connection.redisClient.SRem(connectionsKey, connection.Name)
+	return err
 }
 
 // GetOpenQueues returns a list of all open queues
@@ -122,8 +119,8 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 }
 
 // CloseAllQueues closes all queues by removing them from the global list
-func (connection *redisConnection) CloseAllQueues() (int, error) {
-	count, _, err := connection.redisClient.Del(queuesKey)
+func (connection *redisConnection) CloseAllQueues() (int64, error) {
+	count, err := connection.redisClient.Del(queuesKey)
 	return count, err
 }
 
@@ -142,15 +139,10 @@ func (connection *redisConnection) GetConsumingQueues() ([]string, error) {
 // heartbeat keeps the heartbeat key alive
 func (connection *redisConnection) heartbeat() {
 	for {
-		ok, err := connection.updateHeartbeat()
-		if err != nil {
+		if err := connection.updateHeartbeat(); err != nil {
 			// TODO: what to do here???
 			// one idea was to wait a bit and retry, but make sure the key wasn't expired in between
 			// if it was, do panic
-		}
-
-		if !ok {
-			// log.Printf("rmq connection failed to update heartbeat %s", connection)
 		}
 
 		time.Sleep(time.Second)
@@ -162,7 +154,7 @@ func (connection *redisConnection) heartbeat() {
 	}
 }
 
-func (connection *redisConnection) updateHeartbeat() (bool, error) {
+func (connection *redisConnection) updateHeartbeat() error {
 	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
 }
 
