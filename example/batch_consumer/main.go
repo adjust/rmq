@@ -10,7 +10,10 @@ import (
 const unackedLimit = 1000
 
 func main() {
-	connection := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
+	if err != nil {
+		panic(err)
+	}
 
 	queue := connection.OpenQueue("things")
 	queue.StartConsuming(unackedLimit, 500*time.Millisecond)

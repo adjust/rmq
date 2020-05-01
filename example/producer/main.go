@@ -14,7 +14,11 @@ const (
 )
 
 func main() {
-	connection := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2)
+	if err != nil {
+		panic(err)
+	}
+
 	things := connection.OpenQueue("things")
 	balls := connection.OpenQueue("balls")
 	var before time.Time

@@ -7,8 +7,16 @@ import (
 )
 
 func main() {
-	connection := rmq.OpenConnection("returner", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("returner", "tcp", "localhost:6379", 2)
+	if err != nil {
+		panic(err)
+	}
+
 	queue := connection.OpenQueue("things")
-	returned := queue.ReturnAllRejected()
+	returned, err := queue.ReturnAllRejected()
+	if err != nil {
+		panic(err)
+	}
+
 	log.Printf("queue returner returned %d rejected deliveries", returned)
 }
