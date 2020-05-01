@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/adjust/rmq/v2"
@@ -15,6 +16,8 @@ func main() {
 	cleaner := rmq.NewCleaner(connection)
 
 	for _ = range time.Tick(time.Second) {
-		cleaner.Clean()
+		if err := cleaner.Clean(); err != nil {
+			log.Printf("failed to clean: %s", err)
+		}
 	}
 }

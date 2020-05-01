@@ -16,12 +16,20 @@ func main() {
 	}
 
 	queue := connection.OpenQueue("things")
-	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
-	queue.AddBatchConsumer("things", 111, NewBatchConsumer("things"))
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+		panic(err)
+	}
+	if _, err := queue.AddBatchConsumer("things", 111, NewBatchConsumer("things")); err != nil {
+		panic(err)
+	}
 
 	queue = connection.OpenQueue("balls")
-	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
-	queue.AddBatchConsumer("balls", 111, NewBatchConsumer("balls"))
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+		panic(err)
+	}
+	if _, err := queue.AddBatchConsumer("balls", 111, NewBatchConsumer("balls")); err != nil {
+		panic(err)
+	}
 
 	select {}
 }
@@ -37,5 +45,9 @@ func NewBatchConsumer(tag string) *BatchConsumer {
 func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(time.Millisecond)
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	batch.Ack()
+	if failedCount, err := batch.Ack(); err != nil {
+		log.Printf("failed to ack: %s", err)
+	} else if failedCount > 0 {
+		log.Printf("failed to ack: %d", failedCount)
+	}
 }

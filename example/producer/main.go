@@ -25,13 +25,18 @@ func main() {
 
 	for i := 0; i < numDeliveries; i++ {
 		delivery := fmt.Sprintf("delivery %d", i)
-		things.Publish(delivery)
+		if err := things.Publish(delivery); err != nil {
+			log.Printf("failed to publish: %s", err)
+		}
+
 		if i%batchSize == 0 {
 			duration := time.Now().Sub(before)
 			before = time.Now()
 			perSecond := time.Second / (duration / batchSize)
 			log.Printf("produced %d %s %d", i, delivery, perSecond)
-			balls.Publish("ball")
+			if err := balls.Publish("ball"); err != nil {
+				log.Printf("failed to publish: %s", err)
+			}
 		}
 	}
 }
