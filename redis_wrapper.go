@@ -12,6 +12,7 @@ type RedisWrapper struct {
 
 // TODO: return bool return value?
 func (wrapper RedisWrapper) Set(key string, value string, expiration time.Duration) (ok bool, err error) {
+	// can't be nil
 	return checkErr(wrapper.rawClient.Set(key, value, expiration).Err())
 }
 

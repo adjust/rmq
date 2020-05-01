@@ -156,6 +156,7 @@ func (queue *redisQueue) ReturnAllUnacked() (int, error) {
 
 	unackedCount := count
 	for i := 0; i < unackedCount; i++ {
+		// TODO: RPopLPush until we get redis.nil error?
 		if _, ok, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); !ok {
 			return i, err
 		}
@@ -183,6 +184,7 @@ func (queue *redisQueue) ReturnRejected(count int) (int, error) {
 	}
 
 	for i := 0; i < count; i++ {
+		// TODO: just stop on redis.nil, count was too high
 		_, ok, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey)
 		if !ok {
 			return i, err
@@ -343,7 +345,7 @@ func (queue *redisQueue) batchSize() (int, error) {
 	}
 	prefetchLimit := queue.prefetchLimit - unackedCount
 
-	// TODO: ignore ready count here and just return prefetchLimit?
+	// TODO: ignore ready count here and just return prefetchLimit? yes, and inline this function
 	readyCount, err := queue.ReadyCount()
 	if err != nil {
 		return 0, err
@@ -355,11 +357,16 @@ func (queue *redisQueue) batchSize() (int, error) {
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
+// TODO: name args
 func (queue *redisQueue) consumeBatch(batchSize int) (bool, error) {
 	if batchSize == 0 {
 		return false, nil
 	}
 
+	// TODO: do one blocking call (to wait for first), then no n-1 nonblocking
+	// ones, just stop (finished batch) once redis.nil is returned (nothing
+	// else available yet). !wantMore in that case
+	// TODO: pipeline (this is a hot path, but can consider for other usages of RPopLPush too)
 	for i := 0; i < batchSize; i++ {
 		value, ok, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if !ok {
