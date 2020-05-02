@@ -15,9 +15,9 @@ func NewTestConnection() TestConnection {
 	}
 }
 
-func (connection TestConnection) OpenQueue(name string) Queue {
+func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 	queue, _ := connection.queues.LoadOrStore(name, NewTestQueue(name))
-	return queue.(*TestQueue)
+	return queue.(*TestQueue), nil
 }
 
 func (connection TestConnection) CollectStats(queueList []string) (Stats, error) {

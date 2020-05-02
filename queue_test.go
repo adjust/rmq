@@ -89,7 +89,8 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
 
-	queue1 := connection.OpenQueue("conn-q-q1")
+	queue1, err := connection.OpenQueue("conn-q-q1")
+	c.Check(err, IsNil)
 	c.Assert(queue1, NotNil)
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
@@ -102,7 +103,8 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Check(queues, DeepEquals, []string{"conn-q-q1"})
 
-	queue2 := connection.OpenQueue("conn-q-q2")
+	queue2, err := connection.OpenQueue("conn-q-q2")
+	c.Check(err, IsNil)
 	c.Assert(queue2, NotNil)
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
@@ -149,7 +151,8 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
-	queue := connection.OpenQueue("queue-q")
+	queue, err := connection.OpenQueue("queue-q")
+	c.Check(err, IsNil)
 	c.Assert(queue, NotNil)
 	_, err = queue.PurgeReady()
 	c.Check(err, IsNil)
@@ -224,7 +227,8 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
-	queue1 := connection.OpenQueue("cons-q")
+	queue1, err := connection.OpenQueue("cons-q")
+	c.Check(err, IsNil)
 	c.Assert(queue1, NotNil)
 	_, err = queue1.PurgeReady()
 	c.Check(err, IsNil)
@@ -343,7 +347,8 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(0))
 
-	queue2 := connection.OpenQueue("cons-func-q")
+	queue2, err := connection.OpenQueue("cons-func-q")
+	c.Check(err, IsNil)
 	queue2.StartConsuming(10, time.Millisecond)
 
 	payloadChan := make(chan string, 1)
@@ -375,7 +380,8 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 func (suite *QueueSuite) TestMulti(c *C) {
 	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("multi-q")
+	queue, err := connection.OpenQueue("multi-q")
+	c.Check(err, IsNil)
 	_, err = queue.PurgeReady()
 	c.Check(err, IsNil)
 
@@ -459,7 +465,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 func (suite *QueueSuite) TestBatch(c *C) {
 	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("batch-q")
+	queue, err := connection.OpenQueue("batch-q")
+	c.Check(err, IsNil)
 	_, err = queue.PurgeRejected()
 	c.Check(err, IsNil)
 	_, err = queue.PurgeReady()
@@ -536,7 +543,8 @@ func (suite *QueueSuite) TestBatch(c *C) {
 func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("return-q")
+	queue, err := connection.OpenQueue("return-q")
+	c.Check(err, IsNil)
 	_, err = queue.PurgeReady()
 	c.Check(err, IsNil)
 
@@ -635,10 +643,12 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 func (suite *QueueSuite) TestPushQueue(c *C) {
 	connection, err := OpenConnection("push", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue1 := connection.OpenQueue("queue1").(*redisQueue)
-	queue2 := connection.OpenQueue("queue2").(*redisQueue)
+	queue1, err := connection.OpenQueue("queue1")
+	c.Check(err, IsNil)
+	queue2, err := connection.OpenQueue("queue2")
+	c.Check(err, IsNil)
 	queue1.SetPushQueue(queue2)
-	c.Check(queue1.pushKey, Equals, queue2.readyKey)
+	c.Check(queue1.(*redisQueue).pushKey, Equals, queue2.(*redisQueue).readyKey)
 
 	consumer1 := NewTestConsumer("push-cons")
 	consumer1.AutoAck = false
@@ -685,7 +695,8 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 func (suite *QueueSuite) TestConsuming(c *C) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("consume-q")
+	queue, err := connection.OpenQueue("consume-q")
+	c.Check(err, IsNil)
 
 	finishedChan := queue.StopConsuming()
 	c.Check(finishedChan, NotNil)
@@ -709,7 +720,8 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("consume-q").(*redisQueue)
+	queue, err := connection.OpenQueue("consume-q")
+	c.Check(err, IsNil)
 	_, err = queue.PurgeReady()
 	c.Check(err, IsNil)
 
@@ -745,7 +757,7 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	c.Check(err, IsNil)
 	count := deliveryCount - readyCount
 	c.Check(consumedCount, Equals, count)
-	c.Check(queue.deliveryChan, HasLen, 0)
+	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
 
 	connection.stopHeartbeat()
 }
@@ -753,7 +765,8 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue := connection.OpenQueue("batchConsume-q").(*redisQueue)
+	queue, err := connection.OpenQueue("batchConsume-q")
+	c.Check(err, IsNil)
 	_, err = queue.PurgeReady()
 	c.Check(err, IsNil)
 
@@ -793,7 +806,7 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 	count := deliveryCount - readyCount
 	c.Check(err, IsNil)
 	c.Check(consumedCount, Equals, count)
-	c.Check(queue.deliveryChan, HasLen, 0)
+	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
 
 	connection.stopHeartbeat()
 }
@@ -803,7 +816,8 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	connection, err := OpenConnection("bench-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queueName := fmt.Sprintf("bench-q%d", c.N)
-	queue := connection.OpenQueue(queueName)
+	queue, err := connection.OpenQueue(queueName)
+	c.Check(err, IsNil)
 
 	// add some consumers
 	numConsumers := 10

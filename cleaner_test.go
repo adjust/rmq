@@ -25,11 +25,13 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	queues, err := conn.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
-	queue := conn.OpenQueue("q1")
+	queue, err := conn.OpenQueue("q1")
+	c.Check(err, IsNil)
 	queues, err = conn.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 1)
-	conn.OpenQueue("q2")
+	_, err = conn.OpenQueue("q2")
+	c.Check(err, IsNil)
 	queues, err = conn.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
@@ -115,7 +117,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue = conn.OpenQueue("q1")
+	queue, err = conn.OpenQueue("q1")
+	c.Check(err, IsNil)
 
 	queue.Publish("del7")
 	count, err = queue.readyCount()
@@ -205,7 +208,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	queue = conn.OpenQueue("q1")
+	queue, err = conn.OpenQueue("q1")
+	c.Check(err, IsNil)
 	queue.StartConsuming(10, time.Millisecond)
 	consumer = NewTestConsumer("c-C")
 

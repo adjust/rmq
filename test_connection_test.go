@@ -17,7 +17,8 @@ func (suite *ConnectionSuite) TestConnection(c *C) {
 	var _ Connection = connection // check that it implements the interface
 	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
 
-	queue := connection.OpenQueue("things")
+	queue, err := connection.OpenQueue("things")
+	c.Check(err, IsNil)
 	c.Check(connection.GetDelivery("things", -1), Equals, "rmq.TestConnection: delivery not found: things[-1]")
 	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
 	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")

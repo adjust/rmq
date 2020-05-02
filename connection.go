@@ -13,7 +13,7 @@ const heartbeatDuration = time.Minute
 
 // Connection is an interface that can be used to test publishing
 type Connection interface {
-	OpenQueue(name string) Queue
+	OpenQueue(name string) (Queue, error)
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
 
@@ -26,7 +26,7 @@ type Connection interface {
 	close() error
 	closeAllQueuesInConnection() error
 	// used for stats
-	openQueue(name string) Queue // TODO: rename?
+	openQueue(name string) Queue
 	// used in tests
 	stopHeartbeat() error
 }
@@ -88,10 +88,13 @@ func OpenConnection(tag, network, address string, db int) (*redisConnection, err
 }
 
 // OpenQueue opens and returns the queue with a given name
-func (connection *redisConnection) OpenQueue(name string) Queue {
+func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
 	// TODO: return number of open queues?
-	connection.redisClient.SAdd(queuesKey, name) // TODO: return error
-	return connection.openQueue(name)
+	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
+		return nil, err
+	}
+
+	return connection.openQueue(name), nil
 }
 
 func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {

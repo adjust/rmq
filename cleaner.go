@@ -11,14 +11,13 @@ func NewCleaner(connection Connection) *Cleaner {
 }
 
 func (cleaner *Cleaner) Clean() error {
-	cleanerConnection := cleaner.connection // TODO: inline
-	connectionNames, err := cleanerConnection.getConnections()
+	connectionNames, err := cleaner.connection.getConnections()
 	if err != nil {
 		return err
 	}
 
 	for _, connectionName := range connectionNames {
-		connection := cleanerConnection.hijackConnection(connectionName)
+		connection := cleaner.connection.hijackConnection(connectionName)
 		ok, err := connection.check()
 		if err != nil {
 			return err
@@ -43,14 +42,14 @@ func CleanConnection(connection Connection) error {
 	}
 
 	for _, queueName := range queueNames {
-		// TODO: can we avoid this type assertion/check?
-		queue := connection.OpenQueue(queueName) // TODO: inline
-		// TODO: these would merge if we returned redis.nil
+		queue, err := connection.OpenQueue(queueName)
 		if err != nil {
 			return err
 		}
 
-		CleanQueue(queue)
+		if err := CleanQueue(queue); err != nil {
+			return err
+		}
 	}
 
 	if err := connection.close(); err != nil {

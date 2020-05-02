@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	// TODO:
+	// TODO: actually maybe just merge all them as rmq.ErrorNotFound or rmq.Nil?
 	ErrorNotConsuming     = errors.New("aoeu")
 	ErrorAlreadyConsuming = errors.New("aoeu")
 )
