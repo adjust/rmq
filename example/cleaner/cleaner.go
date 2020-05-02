@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/adjust/rmq"
 	"time"
 
-	"github.com/adjust/rmq"
 )
 
 func main() {

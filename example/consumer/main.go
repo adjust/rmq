@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/adjust/rmq"
 	"log"
 	"time"
-
-	"github.com/adjust/rmq"
 )
 
 const (
