@@ -22,10 +22,10 @@ func (suite *StatsSuite) TestStats(c *C) {
 	c.Check(err, IsNil)
 	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	q1 := conn2.OpenQueue("stats-q1").(*redisQueue)
+	q1 := conn2.OpenQueue("stats-q1")
 	q1.PurgeReady()
 	q1.Publish("stats-d1")
-	q2 := conn2.OpenQueue("stats-q2").(*redisQueue)
+	q2 := conn2.OpenQueue("stats-q2")
 	q2.PurgeReady()
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false

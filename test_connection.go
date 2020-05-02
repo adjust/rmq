@@ -24,6 +24,37 @@ func (connection TestConnection) CollectStats(queueList []string) (Stats, error)
 	return Stats{}, nil
 }
 
+func (connection TestConnection) GetOpenQueues() ([]string, error) {
+	return []string{}, nil
+}
+
+func (connection TestConnection) Check() (bool, error) {
+	return true, nil
+}
+func (connection TestConnection) GetConnections() ([]string, error) {
+	return nil, nil
+}
+func (connection TestConnection) hijackConnection(name string) Connection {
+	return nil
+}
+func (connection TestConnection) GetConsumingQueues() ([]string, error) {
+	return nil, nil
+}
+func (connection TestConnection) Close() error {
+	return nil
+}
+func (connection TestConnection) CloseAllQueuesInConnection() error {
+	return nil
+}
+func (connection TestConnection) openQueue(name string) Queue {
+	return nil
+}
+func (connection TestConnection) StopHeartbeat() error {
+	return nil
+}
+
+// test helpers for test inspection and similar
+
 func (connection TestConnection) GetDeliveries(queueName string) []string {
 	queue, ok := connection.queues.Load(queueName)
 	if !ok {
@@ -47,8 +78,4 @@ func (connection TestConnection) Reset() {
 		v.(*TestQueue).Reset()
 		return true
 	})
-}
-
-func (connection TestConnection) GetOpenQueues() ([]string, error) {
-	return []string{}, nil
 }

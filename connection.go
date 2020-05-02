@@ -16,6 +16,18 @@ type Connection interface {
 	OpenQueue(name string) Queue
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
+	// TODO: clean this up
+	// below are only used in cleaner
+	Check() (bool, error)
+	GetConnections() ([]string, error) // TODO: make private too?
+	hijackConnection(name string) Connection
+	GetConsumingQueues() ([]string, error)
+	Close() error
+	CloseAllQueuesInConnection() error
+	// this is only used for stats
+	openQueue(name string) Queue // TODO: rename?
+	// used in tests
+	StopHeartbeat() error
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
@@ -106,6 +118,7 @@ func (connection *redisConnection) Check() (bool, error) {
 // StopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
 func (connection *redisConnection) StopHeartbeat() error {
+	// TODO: use atomic?
 	connection.heartbeatStopped = true
 	_, err := connection.redisClient.Del(connection.heartbeatKey)
 	return err
@@ -162,7 +175,7 @@ func (connection *redisConnection) updateHeartbeat() error {
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
-func (connection *redisConnection) hijackConnection(name string) *redisConnection {
+func (connection *redisConnection) hijackConnection(name string) Connection {
 	return &redisConnection{
 		Name:         name,
 		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
@@ -172,7 +185,7 @@ func (connection *redisConnection) hijackConnection(name string) *redisConnectio
 }
 
 // openQueue opens a queue without adding it to the set of queues
-func (connection *redisConnection) openQueue(name string) *redisQueue {
+func (connection *redisConnection) openQueue(name string) Queue {
 	return newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 }
 

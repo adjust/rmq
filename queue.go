@@ -50,7 +50,17 @@ type Queue interface {
 	PurgeRejected() (int64, error)
 	ReturnRejected(count int64) (int64, error)
 	ReturnAllRejected() (int64, error)
+	ReturnAllUnacked() (int64, error) // used in cleaner
 	Close() (bool, error)
+	CloseInConnection() // used in cleaner
+	// used in stats
+	ReadyCount() (int64, error)
+	UnackedCount() (int64, error)
+	RejectedCount() (int64, error)
+	GetConsumers() ([]string, error)
+	// used in tests
+	RemoveAllConsumers() (int64, error)
+	RemoveConsumer(name string) (bool, error)
 }
 
 type redisQueue struct {
@@ -196,15 +206,17 @@ func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
 
 // CloseInConnection closes the queue in the associated connection by removing all related keys
 func (queue *redisQueue) CloseInConnection() {
+	// TODO: check and return error
 	queue.redisClient.Del(queue.unackedKey)
 	queue.redisClient.Del(queue.consumersKey)
 	queue.redisClient.SRem(queue.queuesKey, queue.name)
 }
 
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
+	// TODO: can we avoid the type check here?
 	redisPushQueue, ok := pushQueue.(*redisQueue)
 	if !ok {
-		return
+		return // TODO: return error? or just panic?
 	}
 
 	queue.pushKey = redisPushQueue.readyKey

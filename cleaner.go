@@ -11,10 +11,7 @@ func NewCleaner(connection Connection) *Cleaner {
 }
 
 func (cleaner *Cleaner) Clean() error {
-	cleanerConnection, ok := cleaner.connection.(*redisConnection)
-	if !ok {
-		return nil
-	}
+	cleanerConnection := cleaner.connection // TODO: inline
 	connectionNames, err := cleanerConnection.GetConnections()
 	if err != nil {
 		return err
@@ -39,7 +36,7 @@ func (cleaner *Cleaner) Clean() error {
 	return nil
 }
 
-func CleanConnection(connection *redisConnection) error {
+func CleanConnection(connection Connection) error {
 	queueNames, err := connection.GetConsumingQueues()
 	if err != nil {
 		return err
@@ -47,13 +44,10 @@ func CleanConnection(connection *redisConnection) error {
 
 	for _, queueName := range queueNames {
 		// TODO: can we avoid this type assertion/check?
-		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
+		queue := connection.OpenQueue(queueName) // TODO: inline
 		// TODO: these would merge if we returned redis.nil
 		if err != nil {
 			return err
-		}
-		if !ok {
-			return fmt.Errorf("rmq cleaner failed to open queue %s", queueName)
 		}
 
 		CleanQueue(queue)
@@ -71,7 +65,7 @@ func CleanConnection(connection *redisConnection) error {
 	return nil
 }
 
-func CleanQueue(queue *redisQueue) error {
+func CleanQueue(queue Queue) error {
 	returned, err := queue.ReturnAllUnacked()
 	if err != nil {
 		return err

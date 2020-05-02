@@ -65,6 +65,10 @@ func (queue *TestQueue) ReturnAllRejected() (int64, error) {
 	return 0, nil
 }
 
+func (queue *TestQueue) ReturnAllUnacked() (int64, error) {
+	return 0, nil
+}
+
 func (queue *TestQueue) PurgeReady() (int64, error) {
 	return 0, nil
 }
@@ -76,6 +80,29 @@ func (queue *TestQueue) PurgeRejected() (int64, error) {
 func (queue *TestQueue) Close() (bool, error) {
 	return false, nil
 }
+
+func (queue *TestQueue) CloseInConnection() {}
+
+func (queue *TestQueue) ReadyCount() (int64, error) {
+	return 0, nil
+}
+func (queue *TestQueue) UnackedCount() (int64, error) {
+	return 0, nil
+}
+func (queue *TestQueue) RejectedCount() (int64, error) {
+	return 0, nil
+}
+func (queue *TestQueue) GetConsumers() ([]string, error) {
+	return nil, nil
+}
+func (queue *TestQueue) RemoveAllConsumers() (int64, error) {
+	return 0, nil
+}
+func (queue *TestQueue) RemoveConsumer(name string) (bool, error) {
+	return true, nil
+}
+
+// test helper
 
 func (queue *TestQueue) Reset() {
 	queue.LastDeliveries = []string{}
