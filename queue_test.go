@@ -151,7 +151,8 @@ func (suite *QueueSuite) TestQueue(c *C) {
 
 	queue := connection.OpenQueue("queue-q").(*redisQueue)
 	c.Assert(queue, NotNil)
-	queue.PurgeReady() // TODO: check err
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 	count, err := queue.ReadyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(0))
@@ -223,12 +224,14 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	queue1 := connection.OpenQueue("cons-q").(*redisQueue)
 	c.Assert(queue1, NotNil)
-	queue1.PurgeReady() // TODO: check err
+	_, err = queue1.PurgeReady()
+	c.Check(err, IsNil)
 
 	consumer := NewTestConsumer("cons-A")
 	consumer.AutoAck = false
 	queue1.StartConsuming(10, time.Millisecond)
-	queue1.AddConsumer("cons-cons", consumer) // TODO check err
+	_, err = queue1.AddConsumer("cons-cons", consumer)
+	c.Check(err, IsNil)
 	c.Check(consumer.LastDelivery, IsNil)
 
 	err = queue1.Publish("cons-d1")
@@ -346,7 +349,8 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	payload := "cons-func-payload"
 
 	queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
-		delivery.Ack() // TODO: check err
+		_, err = delivery.Ack()
+		c.Check(err, IsNil)
 		payloadChan <- delivery.Payload()
 	})
 
@@ -370,7 +374,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queue := connection.OpenQueue("multi-q").(*redisQueue)
-	queue.PurgeReady() // TODO: check err
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 
 	for i := 0; i < 20; i++ {
 		err := queue.Publish(fmt.Sprintf("multi-d%d", i))
@@ -396,7 +401,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	consumer.AutoAck = false
 	consumer.AutoFinish = false
 
-	queue.AddConsumer("multi-cons", consumer) // TODO check err
+	_, err = queue.AddConsumer("multi-cons", consumer)
+	c.Check(err, IsNil)
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.ReadyCount()
 	c.Check(err, IsNil)
@@ -453,8 +459,10 @@ func (suite *QueueSuite) TestBatch(c *C) {
 	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queue := connection.OpenQueue("batch-q").(*redisQueue)
-	queue.PurgeRejected() // TODO check err
-	queue.PurgeReady()    // TODO: check err
+	_, err = queue.PurgeRejected()
+	c.Check(err, IsNil)
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 
 	for i := 0; i < 5; i++ {
 		err := queue.Publish(fmt.Sprintf("batch-d%d", i))
@@ -532,7 +540,8 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queue := connection.OpenQueue("return-q").(*redisQueue)
-	queue.PurgeReady() // TODO: check err
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 
 	for i := 0; i < 6; i++ {
 		err := queue.Publish(fmt.Sprintf("return-d%d", i))
@@ -563,7 +572,8 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 	consumer := NewTestConsumer("return-cons")
 	consumer.AutoAck = false
-	queue.AddConsumer("cons", consumer) // TODO check err
+	_, err = queue.AddConsumer("cons", consumer)
+	c.Check(err, IsNil)
 	time.Sleep(time.Millisecond)
 	count, err = queue.ReadyCount()
 	c.Check(err, IsNil)
@@ -576,12 +586,17 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	c.Check(count, Equals, int64(0))
 
 	c.Check(consumer.LastDeliveries, HasLen, 6)
-	consumer.LastDeliveries[0].Reject() // TODO check err
-	consumer.LastDeliveries[1].Ack()    // TODO Check err
-	consumer.LastDeliveries[2].Reject() // TODO check err
-	consumer.LastDeliveries[3].Reject() // TODO check err
+	_, err = consumer.LastDeliveries[0].Reject()
+	c.Check(err, IsNil)
+	_, err = consumer.LastDeliveries[1].Ack()
+	c.Check(err, IsNil)
+	_, err = consumer.LastDeliveries[2].Reject()
+	c.Check(err, IsNil)
+	_, err = consumer.LastDeliveries[3].Reject()
+	c.Check(err, IsNil)
 	// delivery 4 still open
-	consumer.LastDeliveries[5].Reject() // TODO check err
+	_, err = consumer.LastDeliveries[5].Reject()
+	c.Check(err, IsNil)
 
 	time.Sleep(time.Millisecond)
 	count, err = queue.ReadyCount()
@@ -631,13 +646,15 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 	consumer1.AutoAck = false
 	consumer1.AutoFinish = false
 	queue1.StartConsuming(10, time.Millisecond)
-	queue1.AddConsumer("push-cons", consumer1) // TODO check err
+	_, err = queue1.AddConsumer("push-cons", consumer1)
+	c.Check(err, IsNil)
 
 	consumer2 := NewTestConsumer("push-cons")
 	consumer2.AutoAck = false
 	consumer2.AutoFinish = false
 	queue2.StartConsuming(10, time.Millisecond)
-	queue2.AddConsumer("push-cons", consumer2) // TODO check err
+	_, err = queue2.AddConsumer("push-cons", consumer2)
+	c.Check(err, IsNil)
 
 	err = queue1.Publish("d1")
 	c.Check(err, IsNil)
@@ -696,12 +713,14 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queue := connection.OpenQueue("consume-q").(*redisQueue)
-	queue.PurgeReady() // TODO: check err
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 
 	deliveryCount := int64(30)
 
 	for i := int64(0); i < deliveryCount; i++ {
-		queue.Publish("d" + strconv.FormatInt(i, 10)) // TODO: check err
+		err = queue.Publish("d" + strconv.FormatInt(i, 10))
+		c.Check(err, IsNil)
 	}
 
 	queue.StartConsuming(20, time.Millisecond)
@@ -709,7 +728,8 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
 		consumers = append(consumers, consumer)
-		queue.AddConsumer("consume", consumer) // TODO check err
+		_, err = queue.AddConsumer("consume", consumer)
+		c.Check(err, IsNil)
 	}
 
 	finishedChan := queue.StopConsuming()
@@ -736,12 +756,14 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	queue := connection.OpenQueue("batchConsume-q").(*redisQueue)
-	queue.PurgeReady() // TODO: check err
+	_, err = queue.PurgeReady()
+	c.Check(err, IsNil)
 
 	deliveryCount := int64(50)
 
 	for i := int64(0); i < deliveryCount; i++ {
-		queue.Publish("d" + strconv.FormatInt(i, 10)) // TODO: check err
+		err = queue.Publish("d" + strconv.FormatInt(i, 10))
+		c.Check(err, IsNil)
 	}
 
 	queue.StartConsuming(20, time.Millisecond)
@@ -792,7 +814,8 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
 		queue.StartConsuming(10, time.Millisecond)
-		queue.AddConsumer("bench-cons", consumer) // TODO check err
+		_, err = queue.AddConsumer("bench-cons", consumer)
+		c.Check(err, IsNil)
 	}
 
 	// publish deliveries
