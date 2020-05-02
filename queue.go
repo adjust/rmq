@@ -37,8 +37,8 @@ const (
 )
 
 type Queue interface {
-	Publish(payload ...string) error
-	PublishBytes(payload ...[]byte) error
+	Publish(payload ...string) (total int64, err error)
+	PublishBytes(payload ...[]byte) (total int64, err error)
 	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int64, pollDuration time.Duration) error
 	StopConsuming() <-chan struct{}
@@ -99,12 +99,13 @@ func (queue *redisQueue) String() string {
 }
 
 // Publish adds a delivery with the given payload to the queue
-func (queue *redisQueue) Publish(payload ...string) error {
+// returns how many deliveries are in the queue afterwards
+func (queue *redisQueue) Publish(payload ...string) (total int64, err error) {
 	return queue.redisClient.LPush(queue.readyKey, payload...)
 }
 
 // PublishBytes just casts the bytes and calls Publish
-func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
+func (queue *redisQueue) PublishBytes(payload ...[]byte) (total int64, err error) {
 	stringifiedBytes := make([]string, len(payload))
 	for i, b := range payload {
 		stringifiedBytes[i] = string(b)

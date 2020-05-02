@@ -17,12 +17,12 @@ func (queue *TestQueue) String() string {
 	return queue.name
 }
 
-func (queue *TestQueue) Publish(payload ...string) error {
+func (queue *TestQueue) Publish(payload ...string) (total int64, err error) {
 	queue.LastDeliveries = append(queue.LastDeliveries, payload...)
-	return nil
+	return int64(len(queue.LastDeliveries)), nil
 }
 
-func (queue *TestQueue) PublishBytes(payload ...[]byte) error {
+func (queue *TestQueue) PublishBytes(payload ...[]byte) (total int64, err error) {
 	stringifiedBytes := make([]string, len(payload))
 	for i, b := range payload {
 		stringifiedBytes[i] = string(b)

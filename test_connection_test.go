@@ -22,14 +22,16 @@ func (suite *ConnectionSuite) TestConnection(c *C) {
 	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
 	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
 
-	err := queue.Publish("bar")
+	total, err := queue.Publish("bar")
 	c.Check(err, IsNil)
+	c.Check(total, Equals, int64(1))
 	c.Check(connection.GetDelivery("things", 0), Equals, "bar")
 	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
 	c.Check(connection.GetDelivery("things", 2), Equals, "rmq.TestConnection: delivery not found: things[2]")
 
-	err = queue.Publish("foo")
+	total, err = queue.Publish("foo")
 	c.Check(err, IsNil)
+	c.Check(total, Equals, int64(2))
 	c.Check(connection.GetDelivery("things", 0), Equals, "bar")
 	c.Check(connection.GetDelivery("things", 1), Equals, "foo")
 	c.Check(connection.GetDelivery("things", 2), Equals, "rmq.TestConnection: delivery not found: things[2]")
@@ -37,8 +39,9 @@ func (suite *ConnectionSuite) TestConnection(c *C) {
 	connection.Reset()
 	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
 
-	err = queue.Publish("blab")
+	total, err = queue.Publish("blab")
 	c.Check(err, IsNil)
+	c.Check(total, Equals, int64(1))
 	c.Check(connection.GetDelivery("things", 0), Equals, "blab")
 	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
 }

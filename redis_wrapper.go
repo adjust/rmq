@@ -10,6 +10,8 @@ type RedisWrapper struct {
 	rawClient *redis.Client
 }
 
+// TODO: check functions where we use .Err() instead of .Result() and consider switching
+
 func (wrapper RedisWrapper) Set(key string, value string, expiration time.Duration) error {
 	return wrapper.rawClient.Set(key, value, expiration).Err()
 }
@@ -22,8 +24,8 @@ func (wrapper RedisWrapper) TTL(key string) (ttl time.Duration, err error) {
 	return wrapper.rawClient.TTL(key).Result()
 }
 
-func (wrapper RedisWrapper) LPush(key string, value ...string) error {
-	return wrapper.rawClient.LPush(key, value).Err()
+func (wrapper RedisWrapper) LPush(key string, value ...string) (total int64, err error) {
+	return wrapper.rawClient.LPush(key, value).Result()
 }
 
 func (wrapper RedisWrapper) LLen(key string) (affected int64, err error) {

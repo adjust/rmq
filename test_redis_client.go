@@ -114,7 +114,7 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 // It is possible to push multiple elements using a single command call just specifying multiple arguments
 // at the end of the command. Elements are inserted one after the other to the head of the list,
 // from the leftmost element to the rightmost element.
-func (client *TestRedisClient) LPush(key string, value ...string) error {
+func (client *TestRedisClient) LPush(key string, value ...string) (total int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -122,11 +122,11 @@ func (client *TestRedisClient) LPush(key string, value ...string) error {
 	list, err := client.findList(key)
 
 	if err != nil {
-		return nil
+		return 0, nil
 	}
 
 	client.storeList(key, append(value, list...))
-	return nil
+	return int64(len(list)) + 1, nil
 }
 
 //LLen returns the length of the list stored at key.

@@ -59,8 +59,9 @@ func (delivery *wrapDelivery) Push() (bool, error) {
 	}
 }
 
+// TODO: return how long the key is afterwards
 func (delivery *wrapDelivery) move(key string) (bool, error) {
-	if err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
+	if _, err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
 		return false, err
 	}
 

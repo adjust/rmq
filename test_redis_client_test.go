@@ -100,6 +100,7 @@ func TestTestRedisClient_LPush(t *testing.T) {
 		name   string
 		client *TestRedisClient
 		args   args
+		total  int64
 	}{
 		{
 			"adding to list",
@@ -108,14 +109,16 @@ func TestTestRedisClient_LPush(t *testing.T) {
 				"somekey",
 				"somevalue",
 			},
+			1,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
 			//Push
-			err := tt.client.LPush(tt.args.key, tt.args.value)
+			total, err := tt.client.LPush(tt.args.key, tt.args.value)
 			assert.NoError(t, err)
+			assert.Equal(t, tt.total, total)
 
 			//Len
 			count, err := tt.client.LLen(tt.args.key)
