@@ -1,14 +1,17 @@
 package rmq
 
 import (
+	"errors"
 	"fmt"
 )
 
+var ErrorDeliveryNotFound = errors.New("delivery not found")
+
 type Delivery interface {
 	Payload() string
-	Ack() (bool, error)
-	Reject() (bool, error)
-	Push() (bool, error)
+	Ack() error
+	Reject() error
+	Push() error
 }
 
 type wrapDelivery struct {
@@ -37,21 +40,26 @@ func (delivery *wrapDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *wrapDelivery) Ack() (bool, error) {
+func (delivery *wrapDelivery) Ack() error {
 	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
 	// TODO: check for other places where we get a returned affectedCount but
 	// ignore it. consider checking the value
 	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	// TODO: return error only, different error if count != 1?
-	return count == 1, err
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrorDeliveryNotFound
+	}
+	return nil
 }
 
-func (delivery *wrapDelivery) Reject() (bool, error) {
+func (delivery *wrapDelivery) Reject() error {
 	return delivery.move(delivery.rejectedKey)
 }
 
-func (delivery *wrapDelivery) Push() (bool, error) {
+func (delivery *wrapDelivery) Push() error {
 	if delivery.pushKey != "" {
 		return delivery.move(delivery.pushKey)
 	} else {
@@ -60,15 +68,17 @@ func (delivery *wrapDelivery) Push() (bool, error) {
 }
 
 // TODO: return how long the key is afterwards
-func (delivery *wrapDelivery) move(key string) (bool, error) {
+func (delivery *wrapDelivery) move(key string) error {
 	if _, err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
-		return false, err
+		return err
 	}
 
-	if _, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload); err != nil {
-		return false, err
+	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+	if err != nil {
+		return err
 	}
-
-	// debug(fmt.Sprintf("delivery rejected %s", delivery)) // COMMENTOUT
-	return true, nil
+	if count == 0 {
+		return ErrorDeliveryNotFound
+	}
+	return nil
 }

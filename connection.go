@@ -99,6 +99,7 @@ func (connection *redisConnection) GetConnections() ([]string, error) {
 func (connection *redisConnection) Check() (bool, error) {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
 	ttl, err := connection.redisClient.TTL(heartbeatKey)
+	// TODO: return ErrorInactive?
 	return ttl > 0, err
 }
 

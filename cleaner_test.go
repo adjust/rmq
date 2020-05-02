@@ -89,9 +89,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	c.Assert(consumer.LastDelivery, NotNil)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del1")
-	ok, err := consumer.LastDelivery.Ack()
+	err = consumer.LastDelivery.Ack()
 	c.Check(err, IsNil)
-	c.Check(ok, Equals, true)
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.UnackedCount()
 	c.Check(err, IsNil)
@@ -175,9 +174,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(count, Equals, int64(6))
 
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
-	ok, err = consumer.LastDelivery.Ack()
+	err = consumer.LastDelivery.Ack()
 	c.Check(err, IsNil)
-	c.Check(ok, Equals, true)
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.UnackedCount()
 	c.Check(err, IsNil)

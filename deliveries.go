@@ -2,44 +2,29 @@ package rmq
 
 type Deliveries []Delivery
 
-func (deliveries Deliveries) Ack() (int, error) {
-	failedCount := 0
+func (deliveries Deliveries) Ack() (errors []error) {
 	for _, delivery := range deliveries {
-		ok, err := delivery.Ack()
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			failedCount++
+		if err := delivery.Ack(); err != nil {
+			errors = append(errors, err)
 		}
 	}
-	return failedCount, nil
+	return errors
 }
 
-func (deliveries Deliveries) Reject() (int, error) {
-	failedCount := 0
+func (deliveries Deliveries) Reject() (errors []error) {
 	for _, delivery := range deliveries {
-		ok, err := delivery.Reject()
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			failedCount++
+		if err := delivery.Reject(); err != nil {
+			errors = append(errors, err)
 		}
 	}
-	return failedCount, nil
+	return errors
 }
 
-func (deliveries Deliveries) Push() (int, error) {
-	failedCount := 0
+func (deliveries Deliveries) Push() (errors []error) {
 	for _, delivery := range deliveries {
-		ok, err := delivery.Push()
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			failedCount++
+		if err := delivery.Push(); err != nil {
+			errors = append(errors, err)
 		}
 	}
-	return failedCount, nil
+	return errors
 }
