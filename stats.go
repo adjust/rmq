@@ -81,30 +81,30 @@ func CollectStats(queueList []string, mainConnection *redisConnection) (Stats, e
 	stats := NewStats()
 	for _, queueName := range queueList {
 		queue := mainConnection.openQueue(queueName)
-		readyCount, err := queue.ReadyCount()
+		readyCount, err := queue.readyCount()
 		if err != nil {
 			return stats, err
 		}
-		rejectedCount, err := queue.RejectedCount()
+		rejectedCount, err := queue.rejectedCount()
 		if err != nil {
 			return stats, err
 		}
 		stats.QueueStats[queueName] = NewQueueStat(readyCount, rejectedCount)
 	}
 
-	connectionNames, err := mainConnection.GetConnections()
+	connectionNames, err := mainConnection.getConnections()
 	if err != nil {
 		return stats, err
 	}
 
 	for _, connectionName := range connectionNames {
 		connection := mainConnection.hijackConnection(connectionName)
-		connectionActive, err := connection.Check()
+		connectionActive, err := connection.check()
 		if err != nil {
 			return stats, err
 		}
 
-		queueNames, err := connection.GetConsumingQueues()
+		queueNames, err := connection.getConsumingQueues()
 		if err != nil {
 			return stats, err
 		}
@@ -115,7 +115,7 @@ func CollectStats(queueList []string, mainConnection *redisConnection) (Stats, e
 
 		for _, queueName := range queueNames {
 			queue := connection.openQueue(queueName)
-			consumers, err := queue.GetConsumers()
+			consumers, err := queue.getConsumers()
 			if err != nil {
 				return stats, err
 			}
@@ -123,7 +123,7 @@ func CollectStats(queueList []string, mainConnection *redisConnection) (Stats, e
 			if !ok {
 				continue
 			}
-			unackedCount, err := queue.UnackedCount()
+			unackedCount, err := queue.unackedCount()
 			if err != nil {
 				return stats, err
 			}

@@ -50,17 +50,20 @@ type Queue interface {
 	PurgeRejected() (int64, error)
 	ReturnRejected(count int64) (int64, error)
 	ReturnAllRejected() (int64, error)
-	ReturnAllUnacked() (int64, error) // used in cleaner
 	Close() (bool, error)
-	CloseInConnection() // used in cleaner
-	// used in stats
-	ReadyCount() (int64, error)
-	UnackedCount() (int64, error)
-	RejectedCount() (int64, error)
-	GetConsumers() ([]string, error)
+
+	// internals
+	// used in cleaner
+	returnAllUnacked() (int64, error)
+	closeInConnection()
+	// used for stats
+	readyCount() (int64, error)
+	unackedCount() (int64, error)
+	rejectedCount() (int64, error)
+	getConsumers() ([]string, error)
 	// used in tests
-	RemoveAllConsumers() (int64, error)
-	RemoveConsumer(name string) (bool, error)
+	removeAllConsumers() (int64, error)
+	removeConsumer(name string) (bool, error)
 }
 
 type redisQueue struct {
@@ -142,22 +145,22 @@ func (queue *redisQueue) Close() (bool, error) {
 	return count > 0, err
 }
 
-func (queue *redisQueue) ReadyCount() (int64, error) {
+func (queue *redisQueue) readyCount() (int64, error) {
 	return queue.redisClient.LLen(queue.readyKey)
 }
 
-func (queue *redisQueue) UnackedCount() (int64, error) {
+func (queue *redisQueue) unackedCount() (int64, error) {
 	return queue.redisClient.LLen(queue.unackedKey)
 }
 
-func (queue *redisQueue) RejectedCount() (int64, error) {
+func (queue *redisQueue) rejectedCount() (int64, error) {
 	return queue.redisClient.LLen(queue.rejectedKey)
 }
 
-// ReturnAllUnacked moves all unacked deliveries back to the ready
+// returnAllUnacked moves all unacked deliveries back to the ready
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
-func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
+func (queue *redisQueue) returnAllUnacked() (int64, error) {
 	// TODO: consider not LLen here, just poppush until empty
 	unackedCount, err := queue.redisClient.LLen(queue.unackedKey)
 	if err != nil {
@@ -180,7 +183,7 @@ func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
 // list and returns the number of returned deliveries
 func (queue *redisQueue) ReturnAllRejected() (int64, error) {
 	// TODO: just use maxint instead of getting the actual count?
-	rejectedCount, err := queue.RejectedCount()
+	rejectedCount, err := queue.rejectedCount()
 	if err != nil {
 		return 0, err
 	}
@@ -204,8 +207,8 @@ func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
 	return count, nil
 }
 
-// CloseInConnection closes the queue in the associated connection by removing all related keys
-func (queue *redisQueue) CloseInConnection() {
+// closeInConnection closes the queue in the associated connection by removing all related keys
+func (queue *redisQueue) closeInConnection() {
 	// TODO: check and return error
 	queue.redisClient.Del(queue.unackedKey)
 	queue.redisClient.Del(queue.consumersKey)
@@ -295,11 +298,11 @@ func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int64
 	return name, nil
 }
 
-func (queue *redisQueue) GetConsumers() ([]string, error) {
+func (queue *redisQueue) getConsumers() ([]string, error) {
 	return queue.redisClient.SMembers(queue.consumersKey)
 }
 
-func (queue *redisQueue) RemoveConsumer(name string) (bool, error) {
+func (queue *redisQueue) removeConsumer(name string) (bool, error) {
 	count, err := queue.redisClient.SRem(queue.consumersKey, name)
 	// TODO: new error for already closed?
 	return count > 0, err
@@ -323,7 +326,7 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 }
 
 // TODO: remove int return value?
-func (queue *redisQueue) RemoveAllConsumers() (int64, error) {
+func (queue *redisQueue) removeAllConsumers() (int64, error) {
 	count, err := queue.redisClient.Del(queue.consumersKey)
 	return count, err
 }
@@ -354,14 +357,14 @@ func (queue *redisQueue) consume() {
 }
 
 func (queue *redisQueue) batchSize() (int64, error) {
-	unackedCount, err := queue.UnackedCount()
+	unackedCount, err := queue.unackedCount()
 	if err != nil {
 		return 0, err
 	}
 	prefetchLimit := queue.prefetchLimit - unackedCount
 
 	// TODO: ignore ready count here and just return prefetchLimit? yes, and inline this function
-	readyCount, err := queue.ReadyCount()
+	readyCount, err := queue.readyCount()
 	if err != nil {
 		return 0, err
 	}

@@ -66,7 +66,7 @@ func (suite *StatsSuite) TestStats(c *C) {
 	*/
 
 	q2.StopConsuming()
-	connection.StopHeartbeat()
-	conn1.StopHeartbeat()
-	conn2.StopHeartbeat()
+	connection.stopHeartbeat()
+	conn1.stopHeartbeat()
+	conn2.stopHeartbeat()
 }

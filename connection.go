@@ -16,18 +16,19 @@ type Connection interface {
 	OpenQueue(name string) Queue
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
-	// TODO: clean this up
-	// below are only used in cleaner
-	Check() (bool, error)
-	GetConnections() ([]string, error) // TODO: make private too?
+
+	// internals
+	// used in cleaner
+	check() (bool, error)
+	getConnections() ([]string, error)
 	hijackConnection(name string) Connection
-	GetConsumingQueues() ([]string, error)
-	Close() error
-	CloseAllQueuesInConnection() error
-	// this is only used for stats
+	getConsumingQueues() ([]string, error)
+	close() error
+	closeAllQueuesInConnection() error
+	// used for stats
 	openQueue(name string) Queue // TODO: rename?
 	// used in tests
-	StopHeartbeat() error
+	stopHeartbeat() error
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
@@ -90,8 +91,7 @@ func OpenConnection(tag, network, address string, db int) (*redisConnection, err
 func (connection *redisConnection) OpenQueue(name string) Queue {
 	// TODO: return number of open queues?
 	connection.redisClient.SAdd(queuesKey, name) // TODO: return error
-	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
-	return queue
+	return connection.openQueue(name)
 }
 
 func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
@@ -102,29 +102,29 @@ func (connection *redisConnection) String() string {
 	return connection.Name
 }
 
-// GetConnections returns a list of all open connections
-func (connection *redisConnection) GetConnections() ([]string, error) {
+// getConnections returns a list of all open connections
+func (connection *redisConnection) getConnections() ([]string, error) {
 	return connection.redisClient.SMembers(connectionsKey)
 }
 
-// Check retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) Check() (bool, error) {
+// check retuns true if the connection is currently active in terms of heartbeat
+func (connection *redisConnection) check() (bool, error) {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
 	ttl, err := connection.redisClient.TTL(heartbeatKey)
 	// TODO: return ErrorInactive?
 	return ttl > 0, err
 }
 
-// StopHeartbeat stops the heartbeat of the connection
+// stopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *redisConnection) StopHeartbeat() error {
+func (connection *redisConnection) stopHeartbeat() error {
 	// TODO: use atomic?
 	connection.heartbeatStopped = true
 	_, err := connection.redisClient.Del(connection.heartbeatKey)
 	return err
 }
 
-func (connection *redisConnection) Close() error {
+func (connection *redisConnection) close() error {
 	_, err := connection.redisClient.SRem(connectionsKey, connection.Name)
 	return err
 }
@@ -140,15 +140,15 @@ func (connection *redisConnection) CloseAllQueues() (int64, error) {
 	return count, err
 }
 
-// CloseAllQueuesInConnection closes all queues in the associated connection by removing all related keys
-func (connection *redisConnection) CloseAllQueuesInConnection() error {
+// closeAllQueuesInConnection closes all queues in the associated connection by removing all related keys
+func (connection *redisConnection) closeAllQueuesInConnection() error {
 	connection.redisClient.Del(connection.queuesKey)
 	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return nil
 }
 
-// GetConsumingQueues returns a list of all queues consumed by this connection
-func (connection *redisConnection) GetConsumingQueues() ([]string, error) {
+// getConsumingQueues returns a list of all queues consumed by this connection
+func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 	return connection.redisClient.SMembers(connection.queuesKey)
 }
 

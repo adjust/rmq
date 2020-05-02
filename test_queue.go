@@ -65,10 +65,6 @@ func (queue *TestQueue) ReturnAllRejected() (int64, error) {
 	return 0, nil
 }
 
-func (queue *TestQueue) ReturnAllUnacked() (int64, error) {
-	return 0, nil
-}
-
 func (queue *TestQueue) PurgeReady() (int64, error) {
 	return 0, nil
 }
@@ -81,24 +77,27 @@ func (queue *TestQueue) Close() (bool, error) {
 	return false, nil
 }
 
-func (queue *TestQueue) CloseInConnection() {}
+func (queue *TestQueue) returnAllUnacked() (int64, error) {
+	return 0, nil
+}
+func (queue *TestQueue) closeInConnection() {}
 
-func (queue *TestQueue) ReadyCount() (int64, error) {
+func (queue *TestQueue) readyCount() (int64, error) {
 	return 0, nil
 }
-func (queue *TestQueue) UnackedCount() (int64, error) {
+func (queue *TestQueue) unackedCount() (int64, error) {
 	return 0, nil
 }
-func (queue *TestQueue) RejectedCount() (int64, error) {
+func (queue *TestQueue) rejectedCount() (int64, error) {
 	return 0, nil
 }
-func (queue *TestQueue) GetConsumers() ([]string, error) {
+func (queue *TestQueue) getConsumers() ([]string, error) {
 	return nil, nil
 }
-func (queue *TestQueue) RemoveAllConsumers() (int64, error) {
+func (queue *TestQueue) removeAllConsumers() (int64, error) {
 	return 0, nil
 }
-func (queue *TestQueue) RemoveConsumer(name string) (bool, error) {
+func (queue *TestQueue) removeConsumer(name string) (bool, error) {
 	return true, nil
 }
 

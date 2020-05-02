@@ -28,28 +28,28 @@ func (connection TestConnection) GetOpenQueues() ([]string, error) {
 	return []string{}, nil
 }
 
-func (connection TestConnection) Check() (bool, error) {
+func (connection TestConnection) check() (bool, error) {
 	return true, nil
 }
-func (connection TestConnection) GetConnections() ([]string, error) {
+func (connection TestConnection) getConnections() ([]string, error) {
 	return nil, nil
 }
 func (connection TestConnection) hijackConnection(name string) Connection {
 	return nil
 }
-func (connection TestConnection) GetConsumingQueues() ([]string, error) {
+func (connection TestConnection) getConsumingQueues() ([]string, error) {
 	return nil, nil
 }
-func (connection TestConnection) Close() error {
+func (connection TestConnection) close() error {
 	return nil
 }
-func (connection TestConnection) CloseAllQueuesInConnection() error {
+func (connection TestConnection) closeAllQueuesInConnection() error {
 	return nil
 }
 func (connection TestConnection) openQueue(name string) Queue {
 	return nil
 }
-func (connection TestConnection) StopHeartbeat() error {
+func (connection TestConnection) stopHeartbeat() error {
 	return nil
 }
 
