@@ -219,7 +219,8 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	}
 
 	// add queue to list of queues consumed on this connection
-	if err := queue.redisClient.SAdd(queue.queuesKey, queue.name); err != nil {
+	// TODO: return number of queues being consumed in this connection?
+	if _, err := queue.redisClient.SAdd(queue.queuesKey, queue.name); err != nil {
 		return err
 	}
 
@@ -300,7 +301,8 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
-	if err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
+	// TODO: return number of consumers in this connection?
+	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
 		return "", err
 	}
 

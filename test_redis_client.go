@@ -287,19 +287,19 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 // Specified members that are already a member of this set are ignored.
 // If key does not exist, a new set is created before adding the specified members.
 // An error is returned when the value stored at key is not a set.
-func (client *TestRedisClient) SAdd(key, value string) error {
+func (client *TestRedisClient) SAdd(key, value string) (total int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
 
 	set, err := client.findSet(key)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	set[value] = struct{}{}
 	client.storeSet(key, set)
-	return nil
+	return int64(len(set)), nil
 }
 
 // SMembers returns all the members of the set value stored at key.

@@ -10,9 +10,8 @@ type RedisWrapper struct {
 	rawClient *redis.Client
 }
 
-// TODO: check functions where we use .Err() instead of .Result() and consider switching
-
 func (wrapper RedisWrapper) Set(key string, value string, expiration time.Duration) error {
+	// NOTE: using Err() here because Result() string is always "OK"
 	return wrapper.rawClient.Set(key, value, expiration).Err()
 }
 
@@ -37,6 +36,7 @@ func (wrapper RedisWrapper) LRem(key string, count int64, value string) (affecte
 }
 
 func (wrapper RedisWrapper) LTrim(key string, start, stop int64) error {
+	// NOTE: using Err() here because Result() string is always "OK"
 	return wrapper.rawClient.LTrim(key, int64(start), int64(stop)).Err()
 }
 
@@ -53,8 +53,8 @@ func (wrapper RedisWrapper) RPopLPush(source, destination string) (value string,
 	}
 }
 
-func (wrapper RedisWrapper) SAdd(key, value string) error {
-	return wrapper.rawClient.SAdd(key, value).Err()
+func (wrapper RedisWrapper) SAdd(key, value string) (total int64, err error) {
+	return wrapper.rawClient.SAdd(key, value).Result()
 }
 
 func (wrapper RedisWrapper) SMembers(key string) (members []string, err error) {

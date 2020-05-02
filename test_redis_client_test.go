@@ -74,11 +74,13 @@ func TestTestRedisClient_SAdd(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.client.SAdd(tt.args.key, tt.args.value)
+			total, err := tt.client.SAdd(tt.args.key, tt.args.value)
 			assert.NoError(t, err)
+			assert.Equal(t, int64(1), total)
 
-			err = tt.client.SAdd(tt.args.key, tt.args.value)
+			total, err = tt.client.SAdd(tt.args.key, tt.args.value)
 			assert.NoError(t, err)
+			assert.Equal(t, int64(1), total)
 
 			members, err := tt.client.SMembers(tt.args.key)
 			assert.Equal(t, []string{tt.args.value}, members)

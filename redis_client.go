@@ -17,7 +17,7 @@ type RedisClient interface {
 	RPopLPush(source, destination string) (value string, ok bool, err error)
 
 	// sets
-	SAdd(key, value string) error
+	SAdd(key, value string) (total int64, err error)
 	SMembers(key string) (members []string, err error)  // default members: []string{}
 	SRem(key, value string) (affected int64, err error) // default affected: 0
 

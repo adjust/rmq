@@ -54,7 +54,8 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisC
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	if err := redisClient.SAdd(connectionsKey, name); err != nil {
+	// TODO: return number of open connections?
+	if _, err := redisClient.SAdd(connectionsKey, name); err != nil {
 		return nil, err
 	}
 
@@ -75,7 +76,8 @@ func OpenConnection(tag, network, address string, db int) (*redisConnection, err
 
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) Queue {
-	connection.redisClient.SAdd(queuesKey, name)
+	// TODO: return number of open queues?
+	connection.redisClient.SAdd(queuesKey, name) // TODO: return error
 	queue := newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 	return queue
 }
