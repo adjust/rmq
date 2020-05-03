@@ -54,8 +54,6 @@ func (queue *TestQueue) readyCount() (int64, error)          { panic(errorNotSup
 func (queue *TestQueue) unackedCount() (int64, error)        { panic(errorNotSupported) }
 func (queue *TestQueue) rejectedCount() (int64, error)       { panic(errorNotSupported) }
 func (queue *TestQueue) getConsumers() ([]string, error)     { panic(errorNotSupported) }
-func (queue *TestQueue) removeAllConsumers() (int64, error)  { panic(errorNotSupported) }
-func (queue *TestQueue) removeConsumer(string) (bool, error) { panic(errorNotSupported) }
 
 // test helper
 

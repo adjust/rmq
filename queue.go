@@ -60,9 +60,6 @@ type Queue interface {
 	unackedCount() (int64, error)
 	rejectedCount() (int64, error)
 	getConsumers() ([]string, error)
-	// used in tests
-	removeAllConsumers() (int64, error)
-	removeConsumer(name string) (bool, error)
 }
 
 type redisQueue struct {
@@ -314,12 +311,6 @@ func (queue *redisQueue) getConsumers() ([]string, error) {
 	return queue.redisClient.SMembers(queue.consumersKey)
 }
 
-func (queue *redisQueue) removeConsumer(name string) (bool, error) {
-	count, err := queue.redisClient.SRem(queue.consumersKey, name)
-	// TODO: new error for already closed?
-	return count > 0, err
-}
-
 func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	if queue.deliveryChan == nil {
 		return "", ErrorNotConsuming
@@ -335,12 +326,6 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 
 	// log.Printf("rmq queue added consumer %s %s", queue, name)
 	return name, nil
-}
-
-// TODO: remove int return value?
-func (queue *redisQueue) removeAllConsumers() (int64, error) {
-	count, err := queue.redisClient.Del(queue.consumersKey)
-	return count, err
 }
 
 func (queue *redisQueue) consume() {
