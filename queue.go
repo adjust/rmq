@@ -12,9 +12,8 @@ import (
 )
 
 var (
-	// TODO: actually maybe just merge all them as rmq.ErrorNotFound or rmq.Nil?
-	ErrorNotConsuming     = errors.New("aoeu")
-	ErrorAlreadyConsuming = errors.New("aoeu")
+	ErrorAlreadyConsuming = errors.New("must not call StartConsuming() multiple times")
+	ErrorNotConsuming     = errors.New("must call StartConsuming() before adding consumers")
 )
 
 const (

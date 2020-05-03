@@ -29,9 +29,9 @@ func (suite *DeliverySuite) TestDeliveryAck(c *C) {
 	c.Check(delivery.State, Equals, Acked)
 
 	err = delivery.Ack()
-	c.Check(err, Equals, ErrorDeliveryNotFound)
+	c.Check(err, Equals, ErrorNotFound)
 	err = delivery.Reject()
-	c.Check(err, Equals, ErrorDeliveryNotFound)
+	c.Check(err, Equals, ErrorNotFound)
 	c.Check(delivery.State, Equals, Acked)
 }
 
@@ -43,8 +43,8 @@ func (suite *DeliverySuite) TestDeliveryReject(c *C) {
 	c.Check(delivery.State, Equals, Rejected)
 
 	err = delivery.Reject()
-	c.Check(err, Equals, ErrorDeliveryNotFound)
+	c.Check(err, Equals, ErrorNotFound)
 	err = delivery.Ack()
-	c.Check(err, Equals, ErrorDeliveryNotFound)
+	c.Check(err, Equals, ErrorNotFound)
 	c.Check(delivery.State, Equals, Rejected)
 }

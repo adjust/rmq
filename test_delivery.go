@@ -32,7 +32,7 @@ func (delivery *TestDelivery) Payload() string {
 
 func (delivery *TestDelivery) Ack() error {
 	if delivery.State != Unacked {
-		return ErrorDeliveryNotFound
+		return ErrorNotFound
 	}
 	delivery.State = Acked
 	return nil
@@ -40,7 +40,7 @@ func (delivery *TestDelivery) Ack() error {
 
 func (delivery *TestDelivery) Reject() error {
 	if delivery.State != Unacked {
-		return ErrorDeliveryNotFound
+		return ErrorNotFound
 	}
 	delivery.State = Rejected
 	return nil
@@ -48,7 +48,7 @@ func (delivery *TestDelivery) Reject() error {
 
 func (delivery *TestDelivery) Push() error {
 	if delivery.State != Unacked {
-		return ErrorDeliveryNotFound
+		return ErrorNotFound
 	}
 	delivery.State = Pushed
 	return nil

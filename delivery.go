@@ -5,7 +5,9 @@ import (
 	"fmt"
 )
 
-var ErrorDeliveryNotFound = errors.New("delivery not found")
+// entitify being delivery ... TODO
+// TODO: move somewhere else
+var ErrorNotFound = errors.New("entity not found")
 
 type Delivery interface {
 	Payload() string
@@ -50,7 +52,7 @@ func (delivery *wrapDelivery) Ack() error {
 		return err
 	}
 	if count == 0 {
-		return ErrorDeliveryNotFound
+		return ErrorNotFound
 	}
 	return nil
 }
@@ -78,7 +80,7 @@ func (delivery *wrapDelivery) move(key string) error {
 		return err
 	}
 	if count == 0 {
-		return ErrorDeliveryNotFound
+		return ErrorNotFound
 	}
 	return nil
 }

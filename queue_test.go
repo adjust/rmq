@@ -284,7 +284,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 	c.Check(count, Equals, int64(0))
 
 	err = consumer.LastDeliveries[0].Ack()
-	c.Check(err, Equals, ErrorDeliveryNotFound)
+	c.Check(err, Equals, ErrorNotFound)
 
 	total, err = queue1.Publish("cons-d3")
 	c.Check(err, IsNil)
