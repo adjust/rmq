@@ -6,8 +6,8 @@ import "time"
 type RedisClient interface {
 	// simple keys
 	Set(key string, value string, expiration time.Duration) error
-	Del(key string) (affected int64, err error)    // default affected: 0
-	TTL(key string) (ttl time.Duration, err error) // default ttl: 0
+	Del(key string) (affected int64, err error)
+	TTL(key string) (ttl time.Duration, err error)
 
 	// lists
 	LPush(key string, value ...string) (total int64, err error)
@@ -18,8 +18,8 @@ type RedisClient interface {
 
 	// sets
 	SAdd(key, value string) (total int64, err error)
-	SMembers(key string) (members []string, err error)  // default members: []string{}
-	SRem(key, value string) (affected int64, err error) // default affected: 0
+	SMembers(key string) (members []string, err error)
+	SRem(key, value string) (affected int64, err error)
 
 	// special
 	FlushDb()

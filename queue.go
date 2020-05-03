@@ -50,7 +50,7 @@ type Queue interface {
 	ReturnRejected(count int64) (int64, error)
 	ReturnAllUnacked() (int64, error)
 	ReturnAllRejected() (int64, error)
-	Close() (bool, error)
+	Destroy() (readyCount, rejectedCount int64, err error)
 
 	// internals
 	// used in cleaner
@@ -135,13 +135,26 @@ func (queue *redisQueue) PurgeRejected() (int64, error) {
 	return queue.deleteRedisList(queue.rejectedKey)
 }
 
-// Close purges and removes the queue from the list of queues
-func (queue *redisQueue) Close() (bool, error) {
-	queue.PurgeRejected()
-	queue.PurgeReady()
+// Destroy purges and removes the queue from the list of queues
+func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) {
+	readyCount, err = queue.PurgeReady()
+	if err != nil {
+		return 0, 0, err
+	}
+	rejectedCount, err = queue.PurgeRejected()
+	if err != nil {
+		return 0, 0, err
+	}
+
 	count, err := queue.redisClient.SRem(queuesKey, queue.name)
-	// TODO: return different error if count == 0? already closed
-	return count > 0, err
+	if err != nil {
+		return 0, 0, err
+	}
+	if count == 0 {
+		return 0, 0, ErrorNotFound
+	}
+
+	return readyCount, rejectedCount, nil
 }
 
 func (queue *redisQueue) readyCount() (int64, error) {

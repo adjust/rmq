@@ -135,7 +135,10 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
 
-	queue1.Close()
+	readyCount, rejectedCount, err := queue1.Destroy()
+	c.Check(err, IsNil)
+	c.Check(readyCount, Equals, int64(0))
+	c.Check(rejectedCount, Equals, int64(0))
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, DeepEquals, []string{"conn-q-q2"})

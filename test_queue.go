@@ -48,7 +48,7 @@ func (queue *TestQueue) ReturnAllUnacked() (int64, error)    { panic(errorNotSup
 func (queue *TestQueue) ReturnAllRejected() (int64, error)   { panic(errorNotSupported) }
 func (queue *TestQueue) PurgeReady() (int64, error)          { panic(errorNotSupported) }
 func (queue *TestQueue) PurgeRejected() (int64, error)       { panic(errorNotSupported) }
-func (queue *TestQueue) Close() (bool, error)                { panic(errorNotSupported) }
+func (queue *TestQueue) Destroy() (int64, int64, error)      { panic(errorNotSupported) }
 func (queue *TestQueue) closeInConnection()                  { panic(errorNotSupported) }
 func (queue *TestQueue) readyCount() (int64, error)          { panic(errorNotSupported) }
 func (queue *TestQueue) unackedCount() (int64, error)        { panic(errorNotSupported) }
