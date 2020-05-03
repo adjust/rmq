@@ -65,7 +65,7 @@ func CleanConnection(connection Connection) error {
 }
 
 func CleanQueue(queue Queue) error {
-	returned, err := queue.returnAllUnacked()
+	returned, err := queue.ReturnAllUnacked()
 	if err != nil {
 		return err
 	}

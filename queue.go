@@ -49,12 +49,12 @@ type Queue interface {
 	PurgeReady() (int64, error)
 	PurgeRejected() (int64, error)
 	ReturnRejected(count int64) (int64, error)
+	ReturnAllUnacked() (int64, error)
 	ReturnAllRejected() (int64, error)
 	Close() (bool, error)
 
 	// internals
 	// used in cleaner
-	returnAllUnacked() (int64, error)
 	closeInConnection()
 	// used for stats
 	readyCount() (int64, error)
@@ -157,10 +157,10 @@ func (queue *redisQueue) rejectedCount() (int64, error) {
 	return queue.redisClient.LLen(queue.rejectedKey)
 }
 
-// returnAllUnacked moves all unacked deliveries back to the ready
+// ReturnAllUnacked moves all unacked deliveries back to the ready
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
-func (queue *redisQueue) returnAllUnacked() (int64, error) {
+func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
 	// TODO: consider not LLen here, just poppush until empty
 	unackedCount, err := queue.redisClient.LLen(queue.unackedKey)
 	if err != nil {

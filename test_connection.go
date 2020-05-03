@@ -1,9 +1,12 @@
 package rmq
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 )
+
+var errorNotSupported = errors.New("not supported")
 
 type TestConnection struct {
 	queues *sync.Map
@@ -20,38 +23,16 @@ func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 	return queue.(*TestQueue), nil
 }
 
-func (connection TestConnection) CollectStats(queueList []string) (Stats, error) {
-	return Stats{}, nil
-}
-
-func (connection TestConnection) GetOpenQueues() ([]string, error) {
-	return []string{}, nil
-}
-
-func (connection TestConnection) check() (bool, error) {
-	return true, nil
-}
-func (connection TestConnection) getConnections() ([]string, error) {
-	return nil, nil
-}
-func (connection TestConnection) hijackConnection(name string) Connection {
-	return nil
-}
-func (connection TestConnection) getConsumingQueues() ([]string, error) {
-	return nil, nil
-}
-func (connection TestConnection) close() error {
-	return nil
-}
-func (connection TestConnection) closeAllQueuesInConnection() error {
-	return nil
-}
-func (connection TestConnection) openQueue(name string) Queue {
-	return nil
-}
-func (connection TestConnection) stopHeartbeat() error {
-	return nil
-}
+func (connection TestConnection) CollectStats([]string) (Stats, error)  { panic(errorNotSupported) }
+func (connection TestConnection) GetOpenQueues() ([]string, error)      { panic(errorNotSupported) }
+func (connection TestConnection) check() (bool, error)                  { panic(errorNotSupported) }
+func (connection TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
+func (connection TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }
+func (connection TestConnection) getConsumingQueues() ([]string, error) { panic(errorNotSupported) }
+func (connection TestConnection) close() error                          { panic(errorNotSupported) }
+func (connection TestConnection) closeAllQueuesInConnection() error     { panic(errorNotSupported) }
+func (connection TestConnection) openQueue(string) Queue                { panic(errorNotSupported) }
+func (connection TestConnection) stopHeartbeat() error                  { panic(errorNotSupported) }
 
 // test helpers for test inspection and similar
 
