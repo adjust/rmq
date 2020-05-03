@@ -38,8 +38,6 @@ func (delivery *wrapDelivery) Payload() string {
 }
 
 func (delivery *wrapDelivery) Ack() error {
-	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
-
 	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if err != nil {
 		return err

@@ -205,7 +205,6 @@ func (connection *redisConnection) closeStaleConnection() error {
 		return err
 	}
 
-	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return nil
 }
 

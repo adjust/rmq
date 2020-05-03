@@ -182,7 +182,6 @@ func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
 		// but that can probably be safely ignored
 		switch _, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); err {
 		case nil:
-			// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", count, queue.readyKey)) // COMMENTOUT
 			continue
 		case ErrorNotFound:
 			return i, nil
@@ -215,7 +214,6 @@ func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
 	for i := int64(0); i < count; i++ {
 		switch _, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey); err {
 		case nil:
-			// debug(fmt.Sprintf("rmq queue returned rejected delivery %s %s", value, queue.readyKey)) // COMMENTOUT
 			continue
 		case ErrorNotFound:
 			return i, nil
@@ -408,18 +406,14 @@ func (queue *redisQueue) consumeBatch(batchSize int64) error {
 		if err != nil {
 			return err // NOTE: can be ErrorNotFound
 		}
-
-		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
 		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
-	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
 	return nil
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	for delivery := range queue.deliveryChan {
-		// debug(fmt.Sprintf("consumer consume %s %s", delivery, consumer)) // COMMENTOUT
 		consumer.Consume(delivery)
 	}
 	queue.stopWg.Done()
@@ -432,15 +426,12 @@ func (queue *redisQueue) consumerBatchConsume(batchSize int64, timeout time.Dura
 		// Wait for first delivery
 		delivery, ok := <-queue.deliveryChan
 		if !ok {
-			// debug("batch channel closed") // COMMENTOUT
 			return
 		}
 		batch = append(batch, delivery)
-		// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
 		batch, ok = queue.batchTimeout(batchSize, batch, timeout)
 		consumer.Consume(batch)
 		if !ok {
-			// debug("batch channel closed") // COMMENTOUT
 			return
 		}
 		batch = batch[:0] // reset batch
@@ -453,18 +444,13 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 	for {
 		select {
 		case <-timer.C:
-			// debug("batch timer fired") // COMMENTOUT
-			// debug(fmt.Sprintf("batch consume consume %d", len(batch))) // COMMENTOUT
 			return batch, true
 		case delivery, ok := <-queue.deliveryChan:
 			if !ok {
-				// debug("batch channel closed") // COMMENTOUT
 				return batch, false
 			}
 			batch = append(batch, delivery)
-			// debug(fmt.Sprintf("batch consume added delivery %d", len(batch))) // COMMENTOUT
 			if int64(len(batch)) >= batchSize {
-				// debug(fmt.Sprintf("batch consume wait %d < %d", len(batch), batchSize)) // COMMENTOUT
 				return batch, true
 			}
 		}
@@ -495,9 +481,4 @@ func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
 	}
 
 	return total, nil
-}
-
-// TODO!: remove this and all COMMENTOUT lines
-func debug(message string) {
-	// log.Printf("rmq debug: %s", message) // COMMENTOUT
 }
