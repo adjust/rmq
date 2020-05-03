@@ -36,9 +36,8 @@ const (
 )
 
 type Queue interface {
-	// TODO: actually let's remove the total again in these two functions
-	Publish(payload ...string) (total int64, err error)
-	PublishBytes(payload ...[]byte) (total int64, err error)
+	Publish(payload ...string) error
+	PublishBytes(payload ...[]byte) error
 	SetPushQueue(pushQueue Queue)
 	StartConsuming(prefetchLimit int64, pollDuration time.Duration) error
 	StopConsuming() <-chan struct{}
@@ -110,12 +109,13 @@ func (queue *redisQueue) String() string {
 
 // Publish adds a delivery with the given payload to the queue
 // returns how many deliveries are in the queue afterwards
-func (queue *redisQueue) Publish(payload ...string) (total int64, err error) {
-	return queue.redisClient.LPush(queue.readyKey, payload...)
+func (queue *redisQueue) Publish(payload ...string) error {
+	_, err := queue.redisClient.LPush(queue.readyKey, payload...)
+	return err
 }
 
 // PublishBytes just casts the bytes and calls Publish
-func (queue *redisQueue) PublishBytes(payload ...[]byte) (total int64, err error) {
+func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
 	stringifiedBytes := make([]string, len(payload))
 	for i, b := range payload {
 		stringifiedBytes[i] = string(b)
@@ -261,7 +261,6 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	}
 
 	// add queue to list of queues consumed on this connection
-	// TODO: return number of queues being consumed in this connection?
 	if _, err := queue.redisClient.SAdd(queue.queuesKey, queue.name); err != nil {
 		return err
 	}
@@ -337,7 +336,6 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	// add consumer to list of consumers of this queue
-	// TODO: return number of consumers in this connection?
 	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
 		return "", err
 	}

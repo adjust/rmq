@@ -17,12 +17,12 @@ func (queue *TestQueue) String() string {
 	return queue.name
 }
 
-func (queue *TestQueue) Publish(payload ...string) (total int64, err error) {
+func (queue *TestQueue) Publish(payload ...string) error {
 	queue.LastDeliveries = append(queue.LastDeliveries, payload...)
-	return int64(len(queue.LastDeliveries)), nil
+	return nil
 }
 
-func (queue *TestQueue) PublishBytes(payload ...[]byte) (total int64, err error) {
+func (queue *TestQueue) PublishBytes(payload ...[]byte) error {
 	stringifiedBytes := make([]string, len(payload))
 	for i, b := range payload {
 		stringifiedBytes[i] = string(b)
@@ -30,7 +30,7 @@ func (queue *TestQueue) PublishBytes(payload ...[]byte) (total int64, err error)
 	return queue.Publish(stringifiedBytes...)
 }
 
-func (queue *TestQueue) SetPushQueue(_ Queue)                         { panic(errorNotSupported) }
+func (queue *TestQueue) SetPushQueue(Queue)                           { panic(errorNotSupported) }
 func (queue *TestQueue) StartConsuming(int64, time.Duration) error    { panic(errorNotSupported) }
 func (queue *TestQueue) StopConsuming() <-chan struct{}               { panic(errorNotSupported) }
 func (queue *TestQueue) AddConsumer(string, Consumer) (string, error) { panic(errorNotSupported) }

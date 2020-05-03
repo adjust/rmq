@@ -10,7 +10,7 @@ import (
 	"github.com/go-redis/redis/v7"
 )
 
-// entitify being connection/delivery ... TODO
+// entitify being connection/queue/delivery
 var ErrorNotFound = errors.New("entity not found")
 
 const heartbeatDuration = time.Minute
@@ -72,7 +72,6 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisC
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	// TODO: return number of open connections?
 	if _, err := redisClient.SAdd(connectionsKey, name); err != nil {
 		return nil, err
 	}
@@ -94,7 +93,6 @@ func OpenConnection(tag, network, address string, db int) (Connection, error) {
 
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
-	// TODO: return number of open queues?
 	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
 		return nil, err
 	}

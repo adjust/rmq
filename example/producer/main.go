@@ -31,7 +31,7 @@ func main() {
 	var before time.Time
 	for i := 0; i < numDeliveries; i++ {
 		delivery := fmt.Sprintf("delivery %d", i)
-		if _, err := things.Publish(delivery); err != nil {
+		if err := things.Publish(delivery); err != nil {
 			log.Printf("failed to publish: %s", err)
 		}
 
@@ -40,7 +40,7 @@ func main() {
 			before = time.Now()
 			perSecond := time.Second / (duration / batchSize)
 			log.Printf("produced %d %s %d", i, delivery, perSecond)
-			if _, err := balls.Publish("ball"); err != nil {
+			if err := balls.Publish("ball"); err != nil {
 				log.Printf("failed to publish: %s", err)
 			}
 		}

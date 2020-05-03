@@ -15,7 +15,7 @@ func main() {
 
 	cleaner := rmq.NewCleaner(connection)
 
-	for _ = range time.Tick(time.Second) {
+	for range time.Tick(time.Second) {
 		returned, err := cleaner.Clean()
 		if err != nil {
 			log.Printf("failed to clean: %s", err)
