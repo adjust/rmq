@@ -340,25 +340,25 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 
 func (queue *redisQueue) consume() {
 	for {
-		batchSize, err := queue.batchSize()
-		if err != nil {
-			// TODO
-		}
-
-		wantMore, err := queue.consumeBatch(batchSize)
-		if err != nil {
-			// TODO
-		}
-
-		if !wantMore {
-			time.Sleep(queue.pollDuration)
-		}
-
 		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
 			// log.Printf("rmq queue stopped consuming %s", queue)
 			close(queue.deliveryChan)
 			// log.Printf("rmq queue stopped fetching %s", queue)
 			return
+		}
+
+		batchSize, err := queue.batchSize()
+		if err != nil {
+			// TODO
+		}
+
+		switch err := queue.consumeBatch(batchSize); err {
+		case nil:
+			continue
+		case ErrorNotFound: // less than batchSize were found
+			time.Sleep(queue.pollDuration)
+		default: // error
+			// TODO
 		}
 	}
 }
@@ -382,9 +382,9 @@ func (queue *redisQueue) batchSize() (int64, error) {
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *redisQueue) consumeBatch(batchSize int64) (wantMore bool, err error) {
+func (queue *redisQueue) consumeBatch(batchSize int64) error {
 	if batchSize == 0 {
-		return false, nil
+		return ErrorNotFound
 	}
 
 	// TODO: do one blocking call (to wait for first), then no n-1 nonblocking
@@ -392,20 +392,17 @@ func (queue *redisQueue) consumeBatch(batchSize int64) (wantMore bool, err error
 	// else available yet). !wantMore in that case
 	// TODO: pipeline (this is a hot path, but can consider for other usages of RPopLPush too)
 	for i := int64(0); i < batchSize; i++ {
-		switch value, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey); err {
-		case nil:
-			// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
-			queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
-			continue
-		case ErrorNotFound:
-			return false, nil
-		default: // err
-			return false, err
+		value, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		if err != nil {
+			return err // NOTE: can be ErrorNotFound
 		}
+
+		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
+		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
-	return true, nil
+	return nil
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
