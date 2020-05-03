@@ -36,6 +36,7 @@ const (
 )
 
 type Queue interface {
+	// TODO: actually let's remove the total again in these two functions
 	Publish(payload ...string) (total int64, err error)
 	PublishBytes(payload ...[]byte) (total int64, err error)
 	SetPushQueue(pushQueue Queue)

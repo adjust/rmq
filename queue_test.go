@@ -18,8 +18,8 @@ type QueueSuite struct{}
 func (suite *QueueSuite) TestConnections(c *C) {
 	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	flushConn.flushDb()
-	flushConn.stopHeartbeat()
+	c.Check(flushConn.flushDb(), IsNil)
+	c.Check(flushConn.stopHeartbeat(), IsNil)
 
 	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
@@ -50,8 +50,8 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	err = conn2.check()
 	c.Check(err, IsNil)
 
-	connection.hijackConnection("nope").stopHeartbeat()
-	conn1.stopHeartbeat()
+	c.Check(connection.hijackConnection("nope").stopHeartbeat(), IsNil)
+	c.Check(conn1.stopHeartbeat(), IsNil)
 	err = conn1.check()
 	c.Check(err, Equals, ErrorNotFound)
 	err = conn2.check()
@@ -60,7 +60,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	c.Check(err, IsNil)
 	c.Check(connections, HasLen, 3)
 
-	conn2.stopHeartbeat()
+	c.Check(conn2.stopHeartbeat(), IsNil)
 	err = conn1.check()
 	c.Check(err, Equals, ErrorNotFound)
 	err = conn2.check()
@@ -69,7 +69,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	c.Check(err, IsNil)
 	c.Check(connections, HasLen, 3)
 
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestConnectionQueues(c *C) {
@@ -77,7 +77,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
-	connection.unlistAllQueues()
+	c.Check(connection.unlistAllQueues(), IsNil)
 	queues, err := connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
@@ -91,7 +91,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	queues, err = connection.getConsumingQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
-	queue1.StartConsuming(1, time.Millisecond)
+	c.Check(queue1.StartConsuming(1, time.Millisecond), IsNil)
 	queues, err = connection.getConsumingQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, DeepEquals, []string{"conn-q-q1"})
@@ -105,13 +105,13 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	queues, err = connection.getConsumingQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 1)
-	queue2.StartConsuming(1, time.Millisecond)
+	c.Check(queue2.StartConsuming(1, time.Millisecond), IsNil)
 	queues, err = connection.getConsumingQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
 
 	queue2.StopConsuming()
-	queue2.closeInStaleConnection()
+	c.Check(queue2.closeInStaleConnection(), IsNil)
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
@@ -120,7 +120,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(queues, DeepEquals, []string{"conn-q-q1"})
 
 	queue1.StopConsuming()
-	queue1.closeInStaleConnection()
+	c.Check(queue1.closeInStaleConnection(), IsNil)
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
@@ -139,7 +139,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)
 
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
@@ -196,7 +196,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 	c.Check(consumers, HasLen, 2)
 
 	queue.StopConsuming()
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestConsumer(c *C) {
@@ -212,7 +212,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	consumer := NewTestConsumer("cons-A")
 	consumer.AutoAck = false
-	queue1.StartConsuming(10, time.Millisecond)
+	c.Check(queue1.StartConsuming(10, time.Millisecond), IsNil)
 	_, err = queue1.AddConsumer("cons-cons", consumer)
 	c.Check(err, IsNil)
 	c.Check(consumer.LastDelivery, IsNil)
@@ -326,16 +326,17 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	queue2, err := connection.OpenQueue("cons-func-q")
 	c.Check(err, IsNil)
-	queue2.StartConsuming(10, time.Millisecond)
+	c.Check(queue2.StartConsuming(10, time.Millisecond), IsNil)
 
 	payloadChan := make(chan string, 1)
 	payload := "cons-func-payload"
 
-	queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
+	_, err = queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
 		err = delivery.Ack()
 		c.Check(err, IsNil)
 		payloadChan <- delivery.Payload()
 	})
+	c.Check(err, IsNil)
 
 	total, err = queue2.Publish(payload)
 	c.Check(err, IsNil)
@@ -351,7 +352,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 
 	queue1.StopConsuming()
 	queue2.StopConsuming()
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestMulti(c *C) {
@@ -374,7 +375,7 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(0))
 
-	queue.StartConsuming(10, time.Millisecond)
+	c.Check(queue.StartConsuming(10, time.Millisecond), IsNil)
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
@@ -436,7 +437,7 @@ func (suite *QueueSuite) TestMulti(c *C) {
 	c.Check(count, Equals, int64(10))
 
 	queue.StopConsuming()
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestBatch(c *C) {
@@ -455,14 +456,15 @@ func (suite *QueueSuite) TestBatch(c *C) {
 		c.Check(total, Equals, int64(i+1))
 	}
 
-	queue.StartConsuming(10, time.Millisecond)
+	c.Check(queue.StartConsuming(10, time.Millisecond), IsNil)
 	time.Sleep(10 * time.Millisecond)
 	count, err := queue.unackedCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(5))
 
 	consumer := NewTestBatchConsumer()
-	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 50*time.Millisecond, consumer)
+	_, err = queue.AddBatchConsumerWithTimeout("batch-cons", 2, 50*time.Millisecond, consumer)
+	c.Check(err, IsNil)
 	time.Sleep(10 * time.Millisecond)
 	c.Assert(consumer.LastBatch, HasLen, 2)
 	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
@@ -541,7 +543,7 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(0))
 
-	queue.StartConsuming(10, time.Millisecond)
+	c.Check(queue.StartConsuming(10, time.Millisecond), IsNil)
 	time.Sleep(time.Millisecond)
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
@@ -594,7 +596,8 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 	queue.StopConsuming()
 
-	queue.ReturnRejected(2)
+	_, err = queue.ReturnRejected(2)
+	c.Check(err, IsNil)
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(2)) // delivery 0, 2
@@ -605,7 +608,8 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(2)) // delivery 3, 5
 
-	queue.ReturnAllRejected()
+	_, err = queue.ReturnAllRejected()
+	c.Check(err, IsNil)
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(4)) // delivery 0, 2, 3, 5
@@ -630,14 +634,14 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 	consumer1 := NewTestConsumer("push-cons")
 	consumer1.AutoAck = false
 	consumer1.AutoFinish = false
-	queue1.StartConsuming(10, time.Millisecond)
+	c.Check(queue1.StartConsuming(10, time.Millisecond), IsNil)
 	_, err = queue1.AddConsumer("push-cons", consumer1)
 	c.Check(err, IsNil)
 
 	consumer2 := NewTestConsumer("push-cons")
 	consumer2.AutoAck = false
 	consumer2.AutoFinish = false
-	queue2.StartConsuming(10, time.Millisecond)
+	c.Check(queue2.StartConsuming(10, time.Millisecond), IsNil)
 	_, err = queue2.AddConsumer("push-cons", consumer2)
 	c.Check(err, IsNil)
 
@@ -683,7 +687,7 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 		c.FailNow() // should return closed finishedChan
 	}
 
-	queue.StartConsuming(10, time.Millisecond)
+	c.Check(queue.StartConsuming(10, time.Millisecond), IsNil)
 	c.Check(queue.StopConsuming(), NotNil)
 	// already stopped
 	c.Check(queue.StopConsuming(), NotNil)
@@ -710,7 +714,7 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 		c.Check(total, Equals, i+1)
 	}
 
-	queue.StartConsuming(20, time.Millisecond)
+	c.Check(queue.StartConsuming(20, time.Millisecond), IsNil)
 	var consumers []*TestConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
@@ -736,7 +740,7 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 	c.Check(consumedCount, Equals, count)
 	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
 
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
@@ -755,14 +759,15 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 		c.Check(total, Equals, i+1)
 	}
 
-	queue.StartConsuming(20, time.Millisecond)
+	c.Check(queue.StartConsuming(20, time.Millisecond), IsNil)
 
 	var consumers []*TestBatchConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestBatchConsumer()
 		consumer.AutoFinish = true
 		consumers = append(consumers, consumer)
-		queue.AddBatchConsumer("consume", 5, consumer)
+		_, err = queue.AddBatchConsumer("consume", 5, consumer)
+		c.Check(err, IsNil)
 	}
 	consumer := NewTestBatchConsumer()
 	consumer.AutoFinish = true
@@ -785,7 +790,7 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 	c.Check(consumedCount, Equals, count)
 	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
 
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
@@ -803,7 +808,7 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		consumer := NewTestConsumer("bench-A")
 		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
-		queue.StartConsuming(10, time.Millisecond)
+		c.Check(queue.StartConsuming(10, time.Millisecond), IsNil)
 		_, err = queue.AddConsumer("bench-cons", consumer)
 		c.Check(err, IsNil)
 	}
@@ -836,5 +841,5 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	}
 	fmt.Printf("consumed %d\n", sum)
 
-	connection.stopHeartbeat()
+	c.Check(connection.stopHeartbeat(), IsNil)
 }
