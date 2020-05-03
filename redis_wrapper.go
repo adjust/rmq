@@ -40,16 +40,15 @@ func (wrapper RedisWrapper) LTrim(key string, start, stop int64) error {
 	return wrapper.rawClient.LTrim(key, int64(start), int64(stop)).Err()
 }
 
-// TODO: comment on bool return value and how/why we transform redis.Nil to nil error
-func (wrapper RedisWrapper) RPopLPush(source, destination string) (value string, ok bool, err error) {
+func (wrapper RedisWrapper) RPopLPush(source, destination string) (value string, err error) {
 	value, err = wrapper.rawClient.RPopLPush(source, destination).Result()
 	switch err {
 	case nil:
-		return value, true, nil
+		return value, nil
 	case redis.Nil:
-		return value, false, nil
+		return value, ErrorNotFound
 	default:
-		return value, false, err
+		return value, err
 	}
 }
 

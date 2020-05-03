@@ -258,7 +258,7 @@ func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 // If source and destination are the same, the operation is equivalent to removing the
 // last element from the list and pushing it as first element of the list,
 // so it can be considered as a list rotation command.
-func (client *TestRedisClient) RPopLPush(source, destination string) (value string, ok bool, err error) {
+func (client *TestRedisClient) RPopLPush(source, destination string) (value string, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -268,19 +268,19 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 
 	//One of the two isn't a list
 	if sourceErr != nil || destErr != nil {
-		return "", false, nil
+		return "", ErrorNotFound
 	}
-	//we have one element to move
-	if len(sourceList) > 0 {
-		//Remove the last element of source (tail)
-		client.storeList(source, sourceList[0:len(sourceList)-1])
-		//Put the last element of source (tail) and prepend it to dest
-		client.storeList(destination, append([]string{sourceList[len(sourceList)-1]}, destList...))
-
-		return sourceList[len(sourceList)-1], true, nil
+	//we have nothing to move
+	if len(sourceList) == 0 {
+		return "", ErrorNotFound
 	}
 
-	return "", false, nil
+	//Remove the last element of source (tail)
+	client.storeList(source, sourceList[0:len(sourceList)-1])
+	//Put the last element of source (tail) and prepend it to dest
+	client.storeList(destination, append([]string{sourceList[len(sourceList)-1]}, destList...))
+
+	return sourceList[len(sourceList)-1], nil
 }
 
 // SAdd adds the specified members to the set stored at key.

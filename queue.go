@@ -179,10 +179,15 @@ func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
 	for i := int64(0); i < unackedCount; i++ {
 		// one consideration: in theory it might not finish if packages get constantly added
 		// but that can probably be safely ignored
-		if _, ok, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); !ok {
-			return i, err
+		switch _, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); err {
+		case nil:
+			// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", count, queue.readyKey)) // COMMENTOUT
+			continue
+		case ErrorNotFound:
+			return i, nil
+		default: // err
+			return 0, err
 		}
-		// debug(fmt.Sprintf("rmq queue returned unacked delivery %s %s", count, queue.readyKey)) // COMMENTOUT
 	}
 
 	return unackedCount, nil
@@ -207,10 +212,15 @@ func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
 	}
 
 	for i := int64(0); i < count; i++ {
-		if _, ok, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey); !ok {
-			return i, err
+		switch _, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey); err {
+		case nil:
+			// debug(fmt.Sprintf("rmq queue returned rejected delivery %s %s", value, queue.readyKey)) // COMMENTOUT
+			continue
+		case ErrorNotFound:
+			return i, nil
+		default: // error
+			return 0, err
 		}
-		// debug(fmt.Sprintf("rmq queue returned rejected delivery %s %s", value, queue.readyKey)) // COMMENTOUT
 	}
 
 	return count, nil
@@ -382,14 +392,16 @@ func (queue *redisQueue) consumeBatch(batchSize int64) (wantMore bool, err error
 	// else available yet). !wantMore in that case
 	// TODO: pipeline (this is a hot path, but can consider for other usages of RPopLPush too)
 	for i := int64(0); i < batchSize; i++ {
-		value, ok, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
-		if !ok {
-			// debug(fmt.Sprintf("rmq queue consumed last batch %s %d", queue, i)) // COMMENTOUT
+		switch value, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey); err {
+		case nil:
+			// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
+			queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
+			continue
+		case ErrorNotFound:
+			return false, nil
+		default: // err
 			return false, err
 		}
-
-		// debug(fmt.Sprintf("consume %d/%d %s %s", i, batchSize, value, queue)) // COMMENTOUT
-		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
 	}
 
 	// debug(fmt.Sprintf("rmq queue consumed batch %s %d", queue, batchSize)) // COMMENTOUT
