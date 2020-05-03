@@ -1,7 +1,5 @@
 package rmq
 
-import "fmt"
-
 type Cleaner struct {
 	connection Connection
 }
@@ -50,12 +48,8 @@ func CleanConnection(connection Connection) error {
 		}
 	}
 
-	if err := connection.close(); err != nil {
+	if err := connection.closeStaleConnection(); err != nil {
 		return err
-	}
-
-	if err := connection.closeAllQueuesInConnection(); err != nil {
-		return fmt.Errorf("rmq cleaner failed to close all queues %s %s", connection, err)
 	}
 
 	// log.Printf("rmq cleaner cleaned connection %s", connection)

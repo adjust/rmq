@@ -28,10 +28,9 @@ func (connection TestConnection) GetOpenQueues() ([]string, error)      { panic(
 func (connection TestConnection) check() error                          { panic(errorNotSupported) }
 func (connection TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
 func (connection TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }
+func (connection TestConnection) closeStaleConnection() error           { panic(errorNotSupported) }
 func (connection TestConnection) getConsumingQueues() ([]string, error) { panic(errorNotSupported) }
-func (connection TestConnection) close() error                          { panic(errorNotSupported) }
 func (connection TestConnection) unlistAllQueues() error                { panic(errorNotSupported) }
-func (connection TestConnection) closeAllQueuesInConnection() error     { panic(errorNotSupported) }
 func (connection TestConnection) openQueue(string) Queue                { panic(errorNotSupported) }
 func (connection TestConnection) stopHeartbeat() error                  { panic(errorNotSupported) }
 func (connection TestConnection) flushDb() error                        { panic(errorNotSupported) }

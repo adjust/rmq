@@ -26,9 +26,8 @@ type Connection interface {
 	check() error
 	getConnections() ([]string, error)
 	hijackConnection(name string) Connection
+	closeStaleConnection() error
 	getConsumingQueues() ([]string, error)
-	close() error
-	closeAllQueuesInConnection() error
 	// used for stats
 	openQueue(name string) Queue
 	// used in tests
@@ -138,11 +137,6 @@ func (connection *redisConnection) stopHeartbeat() error {
 	return err
 }
 
-func (connection *redisConnection) close() error {
-	_, err := connection.redisClient.SRem(connectionsKey, connection.Name)
-	return err
-}
-
 // GetOpenQueues returns a list of all open queues
 func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
@@ -151,13 +145,6 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 // unlistAllQueues closes all queues by removing them from the global list
 func (connection *redisConnection) unlistAllQueues() error {
 	_, err := connection.redisClient.Del(queuesKey)
-	return err
-}
-
-// closeAllQueuesInConnection closes all queues in the associated connection by removing all related keys
-func (connection *redisConnection) closeAllQueuesInConnection() error {
-	_, err := connection.redisClient.Del(connection.queuesKey)
-	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return err
 }
 
@@ -196,6 +183,18 @@ func (connection *redisConnection) hijackConnection(name string) Connection {
 		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:  connection.redisClient,
 	}
+}
+
+// closes a stale connection. not to be called on an active connection
+func (connection *redisConnection) closeStaleConnection() error {
+	if _, err := connection.redisClient.SRem(connectionsKey, connection.Name); err != nil {
+		return err
+	}
+	if _, err := connection.redisClient.Del(connection.queuesKey); err != nil {
+		return err
+	}
+	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
+	return nil
 }
 
 // openQueue opens a queue without adding it to the set of queues
