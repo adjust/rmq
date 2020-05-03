@@ -16,7 +16,8 @@ type StatsSuite struct{}
 func (suite *StatsSuite) TestStats(c *C) {
 	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	c.Assert(NewCleaner(connection).Clean(), IsNil)
+	_, err = NewCleaner(connection).Clean()
+	c.Assert(err, IsNil)
 
 	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)

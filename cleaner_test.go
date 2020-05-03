@@ -198,7 +198,9 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	cleaner := NewCleaner(cleanerConn)
-	c.Check(cleaner.Clean(), IsNil)
+	returned, err := cleaner.Clean()
+	c.Check(err, IsNil)
+	c.Check(returned, Equals, int64(6))
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(10)) // 2 of 11 were acked above
@@ -221,6 +223,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	conn.stopHeartbeat()
 	time.Sleep(time.Millisecond)
 
-	c.Check(cleaner.Clean(), IsNil)
+	returned, err = cleaner.Clean()
+	c.Check(err, IsNil)
+	c.Check(returned, Equals, int64(0))
 	cleanerConn.stopHeartbeat()
 }

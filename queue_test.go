@@ -24,7 +24,8 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
-	c.Assert(NewCleaner(connection).Clean(), IsNil)
+	_, err = NewCleaner(connection).Clean()
+	c.Assert(err, IsNil)
 
 	connections, err := connection.getConnections()
 	c.Check(err, IsNil)
@@ -110,7 +111,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(queues, HasLen, 2)
 
 	queue2.StopConsuming()
-	queue2.closeInConnection()
+	queue2.closeInStaleConnection()
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
@@ -119,7 +120,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(queues, DeepEquals, []string{"conn-q-q1"})
 
 	queue1.StopConsuming()
-	queue1.closeInConnection()
+	queue1.closeInStaleConnection()
 	queues, err = connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)

@@ -8,61 +8,67 @@ func NewCleaner(connection Connection) *Cleaner {
 	return &Cleaner{connection: connection}
 }
 
-func (cleaner *Cleaner) Clean() error {
+func (cleaner *Cleaner) Clean() (returned int64, err error) {
 	connectionNames, err := cleaner.connection.getConnections()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	for _, connectionName := range connectionNames {
-		connection := cleaner.connection.hijackConnection(connectionName)
-		switch err := connection.check(); err {
+		hijackedConnection := cleaner.connection.hijackConnection(connectionName)
+		switch err := hijackedConnection.check(); err {
 		case nil: // active connection
 			continue
 		case ErrorNotFound:
-			if err := CleanConnection(connection); err != nil {
-				return err
+			n, err := cleanConnection(hijackedConnection)
+			if err != nil {
+				return 0, err
 			}
+			returned += n
 		default:
-			return err
+			return 0, err
 		}
 	}
 
-	return nil
+	return returned, nil
 }
 
-func CleanConnection(connection Connection) error {
-	queueNames, err := connection.getConsumingQueues()
+func cleanConnection(hijackedConnection Connection) (returned int64, err error) {
+	queueNames, err := hijackedConnection.getConsumingQueues()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	for _, queueName := range queueNames {
-		queue, err := connection.OpenQueue(queueName)
+		queue, err := hijackedConnection.OpenQueue(queueName)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
-		if err := CleanQueue(queue); err != nil {
-			return err
+		n, err := cleanQueue(queue)
+		if err != nil {
+			return 0, err
 		}
+
+		returned += n
 	}
 
-	if err := connection.closeStaleConnection(); err != nil {
-		return err
+	if err := hijackedConnection.closeStaleConnection(); err != nil {
+		return 0, err
 	}
 
-	// log.Printf("rmq cleaner cleaned connection %s", connection)
-	return nil
+	// log.Printf("rmq cleaner cleaned connection %s", hijackedConnection)
+	return returned, nil
 }
 
-func CleanQueue(queue Queue) error {
-	returned, err := queue.ReturnAllUnacked()
+func cleanQueue(queue Queue) (returned int64, err error) {
+	returned, err = queue.ReturnAllUnacked()
 	if err != nil {
-		return err
+		return 0, err
 	}
-	queue.closeInConnection()
-	_ = returned
+	if err := queue.closeInStaleConnection(); err != nil {
+		return 0, err
+	}
 	// log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
-	return nil
+	return returned, nil
 }

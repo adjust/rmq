@@ -54,7 +54,7 @@ type Queue interface {
 
 	// internals
 	// used in cleaner
-	closeInConnection()
+	closeInStaleConnection() error
 	// used for stats
 	readyCount() (int64, error)
 	unackedCount() (int64, error)
@@ -226,12 +226,19 @@ func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
 	return count, nil
 }
 
-// closeInConnection closes the queue in the associated connection by removing all related keys
-func (queue *redisQueue) closeInConnection() {
-	// TODO: check and return error
-	queue.redisClient.Del(queue.unackedKey)
-	queue.redisClient.Del(queue.consumersKey)
-	queue.redisClient.SRem(queue.queuesKey, queue.name)
+// closeInStaleConnection closes the queue in the associated connection by removing all related keys
+// not supposed to be called on queues in active sessions
+func (queue *redisQueue) closeInStaleConnection() error {
+	if _, err := queue.redisClient.Del(queue.unackedKey); err != nil {
+		return err
+	}
+	if _, err := queue.redisClient.Del(queue.consumersKey); err != nil {
+		return err
+	}
+	if _, err := queue.redisClient.SRem(queue.queuesKey, queue.name); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
