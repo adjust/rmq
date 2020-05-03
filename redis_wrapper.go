@@ -64,6 +64,7 @@ func (wrapper RedisWrapper) SRem(key, value string) (affected int64, err error) 
 	return wrapper.rawClient.SRem(key, value).Result()
 }
 
-func (wrapper RedisWrapper) FlushDb() {
-	wrapper.rawClient.FlushDB()
+func (wrapper RedisWrapper) FlushDb() error {
+	// NOTE: using Err() here because Result() string is always "OK"
+	return wrapper.rawClient.FlushDB().Err()
 }

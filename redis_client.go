@@ -22,5 +22,5 @@ type RedisClient interface {
 	SRem(key, value string) (affected int64, err error)
 
 	// special
-	FlushDb()
+	FlushDb() error
 }

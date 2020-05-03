@@ -28,7 +28,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 
 	connections, err := connection.getConnections()
 	c.Check(err, IsNil)
-	c.Check(connections, HasLen, 1, Commentf("cleaner %s", connection.Name)) // cleaner connection remains
+	c.Check(connections, HasLen, 1) // cleaner connection remains
 
 	conn1, err := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
@@ -76,7 +76,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
-	connection.CloseAllQueues()
+	connection.unlistAllQueues()
 	queues, err := connection.GetOpenQueues()
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 0)

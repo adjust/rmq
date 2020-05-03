@@ -33,6 +33,8 @@ type Connection interface {
 	openQueue(name string) Queue
 	// used in tests
 	stopHeartbeat() error
+	flushDb() error
+	unlistAllQueues() error
 }
 
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
@@ -82,7 +84,7 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisC
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int) (*redisConnection, error) {
+func OpenConnection(tag, network, address string, db int) (Connection, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Network: network,
 		Addr:    address,
@@ -146,17 +148,17 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
 }
 
-// CloseAllQueues closes all queues by removing them from the global list
-func (connection *redisConnection) CloseAllQueues() (int64, error) {
-	count, err := connection.redisClient.Del(queuesKey)
-	return count, err
+// unlistAllQueues closes all queues by removing them from the global list
+func (connection *redisConnection) unlistAllQueues() error {
+	_, err := connection.redisClient.Del(queuesKey)
+	return err
 }
 
 // closeAllQueuesInConnection closes all queues in the associated connection by removing all related keys
 func (connection *redisConnection) closeAllQueuesInConnection() error {
-	connection.redisClient.Del(connection.queuesKey)
+	_, err := connection.redisClient.Del(connection.queuesKey)
 	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
-	return nil
+	return err
 }
 
 // getConsumingQueues returns a list of all queues consumed by this connection
@@ -202,6 +204,6 @@ func (connection *redisConnection) openQueue(name string) Queue {
 }
 
 // flushDb flushes the redis database to reset everything, used in tests
-func (connection *redisConnection) flushDb() {
-	connection.redisClient.FlushDb()
+func (connection *redisConnection) flushDb() error {
+	return connection.redisClient.FlushDb()
 }

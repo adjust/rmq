@@ -341,9 +341,10 @@ func (client *TestRedisClient) SRem(key, value string) (affected int64, err erro
 }
 
 // FlushDb delete all the keys of the currently selected DB. This command never fails.
-func (client *TestRedisClient) FlushDb() {
+func (client *TestRedisClient) FlushDb() error {
 	client.store = *new(sync.Map)
 	client.ttl = *new(sync.Map)
+	return nil
 }
 
 //storeSet stores a set
