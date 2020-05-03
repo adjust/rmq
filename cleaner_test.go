@@ -17,8 +17,8 @@ type CleanerSuite struct{}
 func (suite *CleanerSuite) TestCleaner(c *C) {
 	flushConn, err := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	c.Check(flushConn.flushDb(), IsNil)
 	c.Check(flushConn.stopHeartbeat(), IsNil)
+	c.Check(flushConn.flushDb(), IsNil)
 
 	conn, err := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)

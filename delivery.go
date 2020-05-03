@@ -40,8 +40,6 @@ func (delivery *wrapDelivery) Payload() string {
 func (delivery *wrapDelivery) Ack() error {
 	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
 
-	// TODO: check for other places where we get a returned affectedCount but
-	// ignore it. consider checking the value
 	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if err != nil {
 		return err
@@ -64,7 +62,6 @@ func (delivery *wrapDelivery) Push() error {
 	}
 }
 
-// TODO: return how long the key is afterwards
 func (delivery *wrapDelivery) move(key string) error {
 	if _, err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
 		return err

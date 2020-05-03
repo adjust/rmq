@@ -2,7 +2,6 @@ package rmq
 
 import "time"
 
-// TODO: consistent return value naming
 type RedisClient interface {
 	// simple keys
 	Set(key string, value string, expiration time.Duration) error

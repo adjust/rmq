@@ -18,8 +18,8 @@ type QueueSuite struct{}
 func (suite *QueueSuite) TestConnections(c *C) {
 	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
-	c.Check(flushConn.flushDb(), IsNil)
 	c.Check(flushConn.stopHeartbeat(), IsNil)
+	c.Check(flushConn.flushDb(), IsNil)
 
 	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
 	c.Check(err, IsNil)
@@ -50,7 +50,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	err = conn2.check()
 	c.Check(err, IsNil)
 
-	c.Check(connection.hijackConnection("nope").stopHeartbeat(), IsNil)
+	c.Check(connection.hijackConnection("nope").stopHeartbeat(), Equals, ErrorNotFound)
 	c.Check(conn1.stopHeartbeat(), IsNil)
 	err = conn1.check()
 	c.Check(err, Equals, ErrorNotFound)

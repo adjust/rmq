@@ -171,7 +171,7 @@ func (queue *redisQueue) rejectedCount() (int64, error) {
 // queue and deletes the unacked key afterwards, returns number of returned
 // deliveries
 func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
-	// TODO: consider not LLen here, just poppush until empty
+	// TODO!: consider not LLen here, just poppush until empty
 	unackedCount, err := queue.redisClient.LLen(queue.unackedKey)
 	if err != nil {
 		return 0, err
@@ -197,7 +197,7 @@ func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
 // ReturnAllRejected moves all rejected deliveries back to the ready
 // list and returns the number of returned deliveries
 func (queue *redisQueue) ReturnAllRejected() (int64, error) {
-	// TODO: just use maxint instead of getting the actual count?
+	// TODO!: just use maxint instead of getting the actual count?
 	rejectedCount, err := queue.rejectedCount()
 	if err != nil {
 		return 0, err
@@ -236,9 +236,15 @@ func (queue *redisQueue) closeInStaleConnection() error {
 	if _, err := queue.redisClient.Del(queue.consumersKey); err != nil {
 		return err
 	}
-	if _, err := queue.redisClient.SRem(queue.queuesKey, queue.name); err != nil {
+
+	count, err := queue.redisClient.SRem(queue.queuesKey, queue.name)
+	if err != nil {
 		return err
 	}
+	if count == 0 {
+		return ErrorNotFound
+	}
+
 	return nil
 }
 
@@ -246,7 +252,7 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 	// TODO: can we avoid the type check here?
 	redisPushQueue, ok := pushQueue.(*redisQueue)
 	if !ok {
-		return // TODO: return error? or just panic?
+		return // TODO!: return error? or just panic?
 	}
 
 	queue.pushKey = redisPushQueue.readyKey
@@ -355,7 +361,7 @@ func (queue *redisQueue) consume() {
 
 		batchSize, err := queue.batchSize()
 		if err != nil {
-			// TODO
+			// TODO!
 		}
 
 		switch err := queue.consumeBatch(batchSize); err {
@@ -364,7 +370,7 @@ func (queue *redisQueue) consume() {
 		case ErrorNotFound: // less than batchSize were found
 			time.Sleep(queue.pollDuration)
 		default: // error
-			// TODO
+			// TODO!
 		}
 	}
 }
@@ -376,7 +382,7 @@ func (queue *redisQueue) batchSize() (int64, error) {
 	}
 	prefetchLimit := queue.prefetchLimit - unackedCount
 
-	// TODO: ignore ready count here and just return prefetchLimit? yes, and inline this function
+	// TODO!: ignore ready count here and just return prefetchLimit? yes, and inline this function
 	readyCount, err := queue.readyCount()
 	if err != nil {
 		return 0, err
@@ -393,7 +399,7 @@ func (queue *redisQueue) consumeBatch(batchSize int64) error {
 		return ErrorNotFound
 	}
 
-	// TODO: do one blocking call (to wait for first), then no n-1 nonblocking
+	// TODO!: do one blocking call (to wait for first), then no n-1 nonblocking
 	// ones, just stop (finished batch) once redis.nil is returned (nothing
 	// else available yet). !wantMore in that case
 	// TODO: pipeline (this is a hot path, but can consider for other usages of RPopLPush too)
@@ -491,7 +497,7 @@ func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
 	return total, nil
 }
 
-// TODO: remove this and all COMMENTOUT lines
+// TODO!: remove this and all COMMENTOUT lines
 func debug(message string) {
 	// log.Printf("rmq debug: %s", message) // COMMENTOUT
 }

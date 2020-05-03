@@ -131,8 +131,14 @@ func (connection *redisConnection) check() error {
 func (connection *redisConnection) stopHeartbeat() error {
 	// TODO: use atomic?
 	connection.heartbeatStopped = true
-	_, err := connection.redisClient.Del(connection.heartbeatKey)
-	return err
+	count, err := connection.redisClient.Del(connection.heartbeatKey)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrorNotFound
+	}
+	return nil
 }
 
 // GetOpenQueues returns a list of all open queues
@@ -155,7 +161,7 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 func (connection *redisConnection) heartbeat() {
 	for {
 		if err := connection.updateHeartbeat(); err != nil {
-			// TODO: what to do here???
+			// TODO!: what to do here???
 			// one idea was to wait a bit and retry, but make sure the key wasn't expired in between
 			// if it was, do panic
 		}
@@ -185,12 +191,20 @@ func (connection *redisConnection) hijackConnection(name string) Connection {
 
 // closes a stale connection. not to be called on an active connection
 func (connection *redisConnection) closeStaleConnection() error {
-	if _, err := connection.redisClient.SRem(connectionsKey, connection.Name); err != nil {
+	count, err := connection.redisClient.SRem(connectionsKey, connection.Name)
+	if err != nil {
 		return err
 	}
-	if _, err := connection.redisClient.Del(connection.queuesKey); err != nil {
+	if count == 0 {
+		return ErrorNotFound
+	}
+
+	// NOTE: we're not checking count here because stale connection might not
+	// have been consuming from any queue, in which case this key doesn't exist
+	if _, err = connection.redisClient.Del(connection.queuesKey); err != nil {
 		return err
 	}
+
 	// debug(fmt.Sprintf("connection closed all queues %s %d", connection, connection.queuesKey)) // COMMENTOUT
 	return nil
 }
