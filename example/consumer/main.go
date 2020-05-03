@@ -20,11 +20,18 @@ func main() {
 		panic(err)
 	}
 
-	queue := connection.OpenQueue("things")
-	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
+	queue, err := connection.OpenQueue("things")
+	if err != nil {
+		panic(err)
+	}
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+		panic(err)
+	}
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
-		queue.AddConsumer(name, NewConsumer(i))
+		if _, err := queue.AddConsumer(name, NewConsumer(i)); err != nil {
+			panic(err)
+		}
 	}
 	select {}
 }
@@ -53,8 +60,12 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	}
 	time.Sleep(time.Millisecond)
 	if consumer.count%batchSize == 0 {
-		delivery.Reject()
+		if err := delivery.Reject(); err != nil {
+			log.Printf("failed to reject: %s", err)
+		}
 	} else {
-		delivery.Ack()
+		if err := delivery.Ack(); err != nil {
+			log.Printf("failed to ack: %s", err)
+		}
 	}
 }

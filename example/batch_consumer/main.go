@@ -15,7 +15,10 @@ func main() {
 		panic(err)
 	}
 
-	queue := connection.OpenQueue("things")
+	queue, err := connection.OpenQueue("things")
+	if err != nil {
+		panic(err)
+	}
 	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
 		panic(err)
 	}
@@ -23,7 +26,10 @@ func main() {
 		panic(err)
 	}
 
-	queue = connection.OpenQueue("balls")
+	queue, err = connection.OpenQueue("balls")
+	if err != nil {
+		panic(err)
+	}
 	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
 		panic(err)
 	}
@@ -45,9 +51,7 @@ func NewBatchConsumer(tag string) *BatchConsumer {
 func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(time.Millisecond)
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	if failedCount, err := batch.Ack(); err != nil {
-		log.Printf("failed to ack: %s", err)
-	} else if failedCount > 0 {
-		log.Printf("failed to ack: %d", failedCount)
+	if errors := batch.Ack(); len(errors) > 0 {
+		log.Printf("failed to ack: %s", errors)
 	}
 }

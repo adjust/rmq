@@ -16,10 +16,11 @@ func main() {
 	cleaner := rmq.NewCleaner(connection)
 
 	for _ = range time.Tick(time.Second) {
-		if err := cleaner.Clean(); err != nil {
+		returned, err := cleaner.Clean()
+		if err != nil {
 			log.Printf("failed to clean: %s", err)
 			continue
 		}
-		log.Printf("cleaned")
+		log.Printf("cleaned %d", returned)
 	}
 }

@@ -12,7 +12,10 @@ func main() {
 		panic(err)
 	}
 
-	queue := connection.OpenQueue("things")
+	queue, err := connection.OpenQueue("things")
+	if err != nil {
+		panic(err)
+	}
 	returned, err := queue.ReturnAllRejected()
 	if err != nil {
 		panic(err)
