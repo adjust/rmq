@@ -1,13 +1,8 @@
 package rmq
 
 import (
-	"errors"
 	"fmt"
 )
-
-// entitify being delivery ... TODO
-// TODO: move somewhere else
-var ErrorNotFound = errors.New("entity not found")
 
 type Delivery interface {
 	Payload() string

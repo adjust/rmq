@@ -99,8 +99,14 @@ func CollectStats(queueList []string, mainConnection *redisConnection) (Stats, e
 
 	for _, connectionName := range connectionNames {
 		connection := mainConnection.hijackConnection(connectionName)
-		connectionActive, err := connection.check()
-		if err != nil {
+
+		var connectionActive bool
+		switch err := connection.check(); err {
+		case nil:
+			connectionActive = true
+		case ErrorNotFound:
+			connectionActive = false
+		default:
 			return stats, err
 		}
 

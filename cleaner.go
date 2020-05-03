@@ -18,16 +18,14 @@ func (cleaner *Cleaner) Clean() error {
 
 	for _, connectionName := range connectionNames {
 		connection := cleaner.connection.hijackConnection(connectionName)
-		ok, err := connection.check()
-		if err != nil {
-			return err
-		}
-
-		if ok {
-			continue // skip active connections!
-		}
-
-		if err := CleanConnection(connection); err != nil {
+		switch err := connection.check(); err {
+		case nil: // active connection
+			continue
+		case ErrorNotFound:
+			if err := CleanConnection(connection); err != nil {
+				return err
+			}
+		default:
 			return err
 		}
 	}

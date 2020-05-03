@@ -372,8 +372,7 @@ func (queue *redisQueue) batchSize() (int64, error) {
 }
 
 // consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-// TODO: name args
-func (queue *redisQueue) consumeBatch(batchSize int64) (bool, error) {
+func (queue *redisQueue) consumeBatch(batchSize int64) (wantMore bool, err error) {
 	if batchSize == 0 {
 		return false, nil
 	}

@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -8,6 +9,9 @@ import (
 	"github.com/adjust/uniuri"
 	"github.com/go-redis/redis/v7"
 )
+
+// entitify being connection/delivery ... TODO
+var ErrorNotFound = errors.New("entity not found")
 
 const heartbeatDuration = time.Minute
 
@@ -19,7 +23,7 @@ type Connection interface {
 
 	// internals
 	// used in cleaner
-	check() (bool, error)
+	check() error
 	getConnections() ([]string, error)
 	hijackConnection(name string) Connection
 	getConsumingQueues() ([]string, error)
@@ -111,11 +115,16 @@ func (connection *redisConnection) getConnections() ([]string, error) {
 }
 
 // check retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) check() (bool, error) {
+func (connection *redisConnection) check() error {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
 	ttl, err := connection.redisClient.TTL(heartbeatKey)
-	// TODO: return ErrorInactive?
-	return ttl > 0, err
+	if err != nil {
+		return err
+	}
+	if ttl <= 0 {
+		return ErrorNotFound
+	}
+	return nil
 }
 
 // stopHeartbeat stops the heartbeat of the connection
