@@ -246,14 +246,9 @@ func (queue *redisQueue) closeInStaleConnection() error {
 	return nil
 }
 
+// NOTE: panics if pushQueue is not a *redisQueue
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
-	// TODO: can we avoid the type check here?
-	redisPushQueue, ok := pushQueue.(*redisQueue)
-	if !ok {
-		return // TODO!: return error? or just panic?
-	}
-
-	queue.pushKey = redisPushQueue.readyKey
+	queue.pushKey = pushQueue.(*redisQueue).readyKey
 }
 
 // StartConsuming starts consuming into a channel of size prefetchLimit
