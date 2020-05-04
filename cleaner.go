@@ -1,5 +1,7 @@
 package rmq
 
+import "math"
+
 type Cleaner struct {
 	connection Connection
 }
@@ -62,7 +64,7 @@ func cleanConnection(hijackedConnection Connection) (returned int64, err error) 
 }
 
 func cleanQueue(queue Queue) (returned int64, err error) {
-	returned, err = queue.ReturnAllUnacked()
+	returned, err = queue.ReturnUnacked(math.MaxInt64)
 	if err != nil {
 		return 0, err
 	}

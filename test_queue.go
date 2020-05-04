@@ -43,9 +43,8 @@ func (queue *TestQueue) AddBatchConsumer(string, int64, BatchConsumer) (string, 
 func (queue *TestQueue) AddBatchConsumerWithTimeout(string, int64, time.Duration, BatchConsumer) (string, error) {
 	panic(errorNotSupported)
 }
+func (queue *TestQueue) ReturnUnacked(int64) (int64, error)  { panic(errorNotSupported) }
 func (queue *TestQueue) ReturnRejected(int64) (int64, error) { panic(errorNotSupported) }
-func (queue *TestQueue) ReturnAllUnacked() (int64, error)    { panic(errorNotSupported) }
-func (queue *TestQueue) ReturnAllRejected() (int64, error)   { panic(errorNotSupported) }
 func (queue *TestQueue) PurgeReady() (int64, error)          { panic(errorNotSupported) }
 func (queue *TestQueue) PurgeRejected() (int64, error)       { panic(errorNotSupported) }
 func (queue *TestQueue) Destroy() (int64, int64, error)      { panic(errorNotSupported) }

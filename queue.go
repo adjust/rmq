@@ -47,9 +47,8 @@ type Queue interface {
 	AddBatchConsumerWithTimeout(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error)
 	PurgeReady() (int64, error)
 	PurgeRejected() (int64, error)
-	ReturnRejected(count int64) (int64, error)
-	ReturnAllUnacked() (int64, error)
-	ReturnAllRejected() (int64, error)
+	ReturnUnacked(max int64) (int64, error)
+	ReturnRejected(max int64) (int64, error)
 	Destroy() (readyCount, rejectedCount int64, err error)
 
 	// internals
@@ -167,62 +166,30 @@ func (queue *redisQueue) rejectedCount() (int64, error) {
 	return queue.redisClient.LLen(queue.rejectedKey)
 }
 
-// ReturnAllUnacked moves all unacked deliveries back to the ready
-// queue and deletes the unacked key afterwards, returns number of returned
-// deliveries
-func (queue *redisQueue) ReturnAllUnacked() (int64, error) {
-	// TODO!: consider not LLen here, just poppush until empty
-	unackedCount, err := queue.redisClient.LLen(queue.unackedKey)
-	if err != nil {
-		return 0, err
-	}
-
-	for i := int64(0); i < unackedCount; i++ {
-		// one consideration: in theory it might not finish if packages get constantly added
-		// but that can probably be safely ignored
-		switch _, err := queue.redisClient.RPopLPush(queue.unackedKey, queue.readyKey); err {
-		case nil:
-			continue
-		case ErrorNotFound:
-			return i, nil
-		default: // err
-			return 0, err
-		}
-	}
-
-	return unackedCount, nil
+// ReturnUnacked tries to return max unacked deliveries back to
+// the ready queue and returns the number of returned deliveries
+func (queue *redisQueue) ReturnUnacked(max int64) (count int64, error error) {
+	return queue.move(queue.unackedKey, queue.readyKey, max)
 }
 
-// ReturnAllRejected moves all rejected deliveries back to the ready
-// list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnAllRejected() (int64, error) {
-	// TODO!: just use maxint instead of getting the actual count?
-	rejectedCount, err := queue.rejectedCount()
-	if err != nil {
-		return 0, err
-	}
-	return queue.ReturnRejected(rejectedCount)
+// ReturnRejected tries to return max rejected deliveries back to
+// the ready queue and returns the number of returned deliveries
+func (queue *redisQueue) ReturnRejected(max int64) (count int64, err error) {
+	return queue.move(queue.rejectedKey, queue.readyKey, max)
 }
 
-// ReturnRejected tries to return count rejected deliveries back to
-// the ready list and returns the number of returned deliveries
-func (queue *redisQueue) ReturnRejected(count int64) (int64, error) {
-	if count == 0 {
-		return 0, nil
-	}
-
-	for i := int64(0); i < count; i++ {
-		switch _, err := queue.redisClient.RPopLPush(queue.rejectedKey, queue.readyKey); err {
-		case nil:
+func (queue *redisQueue) move(from, to string, max int64) (n int64, error error) {
+	for n = 0; n < max; n++ {
+		switch _, err := queue.redisClient.RPopLPush(from, to); err {
+		case nil: // moved one
 			continue
-		case ErrorNotFound:
-			return i, nil
+		case ErrorNotFound: // nothing left
+			return n, nil
 		default: // error
 			return 0, err
 		}
 	}
-
-	return count, nil
+	return n, nil
 }
 
 // closeInStaleConnection closes the queue in the associated connection by removing all related keys

@@ -42,6 +42,7 @@ func (wrapper RedisWrapper) LTrim(key string, start, stop int64) error {
 
 func (wrapper RedisWrapper) RPopLPush(source, destination string) (value string, err error) {
 	value, err = wrapper.rawClient.RPopLPush(source, destination).Result()
+	// println("RPopLPush", source, destination, value, err)
 	switch err {
 	case nil:
 		return value, nil

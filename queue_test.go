@@ -2,6 +2,7 @@ package rmq
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -554,8 +555,9 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 
 	queue.StopConsuming()
 
-	_, err = queue.ReturnRejected(2)
+	n, err := queue.ReturnRejected(2)
 	c.Check(err, IsNil)
+	c.Check(n, Equals, int64(2))
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(2)) // delivery 0, 2
@@ -566,8 +568,9 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(2)) // delivery 3, 5
 
-	_, err = queue.ReturnAllRejected()
+	n, err = queue.ReturnRejected(math.MaxInt64)
 	c.Check(err, IsNil)
+	c.Check(n, Equals, int64(2))
 	count, err = queue.readyCount()
 	c.Check(err, IsNil)
 	c.Check(count, Equals, int64(4)) // delivery 0, 2, 3, 5

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math"
 
 	"github.com/adjust/rmq/v2"
 )
@@ -16,7 +17,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	returned, err := queue.ReturnAllRejected()
+	returned, err := queue.ReturnRejected(math.MaxInt64)
 	if err != nil {
 		panic(err)
 	}
