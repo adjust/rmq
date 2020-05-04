@@ -310,68 +310,81 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	return name, nil
 }
 
+var errorConsumingStopped = fmt.Errorf("consuming stopped") // TODO: move
+
 func (queue *redisQueue) consume() {
+	errorCount := 0 // number of consecutive batch errors
+
 	for {
-		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
-			// log.Printf("rmq queue stopped consuming %s", queue)
+		switch err := queue.consumeBatch(); err {
+		case nil: // success
+			errorCount = 0
+
+		case errorConsumingStopped:
 			close(queue.deliveryChan)
-			// log.Printf("rmq queue stopped fetching %s", queue)
 			return
-		}
 
-		batchSize, err := queue.batchSize()
-		if err != nil {
-			// TODO!
-		}
-
-		switch err := queue.consumeBatch(batchSize); err {
-		case nil:
-			continue
-		case ErrorNotFound: // less than batchSize were found
-			time.Sleep(queue.pollDuration)
-		default: // error
-			// TODO!
+		default: // redis error
+			errorCount++
+			// select { // try to add error to channel, but don't block
+			// case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
+			// default:
+			// }
+			time.Sleep(queue.pollDuration) // sleep before retry
 		}
 	}
 }
 
-func (queue *redisQueue) batchSize() (int64, error) {
+func (queue *redisQueue) consumeBatch() error {
+	if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
+		return errorConsumingStopped
+	}
+
+	// unackedCount == <deliveries in deliveryChan> + <deliveries in Consume()>
 	unackedCount, err := queue.unackedCount()
 	if err != nil {
-		return 0, err
-	}
-	prefetchLimit := queue.prefetchLimit - unackedCount
-
-	// TODO!: ignore ready count here and just return prefetchLimit? yes, and inline this function
-	readyCount, err := queue.readyCount()
-	if err != nil {
-		return 0, err
-	}
-	if readyCount < prefetchLimit {
-		return readyCount, nil
-	}
-	return prefetchLimit, nil
-}
-
-// consumeBatch tries to read batchSize deliveries, returns true if any and all were consumed
-func (queue *redisQueue) consumeBatch(batchSize int64) error {
-	if batchSize == 0 {
-		return ErrorNotFound
+		return err
 	}
 
-	// TODO!: do one blocking call (to wait for first), then no n-1 nonblocking
-	// ones, just stop (finished batch) once redis.nil is returned (nothing
-	// else available yet). !wantMore in that case
-	// TODO: pipeline (this is a hot path, but can consider for other usages of RPopLPush too)
+	batchSize := queue.prefetchLimit - unackedCount
+	if batchSize <= 0 {
+		// already at prefetch limit, wait for consumers to finish
+		time.Sleep(queue.pollDuration)
+		return nil
+	}
+
 	for i := int64(0); i < batchSize; i++ {
-		value, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
-		if err != nil {
-			return err // NOTE: can be ErrorNotFound
+		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
+			return errorConsumingStopped
 		}
-		queue.deliveryChan <- newDelivery(value, queue.unackedKey, queue.rejectedKey, queue.pushKey, queue.redisClient)
+
+		payload, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		if err == ErrorNotFound {
+			// ready list currently empty, wait for new deliveries
+			time.Sleep(queue.pollDuration)
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		queue.deliveryChan <- queue.newDelivery(payload)
 	}
 
 	return nil
+}
+
+func (queue *redisQueue) newDelivery(payload string) Delivery {
+	return newDelivery(
+		// queue.ctx,
+		payload,
+		queue.unackedKey,
+		queue.rejectedKey,
+		queue.pushKey,
+		queue.redisClient,
+		// queue.errChan,
+	)
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
