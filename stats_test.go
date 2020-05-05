@@ -34,7 +34,7 @@ func (suite *StatsSuite) TestStats(c *C) {
 	c.Check(err, IsNil)
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false
-	c.Check(q2.StartConsuming(10, time.Millisecond), IsNil)
+	c.Check(q2.StartConsuming(10, time.Millisecond, nil), IsNil)
 	_, err = q2.AddConsumer("stats-cons1", consumer)
 	c.Check(err, IsNil)
 	c.Check(q2.Publish("stats-d2"), IsNil)

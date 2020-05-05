@@ -39,7 +39,7 @@ type Queue interface {
 	Publish(payload ...string) error
 	PublishBytes(payload ...[]byte) error
 	SetPushQueue(pushQueue Queue)
-	StartConsuming(prefetchLimit int64, pollDuration time.Duration) error
+	StartConsuming(prefetchLimit int64, pollDuration time.Duration, errors chan<- error) error
 	StopConsuming() <-chan struct{}
 	AddConsumer(tag string, consumer Consumer) (string, error)
 	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error)
@@ -221,7 +221,7 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
-func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.Duration) error {
+func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.Duration, errors chan<- error) error {
 	if queue.deliveryChan != nil {
 		return ErrorAlreadyConsuming
 	}
@@ -236,7 +236,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
 	atomic.StoreInt32(&queue.consumingStopped, 0)
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
-	go queue.consume()
+	go queue.consume(errors)
 	return nil
 }
 
@@ -312,7 +312,7 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 
 var errorConsumingStopped = fmt.Errorf("consuming stopped") // TODO: move
 
-func (queue *redisQueue) consume() {
+func (queue *redisQueue) consume(errors chan<- error) {
 	errorCount := 0 // number of consecutive batch errors
 
 	for {
@@ -326,10 +326,10 @@ func (queue *redisQueue) consume() {
 
 		default: // redis error
 			errorCount++
-			// select { // try to add error to channel, but don't block
-			// case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
-			// default:
-			// }
+			select { // try to add error to channel, but don't block
+			case errors <- &ConsumeError{RedisErr: err}:
+			default:
+			}
 			time.Sleep(queue.pollDuration) // sleep before retry
 		}
 	}

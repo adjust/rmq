@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
 		panic(err)
 	}
 	if _, err := queue.AddBatchConsumer("things", 111, NewBatchConsumer("things")); err != nil {
@@ -30,7 +30,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
 		panic(err)
 	}
 	if _, err := queue.AddBatchConsumer("balls", 111, NewBatchConsumer("balls")); err != nil {

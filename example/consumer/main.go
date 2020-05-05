@@ -24,9 +24,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+
+	errors := make(chan error, 10)
+	go func() {
+		for err := range errors {
+			log.Print("error: ", err)
+		}
+	}()
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, errors); err != nil {
 		panic(err)
 	}
+
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
 		if _, err := queue.AddConsumer(name, NewConsumer(i)); err != nil {

@@ -30,29 +30,29 @@ func (queue *TestQueue) PublishBytes(payload ...[]byte) error {
 	return queue.Publish(stringifiedBytes...)
 }
 
-func (queue *TestQueue) SetPushQueue(Queue)                           { panic(errorNotSupported) }
-func (queue *TestQueue) StartConsuming(int64, time.Duration) error    { panic(errorNotSupported) }
-func (queue *TestQueue) StopConsuming() <-chan struct{}               { panic(errorNotSupported) }
-func (queue *TestQueue) AddConsumer(string, Consumer) (string, error) { panic(errorNotSupported) }
-func (queue *TestQueue) AddConsumerFunc(string, ConsumerFunc) (string, error) {
+func (*TestQueue) SetPushQueue(Queue) { panic(errorNotSupported) }
+func (*TestQueue) StartConsuming(int64, time.Duration, chan<- error) error {
 	panic(errorNotSupported)
 }
-func (queue *TestQueue) AddBatchConsumer(string, int64, BatchConsumer) (string, error) {
+func (*TestQueue) StopConsuming() <-chan struct{}                       { panic(errorNotSupported) }
+func (*TestQueue) AddConsumer(string, Consumer) (string, error)         { panic(errorNotSupported) }
+func (*TestQueue) AddConsumerFunc(string, ConsumerFunc) (string, error) { panic(errorNotSupported) }
+func (*TestQueue) AddBatchConsumer(string, int64, BatchConsumer) (string, error) {
 	panic(errorNotSupported)
 }
-func (queue *TestQueue) AddBatchConsumerWithTimeout(string, int64, time.Duration, BatchConsumer) (string, error) {
+func (*TestQueue) AddBatchConsumerWithTimeout(string, int64, time.Duration, BatchConsumer) (string, error) {
 	panic(errorNotSupported)
 }
-func (queue *TestQueue) ReturnUnacked(int64) (int64, error)  { panic(errorNotSupported) }
-func (queue *TestQueue) ReturnRejected(int64) (int64, error) { panic(errorNotSupported) }
-func (queue *TestQueue) PurgeReady() (int64, error)          { panic(errorNotSupported) }
-func (queue *TestQueue) PurgeRejected() (int64, error)       { panic(errorNotSupported) }
-func (queue *TestQueue) Destroy() (int64, int64, error)      { panic(errorNotSupported) }
-func (queue *TestQueue) closeInStaleConnection() error       { panic(errorNotSupported) }
-func (queue *TestQueue) readyCount() (int64, error)          { panic(errorNotSupported) }
-func (queue *TestQueue) unackedCount() (int64, error)        { panic(errorNotSupported) }
-func (queue *TestQueue) rejectedCount() (int64, error)       { panic(errorNotSupported) }
-func (queue *TestQueue) getConsumers() ([]string, error)     { panic(errorNotSupported) }
+func (*TestQueue) ReturnUnacked(int64) (int64, error)  { panic(errorNotSupported) }
+func (*TestQueue) ReturnRejected(int64) (int64, error) { panic(errorNotSupported) }
+func (*TestQueue) PurgeReady() (int64, error)          { panic(errorNotSupported) }
+func (*TestQueue) PurgeRejected() (int64, error)       { panic(errorNotSupported) }
+func (*TestQueue) Destroy() (int64, int64, error)      { panic(errorNotSupported) }
+func (*TestQueue) closeInStaleConnection() error       { panic(errorNotSupported) }
+func (*TestQueue) readyCount() (int64, error)          { panic(errorNotSupported) }
+func (*TestQueue) unackedCount() (int64, error)        { panic(errorNotSupported) }
+func (*TestQueue) rejectedCount() (int64, error)       { panic(errorNotSupported) }
+func (*TestQueue) getConsumers() ([]string, error)     { panic(errorNotSupported) }
 
 // test helper
 
