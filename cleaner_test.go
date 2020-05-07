@@ -15,12 +15,12 @@ func TestCleanerSuite(t *testing.T) {
 type CleanerSuite struct{}
 
 func (suite *CleanerSuite) TestCleaner(c *C) {
-	flushConn, err := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1)
+	flushConn, err := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Check(flushConn.stopHeartbeat(), IsNil)
 	c.Check(flushConn.flushDb(), IsNil)
 
-	conn, err := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
+	conn, err := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queues, err := conn.GetOpenQueues()
 	c.Check(err, IsNil)
@@ -115,7 +115,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(conn.stopHeartbeat(), IsNil)
 	time.Sleep(time.Millisecond)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
+	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err = conn.OpenQueue("q1")
 	c.Check(err, IsNil)
@@ -192,7 +192,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(conn.stopHeartbeat(), IsNil)
 	time.Sleep(time.Millisecond)
 
-	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1)
+	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	cleaner := NewCleaner(cleanerConn)
 	returned, err := cleaner.Clean()
@@ -205,7 +205,7 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	c.Check(err, IsNil)
 	c.Check(queues, HasLen, 2)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1)
+	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err = conn.OpenQueue("q1")
 	c.Check(err, IsNil)

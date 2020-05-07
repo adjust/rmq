@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection("handler", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("handler", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -15,7 +15,21 @@ const (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
+	errors := make(chan error, 10)
+	go func() {
+		for err := range errors {
+			switch err := err.(type) {
+			case *rmq.ConsumeError:
+				log.Print("consume error: ", err)
+			case *rmq.HeartbeatError:
+				log.Print("heartbeat error: ", err)
+			default:
+				log.Print("other error: ", err)
+			}
+		}
+	}()
+
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errors)
 	if err != nil {
 		panic(err)
 	}
@@ -25,12 +39,6 @@ func main() {
 		panic(err)
 	}
 
-	errors := make(chan error, 10)
-	go func() {
-		for err := range errors {
-			log.Print("error: ", err)
-		}
-	}()
 	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, errors); err != nil {
 		panic(err)
 	}

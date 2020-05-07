@@ -17,12 +17,12 @@ func TestQueueSuite(t *testing.T) {
 type QueueSuite struct{}
 
 func (suite *QueueSuite) TestConnections(c *C) {
-	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1)
+	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Check(flushConn.stopHeartbeat(), IsNil)
 	c.Check(flushConn.flushDb(), IsNil)
 
-	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 	_, err = NewCleaner(connection).Clean()
@@ -32,14 +32,14 @@ func (suite *QueueSuite) TestConnections(c *C) {
 	c.Check(err, IsNil)
 	c.Check(connections, HasLen, 1) // cleaner connection remains
 
-	conn1, err := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1)
+	conn1, err := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	connections, err = connection.getConnections()
 	c.Check(err, IsNil)
 	c.Check(connections, HasLen, 2)
 	c.Check(connection.hijackConnection("nope").check(), Equals, ErrorNotFound)
 	c.Check(conn1.check(), IsNil)
-	conn2, err := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1)
+	conn2, err := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	connections, err = connection.getConnections()
 	c.Check(err, IsNil)
@@ -66,7 +66,7 @@ func (suite *QueueSuite) TestConnections(c *C) {
 }
 
 func (suite *QueueSuite) TestConnectionQueues(c *C) {
-	connection, err := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
@@ -136,7 +136,7 @@ func (suite *QueueSuite) TestConnectionQueues(c *C) {
 }
 
 func (suite *QueueSuite) TestQueue(c *C) {
-	connection, err := OpenConnection("queue-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("queue-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
@@ -189,7 +189,7 @@ func (suite *QueueSuite) TestQueue(c *C) {
 }
 
 func (suite *QueueSuite) TestConsumer(c *C) {
-	connection, err := OpenConnection("cons-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("cons-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	c.Assert(connection, NotNil)
 
@@ -330,7 +330,7 @@ func (suite *QueueSuite) TestConsumer(c *C) {
 }
 
 func (suite *QueueSuite) TestMulti(c *C) {
-	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("multi-q")
 	c.Check(err, IsNil)
@@ -412,7 +412,7 @@ func (suite *QueueSuite) TestMulti(c *C) {
 }
 
 func (suite *QueueSuite) TestBatch(c *C) {
-	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("batch-q")
 	c.Check(err, IsNil)
@@ -485,7 +485,7 @@ func (suite *QueueSuite) TestBatch(c *C) {
 }
 
 func (suite *QueueSuite) TestReturnRejected(c *C) {
-	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("return-q")
 	c.Check(err, IsNil)
@@ -583,7 +583,7 @@ func (suite *QueueSuite) TestReturnRejected(c *C) {
 }
 
 func (suite *QueueSuite) TestPushQueue(c *C) {
-	connection, err := OpenConnection("push", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("push", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue1, err := connection.OpenQueue("queue1")
 	c.Check(err, IsNil)
@@ -631,7 +631,7 @@ func (suite *QueueSuite) TestPushQueue(c *C) {
 }
 
 func (suite *QueueSuite) TestConsuming(c *C) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("consume-q")
 	c.Check(err, IsNil)
@@ -656,7 +656,7 @@ func (suite *QueueSuite) TestConsuming(c *C) {
 }
 
 func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("consume-q")
 	c.Check(err, IsNil)
@@ -700,7 +700,7 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 }
 
 func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
-	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queue, err := connection.OpenQueue("batchConsume-q")
 	c.Check(err, IsNil)
@@ -750,7 +750,7 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 
 func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	// open queue
-	connection, err := OpenConnection("bench-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("bench-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	queueName := fmt.Sprintf("bench-q%d", c.N)
 	queue, err := connection.OpenQueue(queueName)

@@ -10,7 +10,7 @@ import (
 const unackedLimit = 1000
 
 func main() {
-	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

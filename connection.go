@@ -13,7 +13,10 @@ import (
 // entitify being connection/queue/delivery
 var ErrorNotFound = errors.New("entity not found")
 
-const heartbeatDuration = time.Minute
+const (
+	heartbeatDuration = time.Minute // TTL of heartbeat key
+	heartbeatInterval = time.Second // how often we update the heartbeat key
+)
 
 // Connection is an interface that can be used to test publishing
 type Connection interface {
@@ -46,18 +49,28 @@ type redisConnection struct {
 	heartbeatStopped bool
 }
 
+// OpenConnection opens and returns a new connection
+func OpenConnection(tag, network, address string, db int, errors chan<- error) (Connection, error) {
+	redisClient := redis.NewClient(&redis.Options{
+		Network: network,
+		Addr:    address,
+		DB:      db,
+	})
+	return OpenConnectionWithRedisClient(tag, redisClient, errors)
+}
+
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient})
+func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errors chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errors)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
-func OpenConnectionWithTestRedisClient(tag string) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, NewTestRedisClient())
+func OpenConnectionWithTestRedisClient(tag string, errors chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errors)
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisConnection, error) {
+func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors chan<- error) (*redisConnection, error) {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
@@ -76,19 +89,9 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient) (*redisC
 		return nil, err
 	}
 
-	go connection.heartbeat()
+	go connection.heartbeat(errors)
 	// log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
 	return connection, nil
-}
-
-// OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int) (Connection, error) {
-	redisClient := redis.NewClient(&redis.Options{
-		Network: network,
-		Addr:    address,
-		DB:      db,
-	})
-	return OpenConnectionWithRedisClient(tag, redisClient)
 }
 
 // OpenQueue opens and returns the queue with a given name
@@ -158,19 +161,20 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 }
 
 // heartbeat keeps the heartbeat key alive
-func (connection *redisConnection) heartbeat() {
-	for {
-		if err := connection.updateHeartbeat(); err != nil {
-			// TODO!: what to do here???
-			// one idea was to wait a bit and retry, but make sure the key wasn't expired in between
-			// if it was, do panic
+func (connection *redisConnection) heartbeat(errors chan<- error) {
+	for range time.NewTicker(heartbeatInterval).C {
+		if connection.heartbeatStopped {
+			return
 		}
 
-		time.Sleep(time.Second)
+		if err := connection.updateHeartbeat(); err != nil {
+			select { // try to add error to channel, but don't block
+			// TODO!: add error count or similar?
+			case errors <- &HeartbeatError{RedisErr: err}:
+			default:
+			}
 
-		if connection.heartbeatStopped {
-			// log.Printf("rmq connection stopped heartbeat %s", connection)
-			return
+			// TODO!: stop all consuming at some point (after 40s?)
 		}
 	}
 }

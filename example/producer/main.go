@@ -14,7 +14,7 @@ const (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2)
+	connection, err := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

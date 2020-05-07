@@ -14,14 +14,14 @@ func TestStatsSuite(t *testing.T) {
 type StatsSuite struct{}
 
 func (suite *StatsSuite) TestStats(c *C) {
-	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
+	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	_, err = NewCleaner(connection).Clean()
 	c.Assert(err, IsNil)
 
-	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
+	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
-	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
+	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1, nil)
 	c.Check(err, IsNil)
 	q1, err := conn2.OpenQueue("stats-q1")
 	c.Check(err, IsNil)
