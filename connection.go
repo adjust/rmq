@@ -162,20 +162,26 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 
 // heartbeat keeps the heartbeat key alive
 func (connection *redisConnection) heartbeat(errors chan<- error) {
+	errorCount := 0 // number of consecutive errors
 	for range time.NewTicker(heartbeatInterval).C {
 		if connection.heartbeatStopped {
 			return
 		}
 
-		if err := connection.updateHeartbeat(); err != nil {
-			select { // try to add error to channel, but don't block
-			// TODO!: add error count or similar?
-			case errors <- &HeartbeatError{RedisErr: err}:
-			default:
-			}
-
-			// TODO!: stop all consuming at some point (after 40s?)
+		err := connection.updateHeartbeat()
+		if err == nil { // success
+			errorCount = 0
+			continue
 		}
+		// unexpected redis error
+
+		errorCount++
+		select { // try to add error to channel, but don't block
+		case errors <- &HeartbeatError{RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		// TODO!: stop all consuming at some point (after 40s?)
 	}
 }
 

@@ -327,7 +327,7 @@ func (queue *redisQueue) consume(errors chan<- error) {
 		default: // redis error
 			errorCount++
 			select { // try to add error to channel, but don't block
-			case errors <- &ConsumeError{RedisErr: err}:
+			case errors <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
 			time.Sleep(queue.pollDuration) // sleep before retry
@@ -349,7 +349,7 @@ func (queue *redisQueue) consumeBatch() error {
 	batchSize := queue.prefetchLimit - unackedCount
 	if batchSize <= 0 {
 		// already at prefetch limit, wait for consumers to finish
-		time.Sleep(queue.pollDuration)
+		time.Sleep(queue.pollDuration) // sleep before retry
 		return nil
 	}
 
