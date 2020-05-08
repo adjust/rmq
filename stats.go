@@ -101,7 +101,7 @@ func CollectStats(queueList []string, mainConnection Connection) (Stats, error) 
 		connection := mainConnection.hijackConnection(connectionName)
 
 		var connectionActive bool
-		switch err := connection.check(); err {
+		switch err := connection.checkHeartbeat(); err {
 		case nil:
 			connectionActive = true
 		case ErrorNotFound:

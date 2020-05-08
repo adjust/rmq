@@ -25,7 +25,7 @@ func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 
 func (connection TestConnection) CollectStats([]string) (Stats, error)  { panic(errorNotSupported) }
 func (connection TestConnection) GetOpenQueues() ([]string, error)      { panic(errorNotSupported) }
-func (connection TestConnection) check() error                          { panic(errorNotSupported) }
+func (connection TestConnection) checkHeartbeat() error                 { panic(errorNotSupported) }
 func (connection TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
 func (connection TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }
 func (connection TestConnection) closeStaleConnection() error           { panic(errorNotSupported) }

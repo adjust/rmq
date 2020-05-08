@@ -18,7 +18,7 @@ func (cleaner *Cleaner) Clean() (returned int64, err error) {
 
 	for _, connectionName := range connectionNames {
 		hijackedConnection := cleaner.connection.hijackConnection(connectionName)
-		switch err := hijackedConnection.check(); err {
+		switch err := hijackedConnection.checkHeartbeat(); err {
 		case nil: // active connection
 			continue
 		case ErrorNotFound:

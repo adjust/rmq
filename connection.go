@@ -26,7 +26,7 @@ type Connection interface {
 
 	// internals
 	// used in cleaner
-	check() error
+	checkHeartbeat() error
 	getConnections() ([]string, error)
 	hijackConnection(name string) Connection
 	closeStaleConnection() error
@@ -116,8 +116,8 @@ func (connection *redisConnection) getConnections() ([]string, error) {
 	return connection.redisClient.SMembers(connectionsKey)
 }
 
-// check retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) check() error {
+// checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
+func (connection *redisConnection) checkHeartbeat() error {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
 	ttl, err := connection.redisClient.TTL(heartbeatKey)
 	if err != nil {
