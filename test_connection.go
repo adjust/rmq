@@ -23,8 +23,11 @@ func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 	return queue.(*TestQueue), nil
 }
 
-func (connection TestConnection) CollectStats([]string) (Stats, error)  { panic(errorNotSupported) }
-func (connection TestConnection) GetOpenQueues() ([]string, error)      { panic(errorNotSupported) }
+func (connection TestConnection) CollectStats([]string) (Stats, error) { panic(errorNotSupported) }
+func (connection TestConnection) GetOpenQueues() ([]string, error)     { panic(errorNotSupported) }
+func (connection TestConnection) StopAllConsuming() (<-chan struct{}, error) {
+	panic(errorNotSupported)
+}
 func (connection TestConnection) checkHeartbeat() error                 { panic(errorNotSupported) }
 func (connection TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
 func (connection TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }

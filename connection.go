@@ -23,6 +23,7 @@ type Connection interface {
 	OpenQueue(name string) (Queue, error)
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
+	StopAllConsuming() (<-chan struct{}, error)
 
 	// internals
 	// used in cleaner
@@ -116,34 +117,6 @@ func (connection *redisConnection) getConnections() ([]string, error) {
 	return connection.redisClient.SMembers(connectionsKey)
 }
 
-// checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) checkHeartbeat() error {
-	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	ttl, err := connection.redisClient.TTL(heartbeatKey)
-	if err != nil {
-		return err
-	}
-	if ttl <= 0 {
-		return ErrorNotFound
-	}
-	return nil
-}
-
-// stopHeartbeat stops the heartbeat of the connection
-// it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *redisConnection) stopHeartbeat() error {
-	// TODO: use atomic?
-	connection.heartbeatStopped = true
-	count, err := connection.redisClient.Del(connection.heartbeatKey)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return ErrorNotFound
-	}
-	return nil
-}
-
 // GetOpenQueues returns a list of all open queues
 func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
@@ -187,6 +160,64 @@ func (connection *redisConnection) heartbeat(errors chan<- error) {
 
 func (connection *redisConnection) updateHeartbeat() error {
 	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
+}
+
+// checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
+func (connection *redisConnection) checkHeartbeat() error {
+	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
+	ttl, err := connection.redisClient.TTL(heartbeatKey)
+	if err != nil {
+		return err
+	}
+	if ttl <= 0 {
+		return ErrorNotFound
+	}
+	return nil
+}
+
+// stopHeartbeat stops the heartbeat of the connection
+// it does not remove it from the list of connections so it can later be found by the cleaner
+func (connection *redisConnection) stopHeartbeat() error {
+	// TODO: use atomic?
+	connection.heartbeatStopped = true
+	count, err := connection.redisClient.Del(connection.heartbeatKey)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrorNotFound
+	}
+	return nil
+}
+
+func (connection *redisConnection) StopAllConsuming() (<-chan struct{}, error) {
+	queueNames, err := connection.getConsumingQueues()
+	if err != nil {
+		return nil, err
+	}
+
+	finishedChan := make(chan struct{})
+	if len(queueNames) == 0 {
+		close(finishedChan) // nothing to do
+		return finishedChan, nil
+	}
+
+	chans := make([]<-chan struct{}, 0, len(queueNames))
+	for _, queueName := range queueNames {
+		queue := connection.openQueue(queueName)
+		chans = append(chans, queue.StopConsuming())
+	}
+
+	go func() {
+		// wait for all channels to be closed
+		for _, c := range chans {
+			<-c
+		}
+		close(finishedChan)
+		// log.Printf("rmq connection stopped consuming %s", queue)
+	}()
+
+	return finishedChan, nil
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
