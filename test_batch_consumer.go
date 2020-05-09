@@ -15,10 +15,11 @@ func NewTestBatchConsumer() *TestBatchConsumer {
 }
 
 func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
-	// log.Printf("TestBatchConsumer.Consume(%d)", len(batch))
 	consumer.LastBatch = batch
 	consumer.ConsumedCount += int64(len(batch))
-	if !consumer.AutoFinish {
+	if consumer.AutoFinish {
+		batch.Ack()
+	} else {
 		<-consumer.finish
 		// log.Printf("TestBatchConsumer.Consume() finished")
 	}

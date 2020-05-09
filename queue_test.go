@@ -689,12 +689,12 @@ func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
 		consumedCount += int64(len(consumers[i].LastDeliveries))
 	}
 
-	// make sure all fetched deliveries are consumed
+	// make sure all deliveries are either ready, unacked or consumed (acked)
 	readyCount, err := queue.readyCount()
 	c.Check(err, IsNil)
-	count := deliveryCount - readyCount
-	c.Check(consumedCount, Equals, count)
-	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
+	unackedCount, err := queue.unackedCount()
+	c.Check(err, IsNil)
+	c.Check(deliveryCount, Equals, readyCount+unackedCount+consumedCount, Commentf("counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount))
 
 	c.Check(connection.stopHeartbeat(), IsNil)
 }
@@ -724,9 +724,8 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 		_, err = queue.AddBatchConsumer("consume", 5, consumer)
 		c.Check(err, IsNil)
 	}
-	consumer := NewTestBatchConsumer()
-	consumer.AutoFinish = true
 
+	time.Sleep(2 * time.Millisecond)
 	finishedChan := queue.StopConsuming()
 	c.Assert(finishedChan, NotNil)
 
@@ -737,13 +736,12 @@ func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
 		consumedCount += consumers[i].ConsumedCount
 	}
 
-	// make sure all fetched deliveries are consumed
+	// make sure all deliveries are either ready, unacked or consumed (acked)
 	readyCount, err := queue.readyCount()
 	c.Check(err, IsNil)
-	count := deliveryCount - readyCount
+	unackedCount, err := queue.unackedCount()
 	c.Check(err, IsNil)
-	c.Check(consumedCount, Equals, count)
-	c.Check(queue.(*redisQueue).deliveryChan, HasLen, 0)
+	c.Check(deliveryCount, Equals, readyCount+unackedCount+consumedCount, Commentf("counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount))
 
 	c.Check(connection.stopHeartbeat(), IsNil)
 }

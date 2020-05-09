@@ -398,28 +398,56 @@ func (queue *redisQueue) newDelivery(payload string) Delivery {
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
-	for delivery := range queue.deliveryChan {
-		consumer.Consume(delivery)
+	defer queue.stopWg.Done()
+	for {
+		select {
+		case <-queue.consumingStopped: // prefer this case
+			return
+		default:
+		}
+
+		select {
+		case <-queue.consumingStopped:
+			return
+
+		case delivery, ok := <-queue.deliveryChan:
+			if !ok { // deliveryChan closed
+				return
+			}
+
+			consumer.Consume(delivery)
+		}
 	}
-	queue.stopWg.Done()
 }
 
 func (queue *redisQueue) consumerBatchConsume(batchSize int64, timeout time.Duration, consumer BatchConsumer) {
 	defer queue.stopWg.Done()
 	batch := []Delivery{}
 	for {
-		// Wait for first delivery
-		delivery, ok := <-queue.deliveryChan
-		if !ok {
+		select {
+		case <-queue.consumingStopped: // prefer this case
 			return
+		default:
 		}
-		batch = append(batch, delivery)
-		batch, ok = queue.batchTimeout(batchSize, batch, timeout)
-		consumer.Consume(batch)
-		if !ok {
+
+		select {
+		case <-queue.consumingStopped:
 			return
+
+		case delivery, ok := <-queue.deliveryChan: // Wait for first delivery
+			if !ok { // deliveryChan closed
+				return
+			}
+
+			batch = append(batch, delivery)
+			batch, ok = queue.batchTimeout(batchSize, batch, timeout)
+			if !ok {
+				return
+			}
+
+			consumer.Consume(batch)
+			batch = batch[:0] // reset batch
 		}
-		batch = batch[:0] // reset batch
 	}
 }
 
@@ -428,15 +456,20 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 	defer timer.Stop()
 	for {
 		select {
-		case <-timer.C:
+		case <-timer.C: // timeout: submit batch
 			return batch, true
+
+		case <-queue.consumingStopped: // consuming stopped: abort batch
+			return nil, false
+
 		case delivery, ok := <-queue.deliveryChan:
-			if !ok {
-				return batch, false
+			if !ok { // deliveryChan closed: abort batch
+				return nil, false
 			}
+
 			batch = append(batch, delivery)
 			if int64(len(batch)) >= batchSize {
-				return batch, true
+				return batch, true // once big enough: submit batch
 			}
 		}
 	}
