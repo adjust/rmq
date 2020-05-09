@@ -23,7 +23,7 @@ type Connection interface {
 	OpenQueue(name string) (Queue, error)
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
-	StopAllConsuming() (<-chan struct{}, error)
+	StopAllConsuming() <-chan struct{}
 
 	// internals
 	// used in cleaner
@@ -48,6 +48,10 @@ type redisConnection struct {
 	queuesKey        string // key to list of queues consumed by this connection
 	redisClient      RedisClient
 	heartbeatStopped bool
+
+	// list of all queues that have been opened in this connection
+	// this is used to handle heartbeat errors without relying on the redis connection
+	openQueues []Queue
 }
 
 // OpenConnection opens and returns a new connection
@@ -101,7 +105,10 @@ func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
 		return nil, err
 	}
 
-	return connection.openQueue(name), nil
+	queue := connection.openQueue(name)
+	connection.openQueues = append(connection.openQueues, queue)
+
+	return queue, nil
 }
 
 func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
@@ -190,21 +197,15 @@ func (connection *redisConnection) stopHeartbeat() error {
 	return nil
 }
 
-func (connection *redisConnection) StopAllConsuming() (<-chan struct{}, error) {
-	queueNames, err := connection.getConsumingQueues()
-	if err != nil {
-		return nil, err
-	}
-
+func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
-	if len(queueNames) == 0 {
+	if len(connection.openQueues) == 0 {
 		close(finishedChan) // nothing to do
-		return finishedChan, nil
+		return finishedChan
 	}
 
-	chans := make([]<-chan struct{}, 0, len(queueNames))
-	for _, queueName := range queueNames {
-		queue := connection.openQueue(queueName)
+	chans := make([]<-chan struct{}, 0, len(connection.openQueues))
+	for _, queue := range connection.openQueues {
 		chans = append(chans, queue.StopConsuming())
 	}
 
@@ -217,7 +218,7 @@ func (connection *redisConnection) StopAllConsuming() (<-chan struct{}, error) {
 		// log.Printf("rmq connection stopped consuming %s", queue)
 	}()
 
-	return finishedChan, nil
+	return finishedChan
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
