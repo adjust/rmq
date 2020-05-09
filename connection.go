@@ -14,8 +14,15 @@ import (
 var ErrorNotFound = errors.New("entity not found")
 
 const (
-	heartbeatDuration = time.Minute // TTL of heartbeat key
-	heartbeatInterval = time.Second // how often we update the heartbeat key
+	// NOTE: Be careful when changing any of these values.
+	// Currently we update the heartbeat every second with a TTL of a minute.
+	// This means that if we fail to update the heartbeat 60 times in a row
+	// the connection might get cleaned up by a cleaner. So we want to set the
+	// error limit to a value lower like this (like 45) to make sure we stop
+	// all consuming before that happens.
+	heartbeatDuration   = time.Minute // TTL of heartbeat key
+	heartbeatInterval   = time.Second // how often we update the heartbeat key
+	HeartbeatErrorLimit = 45          // stop consuming after this many heartbeat errors
 )
 
 // Connection is an interface that can be used to test publishing
@@ -143,7 +150,8 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 // heartbeat keeps the heartbeat key alive
 func (connection *redisConnection) heartbeat(errors chan<- error) {
 	errorCount := 0 // number of consecutive errors
-	for range time.NewTicker(heartbeatInterval).C {
+	ticker := time.NewTicker(heartbeatInterval)
+	for range ticker.C {
 		if connection.heartbeatStopped {
 			return
 		}
@@ -156,12 +164,22 @@ func (connection *redisConnection) heartbeat(errors chan<- error) {
 		// unexpected redis error
 
 		errorCount++
+
 		select { // try to add error to channel, but don't block
 		case errors <- &HeartbeatError{RedisErr: err, Count: errorCount}:
 		default:
 		}
 
-		// TODO!: stop all consuming at some point (after 40s?)
+		if errorCount < HeartbeatErrorLimit {
+			// keep trying unless we hit the limit
+			continue
+		}
+		// reached error limit
+
+		ticker.Stop()
+		finishedChan := connection.StopAllConsuming()
+		<-finishedChan // wait for all consuming to stop
+		return
 	}
 }
 

@@ -22,7 +22,11 @@ func main() {
 			case *rmq.ConsumeError:
 				log.Print("consume error: ", err)
 			case *rmq.HeartbeatError:
-				log.Print("heartbeat error: ", err)
+				if err.Count == rmq.HeartbeatErrorLimit {
+					log.Print("heartbeat error (limit): ", err)
+				} else {
+					log.Print("heartbeat error: ", err)
+				}
 			default:
 				log.Print("other error: ", err)
 			}
