@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/adjust/uniuri"
@@ -74,7 +73,7 @@ type redisQueue struct {
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int64         // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	pollDuration     time.Duration
-	consumingStopped int32 // queue status, 1 for stopped, 0 for consuming
+	consumingStopped chan struct{} // this chan gets closed when consuming on this queue got stopped
 	stopWg           sync.WaitGroup
 }
 
@@ -89,15 +88,14 @@ func newQueue(name, connectionName, queuesKey string, redisClient RedisClient) *
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
 	queue := &redisQueue{
-		name:             name,
-		connectionName:   connectionName,
-		queuesKey:        queuesKey,
-		consumersKey:     consumersKey,
-		readyKey:         readyKey,
-		rejectedKey:      rejectedKey,
-		unackedKey:       unackedKey,
-		redisClient:      redisClient,
-		consumingStopped: 1, // start with stopped status
+		name:           name,
+		connectionName: connectionName,
+		queuesKey:      queuesKey,
+		consumersKey:   consumersKey,
+		readyKey:       readyKey,
+		rejectedKey:    rejectedKey,
+		unackedKey:     unackedKey,
+		redisClient:    redisClient,
 	}
 	return queue
 }
@@ -234,7 +232,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	atomic.StoreInt32(&queue.consumingStopped, 0)
+	queue.consumingStopped = make(chan struct{})
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume(errors)
 	return nil
@@ -242,13 +240,21 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 
 func (queue *redisQueue) StopConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
-	if queue.deliveryChan == nil || atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
-		close(finishedChan) // not consuming or already stopped
+
+	if queue.deliveryChan == nil { // not consuming
+		close(finishedChan)
 		return finishedChan
 	}
 
+	select {
+	case <-queue.consumingStopped: // already stopped
+		close(finishedChan)
+		return finishedChan
+	default:
+	}
+
 	// log.Printf("rmq queue stopping %s", queue)
-	atomic.StoreInt32(&queue.consumingStopped, 1)
+	close(queue.consumingStopped)
 	go func() {
 		queue.stopWg.Wait()
 		close(finishedChan)
@@ -336,8 +342,10 @@ func (queue *redisQueue) consume(errors chan<- error) {
 }
 
 func (queue *redisQueue) consumeBatch() error {
-	if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
+	select {
+	case <-queue.consumingStopped:
 		return errorConsumingStopped
+	default:
 	}
 
 	// unackedCount == <deliveries in deliveryChan> + <deliveries in Consume()>
@@ -354,8 +362,10 @@ func (queue *redisQueue) consumeBatch() error {
 	}
 
 	for i := int64(0); i < batchSize; i++ {
-		if atomic.LoadInt32(&queue.consumingStopped) == int32(1) {
+		select {
+		case <-queue.consumingStopped:
 			return errorConsumingStopped
+		default:
 		}
 
 		payload, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
