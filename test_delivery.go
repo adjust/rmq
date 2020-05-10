@@ -1,6 +1,9 @@
 package rmq
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 type TestDelivery struct {
 	State   State
@@ -53,3 +56,7 @@ func (delivery *TestDelivery) Push() error {
 	delivery.State = Pushed
 	return nil
 }
+
+func (d *TestDelivery) AckWithRetry(context.Context, chan<- error) error    { return d.Ack() }
+func (d *TestDelivery) RejectWithRetry(context.Context, chan<- error) error { return d.Reject() }
+func (d *TestDelivery) PushWithRetry(context.Context, chan<- error) error   { return d.Push() }

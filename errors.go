@@ -19,3 +19,13 @@ type HeartbeatError struct {
 func (e *HeartbeatError) Error() string {
 	return fmt.Sprintf("rmq.HeartbeatError (%d): %s", e.Count, e.RedisErr.Error())
 }
+
+type DeliveryError struct {
+	Delivery Delivery
+	RedisErr error
+	Count    int // number of consecutive errors
+}
+
+func (e *DeliveryError) Error() string {
+	return fmt.Sprintf("rmq.DeliveryError (%d): %s", e.Count, e.RedisErr.Error())
+}
