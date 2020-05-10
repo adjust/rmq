@@ -53,11 +53,11 @@ func (delivery *wrapDelivery) Reject() error {
 }
 
 func (delivery *wrapDelivery) Push() error {
-	if delivery.pushKey != "" {
-		return delivery.move(delivery.pushKey)
-	} else {
-		return delivery.move(delivery.rejectedKey)
+	if delivery.pushKey == "" {
+		return delivery.Reject() // fall back to rejecting
 	}
+
+	return delivery.move(delivery.pushKey)
 }
 
 func (delivery *wrapDelivery) move(key string) error {
@@ -65,12 +65,5 @@ func (delivery *wrapDelivery) move(key string) error {
 		return err
 	}
 
-	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return ErrorNotFound
-	}
-	return nil
+	return delivery.Ack()
 }
