@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/adjust/rmq"
 	"log"
 	"time"
 
+	"github.com/adjust/rmq/v2"
 )
 
 const unackedLimit = 1000

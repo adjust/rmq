@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/adjust/rmq"
 	"log"
 	"net/http"
+
+	"github.com/adjust/rmq/v2"
 )
 
 func main() {
