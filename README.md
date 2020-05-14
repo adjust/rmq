@@ -8,20 +8,20 @@ If you don't want to upgrade yet, you can continue using rmq branch `v1`:
 
 1. Using a dependency manager, i.e. [dep][]
 
-    ```toml
-    # Gopkg.toml
-    [[constraint]]
-      name = "github.com/adjust/rmq"
-      branch = "v1"
-    ```
+   ```toml
+   # Gopkg.toml
+   [[constraint]]
+     name = "github.com/adjust/rmq"
+     branch = "v1"
+   ```
 
 2. Using [gopkg.in][gopkg]
 
-    ```go
-    import "gopkg.in/adjust/rmq.v1"
-    ```
+   ```go
+   import "gopkg.in/adjust/rmq.v1"
+   ```
 
-    See https://gopkg.in/adjust/rmq.v1
+   See https://gopkg.in/adjust/rmq.v1
 
 [go-redis]: https://github.com/go-redis/redis
 [dep]: https://golang.github.io/dep/
@@ -331,6 +331,10 @@ below).
 
 [handler.go]: example/handler/main.go
 [handler.png]: http://i.imgur.com/5FexMvZ.png
+
+### Prometheus
+
+If you are using Prometheus, [rmqprom](https://github.com/pffreitas/rmqprom) collects statistics about all open queues and exposes them as Prometheus metrics.
 
 ## TODO
 
