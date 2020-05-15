@@ -3,40 +3,34 @@ package rmq
 import (
 	"testing"
 
-	. "github.com/adjust/gocheck"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestConnectionSuite(t *testing.T) {
-	TestingSuiteT(&ConnectionSuite{}, t)
-}
-
-type ConnectionSuite struct{}
-
-func (suite *ConnectionSuite) TestConnection(c *C) {
+func TestTestConnection(t *testing.T) {
 	connection := NewTestConnection()
 	var _ Connection = connection // check that it implements the interface
-	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[0]", connection.GetDelivery("things", 0))
 
 	queue, err := connection.OpenQueue("things")
-	c.Check(err, IsNil)
-	c.Check(connection.GetDelivery("things", -1), Equals, "rmq.TestConnection: delivery not found: things[-1]")
-	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
-	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
+	assert.NoError(t, err)
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[-1]", connection.GetDelivery("things", -1))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[0]", connection.GetDelivery("things", 0))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[1]", connection.GetDelivery("things", 1))
 
-	c.Check(queue.Publish("bar"), IsNil)
-	c.Check(connection.GetDelivery("things", 0), Equals, "bar")
-	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
-	c.Check(connection.GetDelivery("things", 2), Equals, "rmq.TestConnection: delivery not found: things[2]")
+	assert.NoError(t, queue.Publish("bar"))
+	assert.Equal(t, "bar", connection.GetDelivery("things", 0))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[1]", connection.GetDelivery("things", 1))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[2]", connection.GetDelivery("things", 2))
 
-	c.Check(queue.Publish("foo"), IsNil)
-	c.Check(connection.GetDelivery("things", 0), Equals, "bar")
-	c.Check(connection.GetDelivery("things", 1), Equals, "foo")
-	c.Check(connection.GetDelivery("things", 2), Equals, "rmq.TestConnection: delivery not found: things[2]")
+	assert.NoError(t, queue.Publish("foo"))
+	assert.Equal(t, "bar", connection.GetDelivery("things", 0))
+	assert.Equal(t, "foo", connection.GetDelivery("things", 1))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[2]", connection.GetDelivery("things", 2))
 
 	connection.Reset()
-	c.Check(connection.GetDelivery("things", 0), Equals, "rmq.TestConnection: delivery not found: things[0]")
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[0]", connection.GetDelivery("things", 0))
 
-	c.Check(queue.Publish("blab"), IsNil)
-	c.Check(connection.GetDelivery("things", 0), Equals, "blab")
-	c.Check(connection.GetDelivery("things", 1), Equals, "rmq.TestConnection: delivery not found: things[1]")
+	assert.NoError(t, queue.Publish("blab"))
+	assert.Equal(t, "blab", connection.GetDelivery("things", 0))
+	assert.Equal(t, "rmq.TestConnection: delivery not found: things[1]", connection.GetDelivery("things", 1))
 }

@@ -3,41 +3,34 @@ package rmq
 import (
 	"testing"
 
-	. "github.com/adjust/gocheck"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestDeliverySuite(t *testing.T) {
-	TestingSuiteT(&DeliverySuite{}, t)
-}
-
-type DeliverySuite struct {
-}
-
-func (suite *DeliverySuite) TestDeliveryPayload(c *C) {
+func TestDeliveryPayload(t *testing.T) {
 	var delivery Delivery
 	delivery = NewTestDelivery("p23")
-	c.Check(delivery.Ack(), IsNil)
-	c.Check(delivery.Payload(), Equals, "p23")
+	assert.NoError(t, delivery.Ack())
+	assert.Equal(t, "p23", delivery.Payload())
 }
 
-func (suite *DeliverySuite) TestDeliveryAck(c *C) {
+func TestDeliveryAck(t *testing.T) {
 	delivery := NewTestDelivery("p")
-	c.Check(delivery.State, Equals, Unacked)
-	c.Check(delivery.Ack(), IsNil)
-	c.Check(delivery.State, Equals, Acked)
+	assert.Equal(t, Unacked, delivery.State)
+	assert.NoError(t, delivery.Ack())
+	assert.Equal(t, Acked, delivery.State)
 
-	c.Check(delivery.Ack(), Equals, ErrorNotFound)
-	c.Check(delivery.Reject(), Equals, ErrorNotFound)
-	c.Check(delivery.State, Equals, Acked)
+	assert.Equal(t, ErrorNotFound, delivery.Ack())
+	assert.Equal(t, ErrorNotFound, delivery.Reject())
+	assert.Equal(t, Acked, delivery.State)
 }
 
-func (suite *DeliverySuite) TestDeliveryReject(c *C) {
+func TestDeliveryReject(t *testing.T) {
 	delivery := NewTestDelivery("p")
-	c.Check(delivery.State, Equals, Unacked)
-	c.Check(delivery.Reject(), IsNil)
-	c.Check(delivery.State, Equals, Rejected)
+	assert.Equal(t, Unacked, delivery.State)
+	assert.NoError(t, delivery.Reject())
+	assert.Equal(t, Rejected, delivery.State)
 
-	c.Check(delivery.Reject(), Equals, ErrorNotFound)
-	c.Check(delivery.Ack(), Equals, ErrorNotFound)
-	c.Check(delivery.State, Equals, Rejected)
+	assert.Equal(t, ErrorNotFound, delivery.Reject())
+	assert.Equal(t, ErrorNotFound, delivery.Ack())
+	assert.Equal(t, Rejected, delivery.State)
 }
