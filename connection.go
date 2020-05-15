@@ -50,11 +50,11 @@ type Connection interface {
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type redisConnection struct {
-	Name             string
-	heartbeatKey     string // key to keep alive
-	queuesKey        string // key to list of queues consumed by this connection
-	redisClient      RedisClient
-	heartbeatStopped bool
+	Name            string
+	heartbeatKey    string // key to keep alive
+	queuesKey       string // key to list of queues consumed by this connection
+	redisClient     RedisClient
+	heartbeatTicker *time.Ticker
 
 	// list of all queues that have been opened in this connection
 	// this is used to handle heartbeat errors without relying on the redis connection
@@ -86,10 +86,11 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors c
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
-		Name:         name,
-		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
-		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
-		redisClient:  redisClient,
+		Name:            name,
+		heartbeatKey:    strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
+		queuesKey:       strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
+		redisClient:     redisClient,
+		heartbeatTicker: time.NewTicker(heartbeatInterval),
 	}
 
 	if err := connection.updateHeartbeat(); err != nil { // checks the connection
@@ -150,12 +151,7 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 // heartbeat keeps the heartbeat key alive
 func (connection *redisConnection) heartbeat(errors chan<- error) {
 	errorCount := 0 // number of consecutive errors
-	ticker := time.NewTicker(heartbeatInterval)
-	for range ticker.C {
-		if connection.heartbeatStopped {
-			return
-		}
-
+	for range connection.heartbeatTicker.C {
 		err := connection.updateHeartbeat()
 		if err == nil { // success
 			errorCount = 0
@@ -176,7 +172,7 @@ func (connection *redisConnection) heartbeat(errors chan<- error) {
 		}
 		// reached error limit
 
-		ticker.Stop()
+		connection.heartbeatTicker.Stop()
 		finishedChan := connection.StopAllConsuming()
 		<-finishedChan // wait for all consuming to stop
 		return
@@ -203,8 +199,11 @@ func (connection *redisConnection) checkHeartbeat() error {
 // stopHeartbeat stops the heartbeat of the connection
 // it does not remove it from the list of connections so it can later be found by the cleaner
 func (connection *redisConnection) stopHeartbeat() error {
-	// TODO: use atomic?
-	connection.heartbeatStopped = true
+	if connection.heartbeatTicker == nil {
+		return ErrorNotFound
+	}
+
+	connection.heartbeatTicker.Stop()
 	count, err := connection.redisClient.Del(connection.heartbeatKey)
 	if err != nil {
 		return err
