@@ -1,7 +1,6 @@
 package rmq
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -10,26 +9,7 @@ import (
 	"github.com/adjust/uniuri"
 )
 
-var (
-	ErrorAlreadyConsuming = errors.New("must not call StartConsuming() multiple times")
-	ErrorNotConsuming     = errors.New("must call StartConsuming() before adding consumers")
-)
-
 const (
-	connectionsKey                   = "rmq::connections"                                           // Set of connection names
-	connectionHeartbeatTemplate      = "rmq::connection::{connection}::heartbeat"                   // expires after {connection} died
-	connectionQueuesTemplate         = "rmq::connection::{connection}::queues"                      // Set of queues consumers of {connection} are consuming
-	connectionQueueConsumersTemplate = "rmq::connection::{connection}::queue::[{queue}]::consumers" // Set of all consumers from {connection} consuming from {queue}
-	connectionQueueUnackedTemplate   = "rmq::connection::{connection}::queue::[{queue}]::unacked"   // List of deliveries consumers of {connection} are currently consuming
-
-	queuesKey             = "rmq::queues"                     // Set of all open queues
-	queueReadyTemplate    = "rmq::queue::[{queue}]::ready"    // List of deliveries in that {queue} (right is first and oldest, left is last and youngest)
-	queueRejectedTemplate = "rmq::queue::[{queue}]::rejected" // List of rejected deliveries from that {queue}
-
-	phConnection = "{connection}" // connection name
-	phQueue      = "{queue}"      // queue name
-	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
-
 	defaultBatchTimeout = time.Second
 	purgeBatchSize      = int64(100)
 )
@@ -120,97 +100,6 @@ func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
 	return queue.Publish(stringifiedBytes...)
 }
 
-// PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeReady() (int64, error) {
-	return queue.deleteRedisList(queue.readyKey)
-}
-
-// PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
-func (queue *redisQueue) PurgeRejected() (int64, error) {
-	return queue.deleteRedisList(queue.rejectedKey)
-}
-
-// Destroy purges and removes the queue from the list of queues
-func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) {
-	readyCount, err = queue.PurgeReady()
-	if err != nil {
-		return 0, 0, err
-	}
-	rejectedCount, err = queue.PurgeRejected()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	count, err := queue.redisClient.SRem(queuesKey, queue.name)
-	if err != nil {
-		return 0, 0, err
-	}
-	if count == 0 {
-		return 0, 0, ErrorNotFound
-	}
-
-	return readyCount, rejectedCount, nil
-}
-
-func (queue *redisQueue) readyCount() (int64, error) {
-	return queue.redisClient.LLen(queue.readyKey)
-}
-
-func (queue *redisQueue) unackedCount() (int64, error) {
-	return queue.redisClient.LLen(queue.unackedKey)
-}
-
-func (queue *redisQueue) rejectedCount() (int64, error) {
-	return queue.redisClient.LLen(queue.rejectedKey)
-}
-
-// ReturnUnacked tries to return max unacked deliveries back to
-// the ready queue and returns the number of returned deliveries
-func (queue *redisQueue) ReturnUnacked(max int64) (count int64, error error) {
-	return queue.move(queue.unackedKey, queue.readyKey, max)
-}
-
-// ReturnRejected tries to return max rejected deliveries back to
-// the ready queue and returns the number of returned deliveries
-func (queue *redisQueue) ReturnRejected(max int64) (count int64, err error) {
-	return queue.move(queue.rejectedKey, queue.readyKey, max)
-}
-
-func (queue *redisQueue) move(from, to string, max int64) (n int64, error error) {
-	for n = 0; n < max; n++ {
-		switch _, err := queue.redisClient.RPopLPush(from, to); err {
-		case nil: // moved one
-			continue
-		case ErrorNotFound: // nothing left
-			return n, nil
-		default: // error
-			return 0, err
-		}
-	}
-	return n, nil
-}
-
-// closeInStaleConnection closes the queue in the associated connection by removing all related keys
-// not supposed to be called on queues in active sessions
-func (queue *redisQueue) closeInStaleConnection() error {
-	if _, err := queue.redisClient.Del(queue.unackedKey); err != nil {
-		return err
-	}
-	if _, err := queue.redisClient.Del(queue.consumersKey); err != nil {
-		return err
-	}
-
-	count, err := queue.redisClient.SRem(queue.queuesKey, queue.name)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return ErrorNotFound
-	}
-
-	return nil
-}
-
 // NOTE: panics if pushQueue is not a *redisQueue
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 	queue.pushKey = pushQueue.(*redisQueue).readyKey
@@ -237,86 +126,6 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	go queue.consume(errors)
 	return nil
 }
-
-func (queue *redisQueue) StopConsuming() <-chan struct{} {
-	finishedChan := make(chan struct{})
-
-	if queue.deliveryChan == nil { // not consuming
-		close(finishedChan)
-		return finishedChan
-	}
-
-	select {
-	case <-queue.consumingStopped: // already stopped
-		close(finishedChan)
-		return finishedChan
-	default:
-	}
-
-	// log.Printf("rmq queue stopping %s", queue)
-	close(queue.consumingStopped)
-	go func() {
-		queue.stopWg.Wait()
-		close(finishedChan)
-		// log.Printf("rmq queue stopped consuming %s", queue)
-	}()
-
-	return finishedChan
-}
-
-// AddConsumer adds a consumer to the queue and returns its internal name
-func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string, err error) {
-	queue.stopWg.Add(1)
-	name, err = queue.addConsumer(tag)
-	if err != nil {
-		return "", err
-	}
-	go queue.consumerConsume(consumer)
-	return name, nil
-}
-
-func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error) {
-	return queue.AddConsumer(tag, consumerFunc)
-}
-
-// AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
-func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, consumer BatchConsumer) (string, error) {
-	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
-}
-
-// Timeout limits the amount of time waiting to fill an entire batch
-// The timer is only started when the first message in a batch is received
-func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
-	queue.stopWg.Add(1)
-	name, err := queue.addConsumer(tag)
-	if err != nil {
-		return "", err
-	}
-	go queue.consumerBatchConsume(batchSize, timeout, consumer)
-	return name, nil
-}
-
-func (queue *redisQueue) getConsumers() ([]string, error) {
-	return queue.redisClient.SMembers(queue.consumersKey)
-}
-
-func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
-	if queue.deliveryChan == nil {
-		return "", ErrorNotConsuming
-	}
-
-	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
-
-	// add consumer to list of consumers of this queue
-	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
-		return "", err
-	}
-
-	// log.Printf("rmq queue added consumer %s %s", queue, name)
-	return name, nil
-}
-
-var errorConsumingStopped = fmt.Errorf("consuming stopped") // TODO: move
 
 func (queue *redisQueue) consume(errors chan<- error) {
 	errorCount := 0 // number of consecutive batch errors
@@ -397,6 +206,43 @@ func (queue *redisQueue) newDelivery(payload string) Delivery {
 	)
 }
 
+func (queue *redisQueue) StopConsuming() <-chan struct{} {
+	finishedChan := make(chan struct{})
+
+	if queue.deliveryChan == nil { // not consuming
+		close(finishedChan)
+		return finishedChan
+	}
+
+	select {
+	case <-queue.consumingStopped: // already stopped
+		close(finishedChan)
+		return finishedChan
+	default:
+	}
+
+	// log.Printf("rmq queue stopping %s", queue)
+	close(queue.consumingStopped)
+	go func() {
+		queue.stopWg.Wait()
+		close(finishedChan)
+		// log.Printf("rmq queue stopped consuming %s", queue)
+	}()
+
+	return finishedChan
+}
+
+// AddConsumer adds a consumer to the queue and returns its internal name
+func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string, err error) {
+	queue.stopWg.Add(1)
+	name, err = queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
+	go queue.consumerConsume(consumer)
+	return name, nil
+}
+
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	defer queue.stopWg.Done()
 	for {
@@ -418,6 +264,28 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 			consumer.Consume(delivery)
 		}
 	}
+}
+
+func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error) {
+	return queue.AddConsumer(tag, consumerFunc)
+}
+
+// AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
+func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, consumer BatchConsumer) (string, error) {
+	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
+}
+
+// TODO: merge with above?
+// Timeout limits the amount of time waiting to fill an entire batch
+// The timer is only started when the first message in a batch is received
+func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
+	queue.stopWg.Add(1)
+	name, err := queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
+	go queue.consumerBatchConsume(batchSize, timeout, consumer)
+	return name, nil
 }
 
 func (queue *redisQueue) consumerBatchConsume(batchSize int64, timeout time.Duration, consumer BatchConsumer) {
@@ -475,6 +343,32 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 	}
 }
 
+func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
+	if queue.deliveryChan == nil {
+		return "", ErrorNotConsuming
+	}
+
+	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+
+	// add consumer to list of consumers of this queue
+	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
+		return "", err
+	}
+
+	// log.Printf("rmq queue added consumer %s %s", queue, name)
+	return name, nil
+}
+
+// PurgeReady removes all ready deliveries from the queue and returns the number of purged deliveries
+func (queue *redisQueue) PurgeReady() (int64, error) {
+	return queue.deleteRedisList(queue.readyKey)
+}
+
+// PurgeRejected removes all rejected deliveries from the queue and returns the number of purged deliveries
+func (queue *redisQueue) PurgeRejected() (int64, error) {
+	return queue.deleteRedisList(queue.rejectedKey)
+}
+
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
 func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
@@ -499,4 +393,89 @@ func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
 	}
 
 	return total, nil
+}
+
+// ReturnUnacked tries to return max unacked deliveries back to
+// the ready queue and returns the number of returned deliveries
+func (queue *redisQueue) ReturnUnacked(max int64) (count int64, error error) {
+	return queue.move(queue.unackedKey, queue.readyKey, max)
+}
+
+// ReturnRejected tries to return max rejected deliveries back to
+// the ready queue and returns the number of returned deliveries
+func (queue *redisQueue) ReturnRejected(max int64) (count int64, err error) {
+	return queue.move(queue.rejectedKey, queue.readyKey, max)
+}
+
+func (queue *redisQueue) move(from, to string, max int64) (n int64, error error) {
+	for n = 0; n < max; n++ {
+		switch _, err := queue.redisClient.RPopLPush(from, to); err {
+		case nil: // moved one
+			continue
+		case ErrorNotFound: // nothing left
+			return n, nil
+		default: // error
+			return 0, err
+		}
+	}
+	return n, nil
+}
+
+// Destroy purges and removes the queue from the list of queues
+func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) {
+	readyCount, err = queue.PurgeReady()
+	if err != nil {
+		return 0, 0, err
+	}
+	rejectedCount, err = queue.PurgeRejected()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	count, err := queue.redisClient.SRem(queuesKey, queue.name)
+	if err != nil {
+		return 0, 0, err
+	}
+	if count == 0 {
+		return 0, 0, ErrorNotFound
+	}
+
+	return readyCount, rejectedCount, nil
+}
+
+// closeInStaleConnection closes the queue in the associated connection by removing all related keys
+// not supposed to be called on queues in active sessions
+func (queue *redisQueue) closeInStaleConnection() error {
+	if _, err := queue.redisClient.Del(queue.unackedKey); err != nil {
+		return err
+	}
+	if _, err := queue.redisClient.Del(queue.consumersKey); err != nil {
+		return err
+	}
+
+	count, err := queue.redisClient.SRem(queue.queuesKey, queue.name)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrorNotFound
+	}
+
+	return nil
+}
+
+func (queue *redisQueue) readyCount() (int64, error) {
+	return queue.redisClient.LLen(queue.readyKey)
+}
+
+func (queue *redisQueue) unackedCount() (int64, error) {
+	return queue.redisClient.LLen(queue.unackedKey)
+}
+
+func (queue *redisQueue) rejectedCount() (int64, error) {
+	return queue.redisClient.LLen(queue.rejectedKey)
+}
+
+func (queue *redisQueue) getConsumers() ([]string, error) {
+	return queue.redisClient.SMembers(queue.consumersKey)
 }

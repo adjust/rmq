@@ -18,6 +18,7 @@ type Delivery interface {
 	PushWithRetry(context.Context, chan<- error) error
 }
 
+// TODO: rename to redisDelivery
 type wrapDelivery struct {
 	payload     string
 	unackedKey  string

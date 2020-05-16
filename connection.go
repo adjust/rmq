@@ -1,7 +1,6 @@
 package rmq
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,9 +8,6 @@ import (
 	"github.com/adjust/uniuri"
 	"github.com/go-redis/redis/v7"
 )
-
-// entitify being connection/queue/delivery
-var ErrorNotFound = errors.New("entity not found")
 
 const (
 	// NOTE: Be careful when changing any of these values.
@@ -107,45 +103,8 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors c
 	return connection, nil
 }
 
-// OpenQueue opens and returns the queue with a given name
-func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
-	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
-		return nil, err
-	}
-
-	queue := connection.openQueue(name)
-	connection.openQueues = append(connection.openQueues, queue)
-
-	return queue, nil
-}
-
-func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
-	return CollectStats(queueList, connection)
-}
-
-func (connection *redisConnection) String() string {
-	return connection.Name
-}
-
-// getConnections returns a list of all open connections
-func (connection *redisConnection) getConnections() ([]string, error) {
-	return connection.redisClient.SMembers(connectionsKey)
-}
-
-// GetOpenQueues returns a list of all open queues
-func (connection *redisConnection) GetOpenQueues() ([]string, error) {
-	return connection.redisClient.SMembers(queuesKey)
-}
-
-// unlistAllQueues closes all queues by removing them from the global list
-func (connection *redisConnection) unlistAllQueues() error {
-	_, err := connection.redisClient.Del(queuesKey)
-	return err
-}
-
-// getConsumingQueues returns a list of all queues consumed by this connection
-func (connection *redisConnection) getConsumingQueues() ([]string, error) {
-	return connection.redisClient.SMembers(connection.queuesKey)
+func (connection *redisConnection) updateHeartbeat() error {
+	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
 }
 
 // heartbeat keeps the heartbeat key alive
@@ -179,39 +138,29 @@ func (connection *redisConnection) heartbeat(errors chan<- error) {
 	}
 }
 
-func (connection *redisConnection) updateHeartbeat() error {
-	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
+func (connection *redisConnection) String() string {
+	return connection.Name
 }
 
-// checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
-func (connection *redisConnection) checkHeartbeat() error {
-	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	ttl, err := connection.redisClient.TTL(heartbeatKey)
-	if err != nil {
-		return err
+// OpenQueue opens and returns the queue with a given name
+func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
+	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
+		return nil, err
 	}
-	if ttl <= 0 {
-		return ErrorNotFound
-	}
-	return nil
+
+	queue := connection.openQueue(name)
+	connection.openQueues = append(connection.openQueues, queue)
+
+	return queue, nil
 }
 
-// stopHeartbeat stops the heartbeat of the connection
-// it does not remove it from the list of connections so it can later be found by the cleaner
-func (connection *redisConnection) stopHeartbeat() error {
-	if connection.heartbeatTicker == nil {
-		return ErrorNotFound
-	}
+func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
+	return CollectStats(queueList, connection)
+}
 
-	connection.heartbeatTicker.Stop()
-	count, err := connection.redisClient.Del(connection.heartbeatKey)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return ErrorNotFound
-	}
-	return nil
+// GetOpenQueues returns a list of all open queues
+func (connection *redisConnection) GetOpenQueues() ([]string, error) {
+	return connection.redisClient.SMembers(queuesKey)
 }
 
 func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
@@ -236,6 +185,24 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 	}()
 
 	return finishedChan
+}
+
+// checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
+func (connection *redisConnection) checkHeartbeat() error {
+	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
+	ttl, err := connection.redisClient.TTL(heartbeatKey)
+	if err != nil {
+		return err
+	}
+	if ttl <= 0 {
+		return ErrorNotFound
+	}
+	return nil
+}
+
+// getConnections returns a list of all open connections
+func (connection *redisConnection) getConnections() ([]string, error) {
+	return connection.redisClient.SMembers(connectionsKey)
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
@@ -267,12 +234,41 @@ func (connection *redisConnection) closeStaleConnection() error {
 	return nil
 }
 
+// getConsumingQueues returns a list of all queues consumed by this connection
+func (connection *redisConnection) getConsumingQueues() ([]string, error) {
+	return connection.redisClient.SMembers(connection.queuesKey)
+}
+
 // openQueue opens a queue without adding it to the set of queues
 func (connection *redisConnection) openQueue(name string) Queue {
 	return newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
 }
 
+// stopHeartbeat stops the heartbeat of the connection
+// it does not remove it from the list of connections so it can later be found by the cleaner
+func (connection *redisConnection) stopHeartbeat() error {
+	if connection.heartbeatTicker == nil {
+		return ErrorNotFound
+	}
+
+	connection.heartbeatTicker.Stop()
+	count, err := connection.redisClient.Del(connection.heartbeatKey)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrorNotFound
+	}
+	return nil
+}
+
 // flushDb flushes the redis database to reset everything, used in tests
 func (connection *redisConnection) flushDb() error {
 	return connection.redisClient.FlushDb()
+}
+
+// unlistAllQueues closes all queues by removing them from the global list
+func (connection *redisConnection) unlistAllQueues() error {
+	_, err := connection.redisClient.Del(queuesKey)
+	return err
 }
