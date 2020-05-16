@@ -428,7 +428,7 @@ func TestBatch(t *testing.T) {
 	assert.Equal(t, int64(5), count)
 
 	consumer := NewTestBatchConsumer()
-	_, err = queue.AddBatchConsumerWithTimeout("batch-cons", 2, 50*time.Millisecond, consumer)
+	_, err = queue.AddBatchConsumer("batch-cons", 2, 50*time.Millisecond, consumer)
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 	require.Len(t, consumer.LastBatch, 2)
@@ -716,7 +716,7 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 		consumer := NewTestBatchConsumer()
 		consumer.AutoFinish = true
 		consumers = append(consumers, consumer)
-		_, err = queue.AddBatchConsumer("consume", 5, consumer)
+		_, err = queue.AddBatchConsumer("consume", 5, time.Second, consumer)
 		assert.NoError(t, err)
 	}
 

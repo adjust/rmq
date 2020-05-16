@@ -22,7 +22,7 @@ func main() {
 	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
 		panic(err)
 	}
-	if _, err := queue.AddBatchConsumer("things", 111, NewBatchConsumer("things")); err != nil {
+	if _, err := queue.AddBatchConsumer("things", 111, time.Second, NewBatchConsumer("things")); err != nil {
 		panic(err)
 	}
 
@@ -33,7 +33,7 @@ func main() {
 	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
 		panic(err)
 	}
-	if _, err := queue.AddBatchConsumer("balls", 111, NewBatchConsumer("balls")); err != nil {
+	if _, err := queue.AddBatchConsumer("balls", 111, time.Second, NewBatchConsumer("balls")); err != nil {
 		panic(err)
 	}
 

@@ -22,8 +22,7 @@ type Queue interface {
 	StopConsuming() <-chan struct{}
 	AddConsumer(tag string, consumer Consumer) (string, error)
 	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error)
-	AddBatchConsumer(tag string, batchSize int64, consumer BatchConsumer) (string, error)
-	AddBatchConsumerWithTimeout(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error)
+	AddBatchConsumer(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error)
 	PurgeReady() (int64, error)
 	PurgeRejected() (int64, error)
 	ReturnUnacked(max int64) (int64, error)
@@ -271,14 +270,9 @@ func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) 
 }
 
 // AddBatchConsumer is similar to AddConsumer, but for batches of deliveries
-func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, consumer BatchConsumer) (string, error) {
-	return queue.AddBatchConsumerWithTimeout(tag, batchSize, defaultBatchTimeout, consumer)
-}
-
-// TODO: merge with above?
-// Timeout limits the amount of time waiting to fill an entire batch
+// timeout limits the amount of time waiting to fill an entire batch
 // The timer is only started when the first message in a batch is received
-func (queue *redisQueue) AddBatchConsumerWithTimeout(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
+func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
 	queue.stopWg.Add(1)
 	name, err := queue.addConsumer(tag)
 	if err != nil {

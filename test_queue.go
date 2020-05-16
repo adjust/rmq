@@ -37,10 +37,7 @@ func (*TestQueue) StartConsuming(int64, time.Duration, chan<- error) error {
 func (*TestQueue) StopConsuming() <-chan struct{}                       { panic(errorNotSupported) }
 func (*TestQueue) AddConsumer(string, Consumer) (string, error)         { panic(errorNotSupported) }
 func (*TestQueue) AddConsumerFunc(string, ConsumerFunc) (string, error) { panic(errorNotSupported) }
-func (*TestQueue) AddBatchConsumer(string, int64, BatchConsumer) (string, error) {
-	panic(errorNotSupported)
-}
-func (*TestQueue) AddBatchConsumerWithTimeout(string, int64, time.Duration, BatchConsumer) (string, error) {
+func (*TestQueue) AddBatchConsumer(string, int64, time.Duration, BatchConsumer) (string, error) {
 	panic(errorNotSupported)
 }
 func (*TestQueue) ReturnUnacked(int64) (int64, error)  { panic(errorNotSupported) }
