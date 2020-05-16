@@ -18,8 +18,7 @@ type Delivery interface {
 	PushWithRetry(context.Context, chan<- error) error
 }
 
-// TODO: rename to redisDelivery
-type wrapDelivery struct {
+type redisDelivery struct {
 	payload     string
 	unackedKey  string
 	rejectedKey string
@@ -27,8 +26,8 @@ type wrapDelivery struct {
 	redisClient RedisClient
 }
 
-func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient RedisClient) *wrapDelivery {
-	return &wrapDelivery{
+func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient RedisClient) *redisDelivery {
+	return &redisDelivery{
 		payload:     payload,
 		unackedKey:  unackedKey,
 		rejectedKey: rejectedKey,
@@ -37,15 +36,15 @@ func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient R
 	}
 }
 
-func (delivery *wrapDelivery) String() string {
+func (delivery *redisDelivery) String() string {
 	return fmt.Sprintf("[%s %s]", delivery.payload, delivery.unackedKey)
 }
 
-func (delivery *wrapDelivery) Payload() string {
+func (delivery *redisDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *wrapDelivery) Ack() error {
+func (delivery *redisDelivery) Ack() error {
 	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
 	if err != nil {
 		return err
@@ -56,11 +55,11 @@ func (delivery *wrapDelivery) Ack() error {
 	return nil
 }
 
-func (delivery *wrapDelivery) Reject() error {
+func (delivery *redisDelivery) Reject() error {
 	return delivery.move(delivery.rejectedKey)
 }
 
-func (delivery *wrapDelivery) Push() error {
+func (delivery *redisDelivery) Push() error {
 	if delivery.pushKey == "" {
 		return delivery.Reject() // fall back to rejecting
 	}
@@ -68,7 +67,7 @@ func (delivery *wrapDelivery) Push() error {
 	return delivery.move(delivery.pushKey)
 }
 
-func (delivery *wrapDelivery) move(key string) error {
+func (delivery *redisDelivery) move(key string) error {
 	if _, err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
 		return err
 	}
@@ -82,11 +81,11 @@ func (delivery *wrapDelivery) move(key string) error {
 // 3. if the context is cancalled or its timeout exceeded, context.Cancelled or
 //    context.DeadlineExceeded will be returned
 
-func (delivery *wrapDelivery) AckWithRetry(ctx context.Context, errors chan<- error) error {
+func (delivery *redisDelivery) AckWithRetry(ctx context.Context, errors chan<- error) error {
 	return delivery.ackWithRetry(ctx, errors, 0)
 }
 
-func (delivery *wrapDelivery) ackWithRetry(ctx context.Context, errors chan<- error, errorCount int) error {
+func (delivery *redisDelivery) ackWithRetry(ctx context.Context, errors chan<- error, errorCount int) error {
 	for {
 		switch err := delivery.Ack(); err {
 		case nil, ErrorNotFound:
@@ -108,11 +107,11 @@ func (delivery *wrapDelivery) ackWithRetry(ctx context.Context, errors chan<- er
 	}
 }
 
-func (delivery *wrapDelivery) RejectWithRetry(ctx context.Context, errors chan<- error) error {
+func (delivery *redisDelivery) RejectWithRetry(ctx context.Context, errors chan<- error) error {
 	return delivery.moveWithRetry(ctx, errors, delivery.rejectedKey)
 }
 
-func (delivery *wrapDelivery) PushWithRetry(ctx context.Context, errors chan<- error) error {
+func (delivery *redisDelivery) PushWithRetry(ctx context.Context, errors chan<- error) error {
 	if delivery.pushKey == "" {
 		return delivery.RejectWithRetry(ctx, errors) // fall back to rejecting
 	}
@@ -120,7 +119,7 @@ func (delivery *wrapDelivery) PushWithRetry(ctx context.Context, errors chan<- e
 	return delivery.moveWithRetry(ctx, errors, delivery.pushKey)
 }
 
-func (delivery *wrapDelivery) moveWithRetry(ctx context.Context, errors chan<- error, key string) error {
+func (delivery *redisDelivery) moveWithRetry(ctx context.Context, errors chan<- error, key string) error {
 	errorCount := 0
 	for {
 		_, err := delivery.redisClient.LPush(key, delivery.payload)
