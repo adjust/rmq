@@ -99,6 +99,10 @@ func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
 	return queue.Publish(stringifiedBytes...)
 }
 
+// SetPushQueue sets a push queue. In the consumer function you can call
+// delivery.Push(). If a push queue is set the delivery then gets moved from
+// the original queue to the push queue. If no push queue is set it's
+// equivalent to calling delivery.Reject().
 // NOTE: panics if pushQueue is not a *redisQueue
 func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 	queue.pushKey = pushQueue.(*redisQueue).readyKey
@@ -205,6 +209,9 @@ func (queue *redisQueue) newDelivery(payload string) Delivery {
 	)
 }
 
+// StopConsuming can be used to stop all consumers on this queue. It returns a
+// channel which can be used to wait for all active consumers to finish their
+// current Consume() call. This is useful to implement graceful shutdown.
 func (queue *redisQueue) StopConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
 
@@ -265,6 +272,9 @@ func (queue *redisQueue) consumerConsume(consumer Consumer) {
 	}
 }
 
+// AddConsumerFunc adds a consumer which is defined only by a function. This is
+// similar to http.HandlerFunc and useful if your consumers don't need any
+// state.
 func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error) {
 	return queue.AddConsumer(tag, consumerFunc)
 }

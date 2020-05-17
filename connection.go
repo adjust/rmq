@@ -154,6 +154,7 @@ func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
 	return queue, nil
 }
 
+// CollectStats collects and returns stats
 func (connection *redisConnection) CollectStats(queueList []string) (Stats, error) {
 	return CollectStats(queueList, connection)
 }
@@ -163,6 +164,10 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
 }
 
+// StopAllConsuming stops consuming on all queues opened in this connection.
+// It returns a channel which can be used to wait for all active consumers to
+// finish their current Consume() call. This is useful to implement graceful
+// shutdown.
 func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
 	if len(connection.openQueues) == 0 {
