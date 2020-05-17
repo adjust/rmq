@@ -318,11 +318,17 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 	defer timer.Stop()
 	for {
 		select {
-		case <-timer.C: // timeout: submit batch
-			return batch, true
+		case <-queue.consumingStopped: // prefer this case
+			return nil, false
+		default:
+		}
 
+		select {
 		case <-queue.consumingStopped: // consuming stopped: abort batch
 			return nil, false
+
+		case <-timer.C: // timeout: submit batch
+			return batch, true
 
 		case delivery, ok := <-queue.deliveryChan:
 			if !ok { // deliveryChan closed: abort batch

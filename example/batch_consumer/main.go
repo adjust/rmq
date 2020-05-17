@@ -1,57 +1,115 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/adjust/rmq/v2"
 )
 
-const unackedLimit = 1000
+const (
+	unackedLimit    = 1000
+	batchSize       = 111
+	pollDuration    = 500 * time.Millisecond
+	batchTimeout    = time.Second
+	consumeDuration = time.Millisecond
+	shouldLog       = false
+)
 
 func main() {
-	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, nil)
+	errChan := make(chan error, 10)
+	go func() {
+		for err := range errChan {
+			switch err := err.(type) {
+			case *rmq.ConsumeError:
+				log.Print("consume error: ", err)
+			case *rmq.HeartbeatError:
+				if err.Count == rmq.HeartbeatErrorLimit {
+					log.Print("heartbeat error (limit): ", err)
+				} else {
+					log.Print("heartbeat error: ", err)
+				}
+			case *rmq.DeliveryError:
+				log.Print("delivery error: ", err.Delivery, err)
+			default:
+				log.Print("other error: ", err)
+			}
+		}
+	}()
+
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errChan)
 	if err != nil {
 		panic(err)
 	}
 
-	queue, err := connection.OpenQueue("things")
-	if err != nil {
-		panic(err)
-	}
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
-		panic(err)
-	}
-	if _, err := queue.AddBatchConsumer("things", 111, time.Second, NewBatchConsumer("things")); err != nil {
-		panic(err)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	for _, queueName := range []string{
+		"things",
+		"balls",
+	} {
+		queue, err := connection.OpenQueue(queueName)
+		if err != nil {
+			panic(err)
+		}
+		if err := queue.StartConsuming(unackedLimit, pollDuration, nil); err != nil {
+			panic(err)
+		}
+		if _, err := queue.AddBatchConsumer(queueName, batchSize, batchTimeout, NewBatchConsumer(ctx, errChan, queueName)); err != nil {
+			panic(err)
+		}
 	}
 
-	queue, err = connection.OpenQueue("balls")
-	if err != nil {
-		panic(err)
-	}
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, nil); err != nil {
-		panic(err)
-	}
-	if _, err := queue.AddBatchConsumer("balls", 111, time.Second, NewBatchConsumer("balls")); err != nil {
-		panic(err)
-	}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT)
+	defer signal.Stop(signals)
 
-	select {}
+	<-signals // wait for signal
+	go func() {
+		<-signals // hard exit on second signal (in case shutdown gets stuck)
+		os.Exit(1)
+	}()
+
+	c := connection.StopAllConsuming()
+	// make sure AckWithRetry() and similar calls return with error so that
+	// they can be handled and the active Conume() calls can finish
+	cancel()
+	<-c // wait for all Conume() calls to finish
 }
 
 type BatchConsumer struct {
-	tag string
+	ctx     context.Context
+	errChan chan<- error
+	tag     string
 }
 
-func NewBatchConsumer(tag string) *BatchConsumer {
-	return &BatchConsumer{tag: tag}
+func NewBatchConsumer(ctx context.Context, errChan chan<- error, tag string) *BatchConsumer {
+	return &BatchConsumer{
+		ctx:     ctx,
+		errChan: errChan,
+		tag:     tag,
+	}
 }
 
 func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
-	time.Sleep(time.Millisecond)
+	payloads := batch.Payloads()
+	debugf("start consume %q", payloads)
+	time.Sleep(consumeDuration)
+
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	if errors := batch.Ack(); len(errors) > 0 {
-		log.Printf("failed to ack: %s", errors)
+	if errors := batch.AckWithRetry(consumer.ctx, consumer.errChan); len(errors) > 0 {
+		debugf("failed to ack %q: %q", payloads, errors)
+	} else {
+		debugf("acked %q", payloads)
+	}
+}
+
+func debugf(format string, args ...interface{}) {
+	if shouldLog {
+		log.Printf(format, args...)
 	}
 }
