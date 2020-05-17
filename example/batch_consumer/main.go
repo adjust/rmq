@@ -101,10 +101,14 @@ func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(consumeDuration)
 
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	if errors := batch.AckWithRetry(consumer.ctx, consumer.errChan); len(errors) > 0 {
-		debugf("failed to ack %q: %q", payloads, errors)
-	} else {
+	errors := batch.AckWithRetry(consumer.ctx, consumer.errChan)
+	if len(errors) == 0 {
 		debugf("acked %q", payloads)
+		return
+	}
+
+	for i, err := range errors {
+		debugf("failed to ack %q: %q", batch[i].Payload(), err)
 	}
 }
 

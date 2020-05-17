@@ -9,6 +9,8 @@ import (
 type Delivery interface {
 	Payload() string
 
+	// TODO: rename functions?
+
 	AckWithRetry(context.Context, chan<- error) error
 	RejectWithRetry(context.Context, chan<- error) error
 	PushWithRetry(context.Context, chan<- error) error
