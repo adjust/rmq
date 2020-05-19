@@ -75,8 +75,8 @@ func main() {
 	}()
 
 	c := connection.StopAllConsuming()
-	// make sure AckWithRetry() and similar calls return with error so that
-	// they can be handled and the active Conume() calls can finish
+	// make sure Ack() and similar calls return with error so that they can be
+	// handled and the active Conume() calls can finish
 	cancel()
 	<-c // wait for all Conume() calls to finish
 }
@@ -113,13 +113,13 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	}
 
 	if consumer.count%batchSize > 0 {
-		if err := delivery.AckWithRetry(consumer.ctx, consumer.errChan); err != nil {
+		if err := delivery.Ack(consumer.ctx, consumer.errChan); err != nil {
 			debugf("failed to ack %s: %s", payload, err)
 		} else {
 			debugf("acked %s", payload)
 		}
 	} else { // reject one per batch
-		if err := delivery.RejectWithRetry(consumer.ctx, consumer.errChan); err != nil {
+		if err := delivery.Reject(consumer.ctx, consumer.errChan); err != nil {
 			debugf("failed to reject %s: %s", payload, err)
 		} else {
 			debugf("rejected %s", payload)

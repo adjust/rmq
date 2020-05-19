@@ -36,8 +36,8 @@ func TestStats(t *testing.T) {
 	assert.NoError(t, q2.Publish("stats-d3"))
 	assert.NoError(t, q2.Publish("stats-d4"))
 	time.Sleep(2 * time.Millisecond)
-	assert.NoError(t, consumer.LastDeliveries[0].Ack())
-	assert.NoError(t, consumer.LastDeliveries[1].Reject())
+	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[1].Reject(nil, nil))
 	_, err = q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 	assert.NoError(t, err)
 

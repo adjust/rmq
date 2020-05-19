@@ -9,18 +9,9 @@ import (
 type Delivery interface {
 	Payload() string
 
-	// TODO: rename functions?
-
-	AckWithRetry(context.Context, chan<- error) error
-	RejectWithRetry(context.Context, chan<- error) error
-	PushWithRetry(context.Context, chan<- error) error
-
-	// NOTE: These are simple low level functions, but potentially dangerous if
-	// used naively. It's strongly recommended to use the functions above
-	// (AckWithRetry() etc.) instead unless you know what you are doing.
-	Ack() error
-	Reject() error
-	Push() error
+	Ack(context.Context, chan<- error) error
+	Reject(context.Context, chan<- error) error
+	Push(context.Context, chan<- error) error
 }
 
 type redisDelivery struct {
@@ -55,45 +46,51 @@ func (delivery *redisDelivery) Payload() string {
 // 3. if the context is cancalled or its timeout exceeded, context.Cancelled or
 //    context.DeadlineExceeded will be returned
 
-func (delivery *redisDelivery) AckWithRetry(ctx context.Context, errChan chan<- error) error {
-	return delivery.ackWithRetry(ctx, errChan, 0)
-}
+func (delivery *redisDelivery) Ack(ctx context.Context, errChan chan<- error) error {
+	if ctx == nil { // TODO: remove this
+		ctx = context.TODO()
+	}
 
-func (delivery *redisDelivery) ackWithRetry(ctx context.Context, errChan chan<- error, errorCount int) error {
+	errorCount := 0
 	for {
-		switch err := delivery.Ack(); err {
-		case nil, ErrorNotFound:
-			return err
-		default: // redis error
-			errorCount++
-
-			select { // try to add error to channel, but don't block
-			case errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
-			default:
+		count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+		if err == nil { // no redis error
+			if count == 0 {
+				return ErrorNotFound
 			}
-
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-
-			time.Sleep(time.Second)
+			return nil
 		}
+
+		// redis error
+
+		errorCount++
+
+		select { // try to add error to channel, but don't block
+		case errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		time.Sleep(time.Second)
 	}
 }
 
-func (delivery *redisDelivery) RejectWithRetry(ctx context.Context, errChan chan<- error) error {
-	return delivery.moveWithRetry(ctx, errChan, delivery.rejectedKey)
+func (delivery *redisDelivery) Reject(ctx context.Context, errChan chan<- error) error {
+	return delivery.move(ctx, errChan, delivery.rejectedKey)
 }
 
-func (delivery *redisDelivery) PushWithRetry(ctx context.Context, errChan chan<- error) error {
+func (delivery *redisDelivery) Push(ctx context.Context, errChan chan<- error) error {
 	if delivery.pushKey == "" {
-		return delivery.RejectWithRetry(ctx, errChan) // fall back to rejecting
+		return delivery.Reject(ctx, errChan) // fall back to rejecting
 	}
 
-	return delivery.moveWithRetry(ctx, errChan, delivery.pushKey)
+	return delivery.move(ctx, errChan, delivery.pushKey)
 }
 
-func (delivery *redisDelivery) moveWithRetry(ctx context.Context, errChan chan<- error, key string) error {
+func (delivery *redisDelivery) move(ctx context.Context, errChan chan<- error, key string) error {
 	errorCount := 0
 	for {
 		_, err := delivery.redisClient.LPush(key, delivery.payload)
@@ -112,38 +109,7 @@ func (delivery *redisDelivery) moveWithRetry(ctx context.Context, errChan chan<-
 		time.Sleep(time.Second)
 	}
 
-	return delivery.ackWithRetry(ctx, errChan, errorCount)
+	return delivery.Ack(ctx, errChan)
 }
 
 // lower level functions which don't retry but just return the first error
-
-func (delivery *redisDelivery) Ack() error {
-	count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return ErrorNotFound
-	}
-	return nil
-}
-
-func (delivery *redisDelivery) Reject() error {
-	return delivery.move(delivery.rejectedKey)
-}
-
-func (delivery *redisDelivery) Push() error {
-	if delivery.pushKey == "" {
-		return delivery.Reject() // fall back to rejecting
-	}
-
-	return delivery.move(delivery.pushKey)
-}
-
-func (delivery *redisDelivery) move(key string) error {
-	if _, err := delivery.redisClient.LPush(key, delivery.payload); err != nil {
-		return err
-	}
-
-	return delivery.Ack()
-}

@@ -86,7 +86,7 @@ func TestCleaner(t *testing.T) {
 
 	require.NotNil(t, consumer.LastDelivery)
 	assert.Equal(t, "del1", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack())
+	assert.NoError(t, consumer.LastDelivery.Ack(nil, nil))
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
@@ -172,7 +172,7 @@ func TestCleaner(t *testing.T) {
 	assert.Equal(t, int64(6), count)
 
 	assert.Equal(t, "del5", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack())
+	assert.NoError(t, consumer.LastDelivery.Ack(nil, nil))
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)

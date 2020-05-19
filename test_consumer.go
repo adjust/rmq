@@ -37,7 +37,7 @@ func (consumer *TestConsumer) Consume(delivery Delivery) {
 		time.Sleep(consumer.SleepDuration)
 	}
 	if consumer.AutoAck {
-		if err := delivery.Ack(); err != nil {
+		if err := delivery.Ack(nil, nil); err != nil {
 			panic(err)
 		}
 	}

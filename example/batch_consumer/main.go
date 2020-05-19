@@ -75,8 +75,8 @@ func main() {
 	}()
 
 	c := connection.StopAllConsuming()
-	// make sure AckWithRetry() and similar calls return with error so that
-	// they can be handled and the active Conume() calls can finish
+	// make sure Ack() and similar calls return with error so that they can be
+	// handled and the active Conume() calls can finish
 	cancel()
 	<-c // wait for all Conume() calls to finish
 }
@@ -101,7 +101,7 @@ func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(consumeDuration)
 
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	errors := batch.AckWithRetry(consumer.ctx, consumer.errChan)
+	errors := batch.Ack(consumer.ctx, consumer.errChan)
 	if len(errors) == 0 {
 		debugf("acked %q", payloads)
 		return
