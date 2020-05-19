@@ -9,9 +9,9 @@ import (
 type Delivery interface {
 	Payload() string
 
-	Ack(context.Context, chan<- error) error
-	Reject(context.Context, chan<- error) error
-	Push(context.Context, chan<- error) error
+	Ack(context.Context) error
+	Reject(context.Context) error
+	Push(context.Context) error
 }
 
 type redisDelivery struct {
@@ -20,15 +20,24 @@ type redisDelivery struct {
 	rejectedKey string
 	pushKey     string
 	redisClient RedisClient
+	errChan     chan<- error
 }
 
-func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient RedisClient) *redisDelivery {
+func newDelivery(
+	payload string,
+	unackedKey string,
+	rejectedKey string,
+	pushKey string,
+	redisClient RedisClient,
+	errChan chan<- error,
+) *redisDelivery {
 	return &redisDelivery{
 		payload:     payload,
 		unackedKey:  unackedKey,
 		rejectedKey: rejectedKey,
 		pushKey:     pushKey,
 		redisClient: redisClient,
+		errChan:     errChan,
 	}
 }
 
@@ -46,7 +55,7 @@ func (delivery *redisDelivery) Payload() string {
 // 3. if the context is cancalled or its timeout exceeded, context.Cancelled or
 //    context.DeadlineExceeded will be returned
 
-func (delivery *redisDelivery) Ack(ctx context.Context, errChan chan<- error) error {
+func (delivery *redisDelivery) Ack(ctx context.Context) error {
 	if ctx == nil { // TODO: remove this
 		ctx = context.TODO()
 	}
@@ -66,7 +75,7 @@ func (delivery *redisDelivery) Ack(ctx context.Context, errChan chan<- error) er
 		errorCount++
 
 		select { // try to add error to channel, but don't block
-		case errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
+		case delivery.errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
 		default:
 		}
 
@@ -78,19 +87,19 @@ func (delivery *redisDelivery) Ack(ctx context.Context, errChan chan<- error) er
 	}
 }
 
-func (delivery *redisDelivery) Reject(ctx context.Context, errChan chan<- error) error {
-	return delivery.move(ctx, errChan, delivery.rejectedKey)
+func (delivery *redisDelivery) Reject(ctx context.Context) error {
+	return delivery.move(ctx, delivery.rejectedKey)
 }
 
-func (delivery *redisDelivery) Push(ctx context.Context, errChan chan<- error) error {
+func (delivery *redisDelivery) Push(ctx context.Context) error {
 	if delivery.pushKey == "" {
-		return delivery.Reject(ctx, errChan) // fall back to rejecting
+		return delivery.Reject(ctx) // fall back to rejecting
 	}
 
-	return delivery.move(ctx, errChan, delivery.pushKey)
+	return delivery.move(ctx, delivery.pushKey)
 }
 
-func (delivery *redisDelivery) move(ctx context.Context, errChan chan<- error, key string) error {
+func (delivery *redisDelivery) move(ctx context.Context, key string) error {
 	errorCount := 0
 	for {
 		_, err := delivery.redisClient.LPush(key, delivery.payload)
@@ -102,14 +111,14 @@ func (delivery *redisDelivery) move(ctx context.Context, errChan chan<- error, k
 		errorCount++
 
 		select { // try to add error to channel, but don't block
-		case errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
+		case delivery.errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
 		default:
 		}
 
 		time.Sleep(time.Second)
 	}
 
-	return delivery.Ack(ctx, errChan)
+	return delivery.Ack(ctx)
 }
 
 // lower level functions which don't retry but just return the first error

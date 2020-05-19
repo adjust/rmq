@@ -51,7 +51,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond, errChan); err != nil {
+	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
 		panic(err)
 	}
 
@@ -59,7 +59,7 @@ func main() {
 
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
-		if _, err := queue.AddConsumer(name, NewConsumer(ctx, errChan, i)); err != nil {
+		if _, err := queue.AddConsumer(name, NewConsumer(ctx, i)); err != nil {
 			panic(err)
 		}
 	}
@@ -82,20 +82,18 @@ func main() {
 }
 
 type Consumer struct {
-	ctx     context.Context
-	errChan chan<- error
-	name    string
-	count   int
-	before  time.Time
+	ctx    context.Context
+	name   string
+	count  int
+	before time.Time
 }
 
-func NewConsumer(ctx context.Context, errChan chan<- error, tag int) *Consumer {
+func NewConsumer(ctx context.Context, tag int) *Consumer {
 	return &Consumer{
-		ctx:     ctx,
-		errChan: errChan,
-		name:    fmt.Sprintf("consumer%d", tag),
-		count:   0,
-		before:  time.Now(),
+		ctx:    ctx,
+		name:   fmt.Sprintf("consumer%d", tag),
+		count:  0,
+		before: time.Now(),
 	}
 }
 
@@ -113,13 +111,13 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	}
 
 	if consumer.count%batchSize > 0 {
-		if err := delivery.Ack(consumer.ctx, consumer.errChan); err != nil {
+		if err := delivery.Ack(consumer.ctx); err != nil {
 			debugf("failed to ack %s: %s", payload, err)
 		} else {
 			debugf("acked %s", payload)
 		}
 	} else { // reject one per batch
-		if err := delivery.Reject(consumer.ctx, consumer.errChan); err != nil {
+		if err := delivery.Reject(consumer.ctx); err != nil {
 			debugf("failed to reject %s: %s", payload, err)
 		} else {
 			debugf("rejected %s", payload)

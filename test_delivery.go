@@ -33,7 +33,7 @@ func (delivery *TestDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *TestDelivery) Ack(context.Context, chan<- error) error {
+func (delivery *TestDelivery) Ack(context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}
@@ -41,7 +41,7 @@ func (delivery *TestDelivery) Ack(context.Context, chan<- error) error {
 	return nil
 }
 
-func (delivery *TestDelivery) Reject(context.Context, chan<- error) error {
+func (delivery *TestDelivery) Reject(context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}
@@ -49,7 +49,7 @@ func (delivery *TestDelivery) Reject(context.Context, chan<- error) error {
 	return nil
 }
 
-func (delivery *TestDelivery) Push(context.Context, chan<- error) error {
+func (delivery *TestDelivery) Push(context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}

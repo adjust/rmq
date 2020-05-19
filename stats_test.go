@@ -29,15 +29,15 @@ func TestStats(t *testing.T) {
 	assert.NoError(t, err)
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false
-	assert.NoError(t, q2.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, q2.StartConsuming(10, time.Millisecond))
 	_, err = q2.AddConsumer("stats-cons1", consumer)
 	assert.NoError(t, err)
 	assert.NoError(t, q2.Publish("stats-d2"))
 	assert.NoError(t, q2.Publish("stats-d3"))
 	assert.NoError(t, q2.Publish("stats-d4"))
 	time.Sleep(2 * time.Millisecond)
-	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil, nil))
-	assert.NoError(t, consumer.LastDeliveries[1].Reject(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil))
+	assert.NoError(t, consumer.LastDeliveries[1].Reject(nil))
 	_, err = q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 	assert.NoError(t, err)
 

@@ -56,10 +56,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if err := queue.StartConsuming(unackedLimit, pollDuration, nil); err != nil {
+		if err := queue.StartConsuming(unackedLimit, pollDuration); err != nil {
 			panic(err)
 		}
-		if _, err := queue.AddBatchConsumer(queueName, batchSize, batchTimeout, NewBatchConsumer(ctx, errChan, queueName)); err != nil {
+		if _, err := queue.AddBatchConsumer(queueName, batchSize, batchTimeout, NewBatchConsumer(ctx, queueName)); err != nil {
 			panic(err)
 		}
 	}
@@ -82,16 +82,14 @@ func main() {
 }
 
 type BatchConsumer struct {
-	ctx     context.Context
-	errChan chan<- error
-	tag     string
+	ctx context.Context
+	tag string
 }
 
-func NewBatchConsumer(ctx context.Context, errChan chan<- error, tag string) *BatchConsumer {
+func NewBatchConsumer(ctx context.Context, tag string) *BatchConsumer {
 	return &BatchConsumer{
-		ctx:     ctx,
-		errChan: errChan,
-		tag:     tag,
+		ctx: ctx,
+		tag: tag,
 	}
 }
 
@@ -101,7 +99,7 @@ func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(consumeDuration)
 
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	errors := batch.Ack(consumer.ctx, consumer.errChan)
+	errors := batch.Ack(consumer.ctx)
 	if len(errors) == 0 {
 		debugf("acked %q", payloads)
 		return

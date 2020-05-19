@@ -79,7 +79,7 @@ func TestConnectionQueues(t *testing.T) {
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 0)
-	assert.NoError(t, queue1.StartConsuming(1, time.Millisecond, nil))
+	assert.NoError(t, queue1.StartConsuming(1, time.Millisecond))
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"conn-q-q1"}, queues)
@@ -93,7 +93,7 @@ func TestConnectionQueues(t *testing.T) {
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 1)
-	assert.NoError(t, queue2.StartConsuming(1, time.Millisecond, nil))
+	assert.NoError(t, queue2.StartConsuming(1, time.Millisecond))
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
@@ -162,8 +162,8 @@ func TestQueueCommon(t *testing.T) {
 	queues, err := connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 0)
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond, nil))
-	assert.Equal(t, ErrorAlreadyConsuming, queue.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
+	assert.Equal(t, ErrorAlreadyConsuming, queue.StartConsuming(10, time.Millisecond))
 	cons1name, err := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
 	assert.NoError(t, err)
 	time.Sleep(time.Millisecond)
@@ -196,7 +196,7 @@ func TestConsumerCommon(t *testing.T) {
 
 	consumer := NewTestConsumer("cons-A")
 	consumer.AutoAck = false
-	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond))
 	_, err = queue1.AddConsumer("cons-cons", consumer)
 	assert.NoError(t, err)
 	assert.Nil(t, consumer.LastDelivery)
@@ -222,7 +222,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil))
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -230,7 +230,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 
-	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil))
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -238,7 +238,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
-	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack(nil, nil))
+	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack(nil))
 
 	assert.NoError(t, queue1.Publish("cons-d3"))
 	time.Sleep(2 * time.Millisecond)
@@ -252,7 +252,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 	assert.Equal(t, "cons-d3", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Reject(nil, nil))
+	assert.NoError(t, consumer.LastDelivery.Reject(nil))
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -275,7 +275,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 	assert.Equal(t, "cons-d4", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Reject(nil, nil))
+	assert.NoError(t, consumer.LastDelivery.Reject(nil))
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -297,13 +297,13 @@ func TestConsumerCommon(t *testing.T) {
 
 	queue2, err := connection.OpenQueue("cons-func-q")
 	assert.NoError(t, err)
-	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond))
 
 	payloadChan := make(chan string, 1)
 	payload := "cons-func-payload"
 
 	_, err = queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
-		err = delivery.Ack(nil, nil)
+		err = delivery.Ack(nil)
 		assert.NoError(t, err)
 		payloadChan <- delivery.Payload()
 	})
@@ -343,7 +343,7 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -366,7 +366,7 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), count)
 
-	assert.NoError(t, consumer.LastDelivery.Ack(nil, nil))
+	assert.NoError(t, consumer.LastDelivery.Ack(nil))
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -384,7 +384,7 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), count)
 
-	assert.NoError(t, consumer.LastDelivery.Ack(nil, nil))
+	assert.NoError(t, consumer.LastDelivery.Ack(nil))
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -421,7 +421,7 @@ func TestBatch(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(10 * time.Millisecond)
 	count, err := queue.unackedCount()
 	assert.NoError(t, err)
@@ -434,8 +434,8 @@ func TestBatch(t *testing.T) {
 	require.Len(t, consumer.LastBatch, 2)
 	assert.Equal(t, "batch-d0", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d1", consumer.LastBatch[1].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil, nil))
-	assert.NoError(t, consumer.LastBatch[1].Ack(nil, nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
+	assert.NoError(t, consumer.LastBatch[1].Ack(nil))
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(3), count)
@@ -448,8 +448,8 @@ func TestBatch(t *testing.T) {
 	require.Len(t, consumer.LastBatch, 2)
 	assert.Equal(t, "batch-d2", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d3", consumer.LastBatch[1].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil, nil))
-	assert.NoError(t, consumer.LastBatch[1].Ack(nil, nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
+	assert.NoError(t, consumer.LastBatch[1].Ack(nil))
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
@@ -470,7 +470,7 @@ func TestBatch(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	require.Len(t, consumer.LastBatch, 1)
 	assert.Equal(t, "batch-d4", consumer.LastBatch[0].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil, nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -502,7 +502,7 @@ func TestReturnRejected(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -530,12 +530,12 @@ func TestReturnRejected(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 
 	assert.Len(t, consumer.LastDeliveries, 6)
-	assert.NoError(t, consumer.LastDeliveries[0].Reject(nil, nil))
-	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil, nil))
-	assert.NoError(t, consumer.LastDeliveries[2].Reject(nil, nil))
-	assert.NoError(t, consumer.LastDeliveries[3].Reject(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Reject(nil))
+	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil))
+	assert.NoError(t, consumer.LastDeliveries[2].Reject(nil))
+	assert.NoError(t, consumer.LastDeliveries[3].Reject(nil))
 	// delivery 4 still open
-	assert.NoError(t, consumer.LastDeliveries[5].Reject(nil, nil))
+	assert.NoError(t, consumer.LastDeliveries[5].Reject(nil))
 
 	time.Sleep(time.Millisecond)
 	count, err = queue.readyCount()
@@ -590,14 +590,14 @@ func TestPushQueue(t *testing.T) {
 	consumer1 := NewTestConsumer("push-cons")
 	consumer1.AutoAck = false
 	consumer1.AutoFinish = false
-	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond))
 	_, err = queue1.AddConsumer("push-cons", consumer1)
 	assert.NoError(t, err)
 
 	consumer2 := NewTestConsumer("push-cons")
 	consumer2.AutoAck = false
 	consumer2.AutoFinish = false
-	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond))
 	_, err = queue2.AddConsumer("push-cons", consumer2)
 	assert.NoError(t, err)
 
@@ -608,7 +608,7 @@ func TestPushQueue(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 	require.Len(t, consumer1.LastDeliveries, 1)
 
-	assert.NoError(t, consumer1.LastDelivery.Push(nil, nil))
+	assert.NoError(t, consumer1.LastDelivery.Push(nil))
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue1.unackedCount()
 	assert.NoError(t, err)
@@ -618,7 +618,7 @@ func TestPushQueue(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 
 	require.Len(t, consumer2.LastDeliveries, 1)
-	assert.NoError(t, consumer2.LastDelivery.Push(nil, nil))
+	assert.NoError(t, consumer2.LastDelivery.Push(nil))
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue2.rejectedCount()
 	assert.NoError(t, err)
@@ -639,7 +639,7 @@ func TestConsuming(t *testing.T) {
 		t.FailNow() // should return closed finishedChan
 	}
 
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	assert.NotNil(t, queue.StopConsuming())
 	// already stopped
 	assert.NotNil(t, queue.StopConsuming())
@@ -665,7 +665,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	assert.NoError(t, queue.StartConsuming(20, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 	var consumers []*TestConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
@@ -709,7 +709,7 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	assert.NoError(t, queue.StartConsuming(20, time.Millisecond, nil))
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 
 	var consumers []*TestBatchConsumer
 	for i := 0; i < 10; i++ {
@@ -756,7 +756,7 @@ func BenchmarkQueue(b *testing.B) {
 		consumer := NewTestConsumer("bench-A")
 		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
-		assert.NoError(b, queue.StartConsuming(10, time.Millisecond, nil))
+		assert.NoError(b, queue.StartConsuming(10, time.Millisecond))
 		_, err = queue.AddConsumer("bench-cons", consumer)
 		assert.NoError(b, err)
 	}

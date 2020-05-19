@@ -19,27 +19,26 @@ func (deliveries Deliveries) Payloads() []string {
 
 // functions with retry, see comments in delivery.go (recommended)
 
-func (deliveries Deliveries) Ack(ctx context.Context, errChan chan<- error) (errMap map[int]error) {
-	return deliveries.each(ctx, errChan, Delivery.Ack)
+func (deliveries Deliveries) Ack(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Ack)
 }
 
-func (deliveries Deliveries) Reject(ctx context.Context, errChan chan<- error) (errMap map[int]error) {
-	return deliveries.each(ctx, errChan, Delivery.Reject)
+func (deliveries Deliveries) Reject(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Reject)
 }
 
-func (deliveries Deliveries) Push(ctx context.Context, errChan chan<- error) (errMap map[int]error) {
-	return deliveries.each(ctx, errChan, Delivery.Push)
+func (deliveries Deliveries) Push(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Push)
 }
 
 // helper functions
 
 func (deliveries Deliveries) each(
 	ctx context.Context,
-	errChan chan<- error,
-	f func(Delivery, context.Context, chan<- error) error,
+	f func(Delivery, context.Context) error,
 ) (errMap map[int]error) {
 	for i, delivery := range deliveries {
-		if err := f(delivery, ctx, errChan); err != nil {
+		if err := f(delivery, ctx); err != nil {
 			if errMap == nil { // create error map lazily on demand
 				errMap = map[int]error{}
 			}

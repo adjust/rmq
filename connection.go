@@ -50,6 +50,7 @@ type redisConnection struct {
 	heartbeatKey    string // key to keep alive
 	queuesKey       string // key to list of queues consumed by this connection
 	redisClient     RedisClient
+	errChan         chan<- error
 	heartbeatTicker *time.Ticker
 
 	// list of all queues that have been opened in this connection
@@ -58,27 +59,27 @@ type redisConnection struct {
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int, errors chan<- error) (Connection, error) {
+func OpenConnection(tag, network, address string, db int, errChan chan<- error) (Connection, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Network: network,
 		Addr:    address,
 		DB:      db,
 	})
-	return OpenConnectionWithRedisClient(tag, redisClient, errors)
+	return OpenConnectionWithRedisClient(tag, redisClient, errChan)
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errors chan<- error) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errors)
+func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
-func OpenConnectionWithTestRedisClient(tag string, errors chan<- error) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errors)
+func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errChan)
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors chan<- error) (*redisConnection, error) {
+func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (*redisConnection, error) {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
@@ -86,6 +87,7 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors c
 		heartbeatKey:    strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:       strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:     redisClient,
+		errChan:         errChan,
 		heartbeatTicker: time.NewTicker(heartbeatInterval),
 	}
 
@@ -98,7 +100,7 @@ func openConnectionWithRedisClient(tag string, redisClient RedisClient, errors c
 		return nil, err
 	}
 
-	go connection.heartbeat(errors)
+	go connection.heartbeat(errChan)
 	// log.Printf("rmq connection connected to %s %s:%s %d", name, network, address, db)
 	return connection, nil
 }
@@ -108,7 +110,7 @@ func (connection *redisConnection) updateHeartbeat() error {
 }
 
 // heartbeat keeps the heartbeat key alive
-func (connection *redisConnection) heartbeat(errors chan<- error) {
+func (connection *redisConnection) heartbeat(errChan chan<- error) {
 	errorCount := 0 // number of consecutive errors
 	for range connection.heartbeatTicker.C {
 		err := connection.updateHeartbeat()
@@ -121,7 +123,7 @@ func (connection *redisConnection) heartbeat(errors chan<- error) {
 		errorCount++
 
 		select { // try to add error to channel, but don't block
-		case errors <- &HeartbeatError{RedisErr: err, Count: errorCount}:
+		case errChan <- &HeartbeatError{RedisErr: err, Count: errorCount}:
 		default:
 		}
 
@@ -246,7 +248,13 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 
 // openQueue opens a queue without adding it to the set of queues
 func (connection *redisConnection) openQueue(name string) Queue {
-	return newQueue(name, connection.Name, connection.queuesKey, connection.redisClient)
+	return newQueue(
+		name,
+		connection.Name,
+		connection.queuesKey,
+		connection.redisClient,
+		connection.errChan,
+	)
 }
 
 // stopHeartbeat stops the heartbeat of the connection

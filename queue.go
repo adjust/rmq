@@ -18,7 +18,7 @@ type Queue interface {
 	Publish(payload ...string) error
 	PublishBytes(payload ...[]byte) error
 	SetPushQueue(pushQueue Queue)
-	StartConsuming(prefetchLimit int64, pollDuration time.Duration, errors chan<- error) error
+	StartConsuming(prefetchLimit int64, pollDuration time.Duration) error
 	StopConsuming() <-chan struct{}
 	AddConsumer(tag string, consumer Consumer) (string, error)
 	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error)
@@ -49,6 +49,7 @@ type redisQueue struct {
 	unackedKey       string // key to list of currently consuming deliveries
 	pushKey          string // key to list of pushed deliveries
 	redisClient      RedisClient
+	errChan          chan<- error
 	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 	prefetchLimit    int64         // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
 	pollDuration     time.Duration
@@ -56,7 +57,14 @@ type redisQueue struct {
 	stopWg           sync.WaitGroup
 }
 
-func newQueue(name, connectionName, queuesKey string, redisClient RedisClient) *redisQueue {
+func newQueue(
+	name string,
+	connectionName string,
+	queuesKey string,
+	redisClient RedisClient,
+	errChan chan<- error,
+) *redisQueue {
+
 	consumersKey := strings.Replace(connectionQueueConsumersTemplate, phConnection, connectionName, 1)
 	consumersKey = strings.Replace(consumersKey, phQueue, name, 1)
 
@@ -75,6 +83,7 @@ func newQueue(name, connectionName, queuesKey string, redisClient RedisClient) *
 		rejectedKey:    rejectedKey,
 		unackedKey:     unackedKey,
 		redisClient:    redisClient,
+		errChan:        errChan,
 	}
 	return queue
 }
@@ -111,7 +120,7 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // StartConsuming starts consuming into a channel of size prefetchLimit
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
-func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.Duration, errors chan<- error) error {
+func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.Duration) error {
 	if queue.deliveryChan != nil {
 		return ErrorAlreadyConsuming
 	}
@@ -126,11 +135,11 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
 	queue.consumingStopped = make(chan struct{})
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
-	go queue.consume(errors)
+	go queue.consume()
 	return nil
 }
 
-func (queue *redisQueue) consume(errors chan<- error) {
+func (queue *redisQueue) consume() {
 	errorCount := 0 // number of consecutive batch errors
 
 	for {
@@ -145,7 +154,7 @@ func (queue *redisQueue) consume(errors chan<- error) {
 		default: // redis error
 			errorCount++
 			select { // try to add error to channel, but don't block
-			case errors <- &ConsumeError{RedisErr: err, Count: errorCount}:
+			case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
 			time.Sleep(queue.pollDuration) // sleep before retry
@@ -205,7 +214,7 @@ func (queue *redisQueue) newDelivery(payload string) Delivery {
 		queue.rejectedKey,
 		queue.pushKey,
 		queue.redisClient,
-		// queue.errChan,
+		queue.errChan,
 	)
 }
 
