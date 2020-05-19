@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,12 +10,14 @@ import (
 )
 
 func TestCleaner(t *testing.T) {
-	flushConn, err := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+
+	flushConn, err := OpenConnection(ctx, "cleaner-flush", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	conn, err := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err := OpenConnection(ctx, "cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queues, err := conn.GetOpenQueues()
 	assert.NoError(t, err)
@@ -86,7 +89,7 @@ func TestCleaner(t *testing.T) {
 
 	require.NotNil(t, consumer.LastDelivery)
 	assert.Equal(t, "del1", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack(nil))
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
@@ -109,7 +112,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err = OpenConnection(ctx, "cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)
@@ -172,7 +175,7 @@ func TestCleaner(t *testing.T) {
 	assert.Equal(t, int64(6), count)
 
 	assert.Equal(t, "del5", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack(nil))
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
@@ -185,7 +188,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1, nil)
+	cleanerConn, err := OpenConnection(ctx, "cleaner-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	cleaner := NewCleaner(cleanerConn)
 	returned, err := cleaner.Clean()
@@ -198,7 +201,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err = OpenConnection(ctx, "cleaner-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)

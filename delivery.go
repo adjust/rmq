@@ -9,12 +9,13 @@ import (
 type Delivery interface {
 	Payload() string
 
-	Ack(context.Context) error
-	Reject(context.Context) error
-	Push(context.Context) error
+	Ack() error
+	Reject() error
+	Push() error
 }
 
 type redisDelivery struct {
+	ctx         context.Context
 	payload     string
 	unackedKey  string
 	rejectedKey string
@@ -24,6 +25,7 @@ type redisDelivery struct {
 }
 
 func newDelivery(
+	ctx context.Context,
 	payload string,
 	unackedKey string,
 	rejectedKey string,
@@ -32,6 +34,7 @@ func newDelivery(
 	errChan chan<- error,
 ) *redisDelivery {
 	return &redisDelivery{
+		ctx:         ctx,
 		payload:     payload,
 		unackedKey:  unackedKey,
 		rejectedKey: rejectedKey,
@@ -55,11 +58,7 @@ func (delivery *redisDelivery) Payload() string {
 // 3. if the context is cancalled or its timeout exceeded, context.Cancelled or
 //    context.DeadlineExceeded will be returned
 
-func (delivery *redisDelivery) Ack(ctx context.Context) error {
-	if ctx == nil { // TODO: remove this
-		ctx = context.TODO()
-	}
-
+func (delivery *redisDelivery) Ack() error {
 	errorCount := 0
 	for {
 		count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
@@ -79,7 +78,7 @@ func (delivery *redisDelivery) Ack(ctx context.Context) error {
 		default:
 		}
 
-		if err := ctx.Err(); err != nil {
+		if err := delivery.ctx.Err(); err != nil {
 			return err
 		}
 
@@ -87,19 +86,19 @@ func (delivery *redisDelivery) Ack(ctx context.Context) error {
 	}
 }
 
-func (delivery *redisDelivery) Reject(ctx context.Context) error {
-	return delivery.move(ctx, delivery.rejectedKey)
+func (delivery *redisDelivery) Reject() error {
+	return delivery.move(delivery.rejectedKey)
 }
 
-func (delivery *redisDelivery) Push(ctx context.Context) error {
+func (delivery *redisDelivery) Push() error {
 	if delivery.pushKey == "" {
-		return delivery.Reject(ctx) // fall back to rejecting
+		return delivery.Reject() // fall back to rejecting
 	}
 
-	return delivery.move(ctx, delivery.pushKey)
+	return delivery.move(delivery.pushKey)
 }
 
-func (delivery *redisDelivery) move(ctx context.Context, key string) error {
+func (delivery *redisDelivery) move(key string) error {
 	errorCount := 0
 	for {
 		_, err := delivery.redisClient.LPush(key, delivery.payload)
@@ -118,7 +117,7 @@ func (delivery *redisDelivery) move(ctx context.Context, key string) error {
 		time.Sleep(time.Second)
 	}
 
-	return delivery.Ack(ctx)
+	return delivery.Ack()
 }
 
 // lower level functions which don't retry but just return the first error

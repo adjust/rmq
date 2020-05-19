@@ -41,12 +41,11 @@ func main() {
 		}
 	}()
 
-	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	connection, err := rmq.OpenConnection(ctx, "consumer", "tcp", "localhost:6379", 2, errChan)
 	if err != nil {
 		panic(err)
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, queueName := range []string{
 		"things",
@@ -59,7 +58,7 @@ func main() {
 		if err := queue.StartConsuming(unackedLimit, pollDuration); err != nil {
 			panic(err)
 		}
-		if _, err := queue.AddBatchConsumer(queueName, batchSize, batchTimeout, NewBatchConsumer(ctx, queueName)); err != nil {
+		if _, err := queue.AddBatchConsumer(queueName, batchSize, batchTimeout, NewBatchConsumer(queueName)); err != nil {
 			panic(err)
 		}
 	}
@@ -82,15 +81,11 @@ func main() {
 }
 
 type BatchConsumer struct {
-	ctx context.Context
 	tag string
 }
 
-func NewBatchConsumer(ctx context.Context, tag string) *BatchConsumer {
-	return &BatchConsumer{
-		ctx: ctx,
-		tag: tag,
-	}
+func NewBatchConsumer(tag string) *BatchConsumer {
+	return &BatchConsumer{tag: tag}
 }
 
 func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
@@ -99,7 +94,7 @@ func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(consumeDuration)
 
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	errors := batch.Ack(consumer.ctx)
+	errors := batch.Ack()
 	if len(errors) == 0 {
 		debugf("acked %q", payloads)
 		return

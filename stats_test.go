@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,14 +10,15 @@ import (
 )
 
 func TestStats(t *testing.T) {
-	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "stats-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	_, err = NewCleaner(connection).Clean()
 	require.NoError(t, err)
 
-	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1, nil)
+	conn1, err := OpenConnection(ctx, "stats-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
-	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1, nil)
+	conn2, err := OpenConnection(ctx, "stats-conn2", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	q1, err := conn2.OpenQueue("stats-q1")
 	assert.NoError(t, err)
@@ -36,8 +38,8 @@ func TestStats(t *testing.T) {
 	assert.NoError(t, q2.Publish("stats-d3"))
 	assert.NoError(t, q2.Publish("stats-d4"))
 	time.Sleep(2 * time.Millisecond)
-	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil))
-	assert.NoError(t, consumer.LastDeliveries[1].Reject(nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Ack())
+	assert.NoError(t, consumer.LastDeliveries[1].Reject())
 	_, err = q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 	assert.NoError(t, err)
 

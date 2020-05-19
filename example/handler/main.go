@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection("handler", "tcp", "localhost:6379", 2, nil)
+	connection, err := rmq.OpenConnection(context.Background(), "handler", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

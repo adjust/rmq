@@ -41,7 +41,8 @@ func main() {
 		}
 	}()
 
-	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errChan)
+	ctx, cancel := context.WithCancel(context.Background())
+	connection, err := rmq.OpenConnection(ctx, "consumer", "tcp", "localhost:6379", 2, errChan)
 	if err != nil {
 		panic(err)
 	}
@@ -55,11 +56,9 @@ func main() {
 		panic(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
-		if _, err := queue.AddConsumer(name, NewConsumer(ctx, i)); err != nil {
+		if _, err := queue.AddConsumer(name, NewConsumer(i)); err != nil {
 			panic(err)
 		}
 	}
@@ -82,15 +81,13 @@ func main() {
 }
 
 type Consumer struct {
-	ctx    context.Context
 	name   string
 	count  int
 	before time.Time
 }
 
-func NewConsumer(ctx context.Context, tag int) *Consumer {
+func NewConsumer(tag int) *Consumer {
 	return &Consumer{
-		ctx:    ctx,
 		name:   fmt.Sprintf("consumer%d", tag),
 		count:  0,
 		before: time.Now(),
@@ -111,13 +108,13 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	}
 
 	if consumer.count%batchSize > 0 {
-		if err := delivery.Ack(consumer.ctx); err != nil {
+		if err := delivery.Ack(); err != nil {
 			debugf("failed to ack %s: %s", payload, err)
 		} else {
 			debugf("acked %s", payload)
 		}
 	} else { // reject one per batch
-		if err := delivery.Reject(consumer.ctx); err != nil {
+		if err := delivery.Reject(); err != nil {
 			debugf("failed to reject %s: %s", payload, err)
 		} else {
 			debugf("rejected %s", payload)

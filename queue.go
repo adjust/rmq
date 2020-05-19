@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ type Queue interface {
 }
 
 type redisQueue struct {
+	ctx              context.Context
 	name             string
 	connectionName   string
 	queuesKey        string // key to list of queues consumed by this connection
@@ -58,6 +60,7 @@ type redisQueue struct {
 }
 
 func newQueue(
+	ctx context.Context,
 	name string,
 	connectionName string,
 	queuesKey string,
@@ -75,6 +78,7 @@ func newQueue(
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
 	queue := &redisQueue{
+		ctx:            ctx,
 		name:           name,
 		connectionName: connectionName,
 		queuesKey:      queuesKey,
@@ -208,7 +212,7 @@ func (queue *redisQueue) consumeBatch() error {
 
 func (queue *redisQueue) newDelivery(payload string) Delivery {
 	return newDelivery(
-		// queue.ctx,
+		queue.ctx,
 		payload,
 		queue.unackedKey,
 		queue.rejectedKey,

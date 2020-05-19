@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -12,12 +13,13 @@ import (
 )
 
 func TestConnections(t *testing.T) {
-	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	flushConn, err := OpenConnection(ctx, "conns-flush", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1, nil)
+	connection, err := OpenConnection(ctx, "conns-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 	_, err = NewCleaner(connection).Clean()
@@ -27,14 +29,14 @@ func TestConnections(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, connections, 1) // cleaner connection remains
 
-	conn1, err := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1, nil)
+	conn1, err := OpenConnection(ctx, "conns-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	connections, err = connection.getConnections()
 	assert.NoError(t, err)
 	assert.Len(t, connections, 2)
 	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").checkHeartbeat())
 	assert.NoError(t, conn1.checkHeartbeat())
-	conn2, err := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1, nil)
+	conn2, err := OpenConnection(ctx, "conns-conn2", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	connections, err = connection.getConnections()
 	assert.NoError(t, err)
@@ -61,7 +63,8 @@ func TestConnections(t *testing.T) {
 }
 
 func TestConnectionQueues(t *testing.T) {
-	connection, err := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "conn-q-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -131,7 +134,8 @@ func TestConnectionQueues(t *testing.T) {
 }
 
 func TestQueueCommon(t *testing.T) {
-	connection, err := OpenConnection("queue-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "queue-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -184,7 +188,8 @@ func TestQueueCommon(t *testing.T) {
 }
 
 func TestConsumerCommon(t *testing.T) {
-	connection, err := OpenConnection("cons-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "cons-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -222,7 +227,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	assert.NoError(t, consumer.LastDeliveries[0].Ack(nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Ack())
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -230,7 +235,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 
-	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil))
+	assert.NoError(t, consumer.LastDeliveries[1].Ack())
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -238,7 +243,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
-	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack(nil))
+	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack())
 
 	assert.NoError(t, queue1.Publish("cons-d3"))
 	time.Sleep(2 * time.Millisecond)
@@ -252,7 +257,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 	assert.Equal(t, "cons-d3", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Reject(nil))
+	assert.NoError(t, consumer.LastDelivery.Reject())
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -275,7 +280,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 	assert.Equal(t, "cons-d4", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Reject(nil))
+	assert.NoError(t, consumer.LastDelivery.Reject())
 	count, err = queue1.readyCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -303,7 +308,7 @@ func TestConsumerCommon(t *testing.T) {
 	payload := "cons-func-payload"
 
 	_, err = queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
-		err = delivery.Ack(nil)
+		err = delivery.Ack()
 		assert.NoError(t, err)
 		payloadChan <- delivery.Payload()
 	})
@@ -325,7 +330,8 @@ func TestConsumerCommon(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
-	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "multi-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("multi-q")
 	assert.NoError(t, err)
@@ -366,7 +372,7 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), count)
 
-	assert.NoError(t, consumer.LastDelivery.Ack(nil))
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -384,7 +390,7 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), count)
 
-	assert.NoError(t, consumer.LastDelivery.Ack(nil))
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
 	count, err = queue.readyCount()
 	assert.NoError(t, err)
@@ -407,7 +413,8 @@ func TestMulti(t *testing.T) {
 }
 
 func TestBatch(t *testing.T) {
-	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "batch-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batch-q")
 	assert.NoError(t, err)
@@ -434,8 +441,8 @@ func TestBatch(t *testing.T) {
 	require.Len(t, consumer.LastBatch, 2)
 	assert.Equal(t, "batch-d0", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d1", consumer.LastBatch[1].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
-	assert.NoError(t, consumer.LastBatch[1].Ack(nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject())
+	assert.NoError(t, consumer.LastBatch[1].Ack())
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(3), count)
@@ -448,8 +455,8 @@ func TestBatch(t *testing.T) {
 	require.Len(t, consumer.LastBatch, 2)
 	assert.Equal(t, "batch-d2", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d3", consumer.LastBatch[1].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
-	assert.NoError(t, consumer.LastBatch[1].Ack(nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject())
+	assert.NoError(t, consumer.LastBatch[1].Ack())
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
@@ -470,7 +477,7 @@ func TestBatch(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	require.Len(t, consumer.LastBatch, 1)
 	assert.Equal(t, "batch-d4", consumer.LastBatch[0].Payload())
-	assert.NoError(t, consumer.LastBatch[0].Reject(nil))
+	assert.NoError(t, consumer.LastBatch[0].Reject())
 	count, err = queue.unackedCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -480,7 +487,8 @@ func TestBatch(t *testing.T) {
 }
 
 func TestReturnRejected(t *testing.T) {
-	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "return-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("return-q")
 	assert.NoError(t, err)
@@ -530,12 +538,12 @@ func TestReturnRejected(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 
 	assert.Len(t, consumer.LastDeliveries, 6)
-	assert.NoError(t, consumer.LastDeliveries[0].Reject(nil))
-	assert.NoError(t, consumer.LastDeliveries[1].Ack(nil))
-	assert.NoError(t, consumer.LastDeliveries[2].Reject(nil))
-	assert.NoError(t, consumer.LastDeliveries[3].Reject(nil))
+	assert.NoError(t, consumer.LastDeliveries[0].Reject())
+	assert.NoError(t, consumer.LastDeliveries[1].Ack())
+	assert.NoError(t, consumer.LastDeliveries[2].Reject())
+	assert.NoError(t, consumer.LastDeliveries[3].Reject())
 	// delivery 4 still open
-	assert.NoError(t, consumer.LastDeliveries[5].Reject(nil))
+	assert.NoError(t, consumer.LastDeliveries[5].Reject())
 
 	time.Sleep(time.Millisecond)
 	count, err = queue.readyCount()
@@ -578,7 +586,8 @@ func TestReturnRejected(t *testing.T) {
 }
 
 func TestPushQueue(t *testing.T) {
-	connection, err := OpenConnection("push", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "push", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue1, err := connection.OpenQueue("queue1")
 	assert.NoError(t, err)
@@ -608,7 +617,7 @@ func TestPushQueue(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 	require.Len(t, consumer1.LastDeliveries, 1)
 
-	assert.NoError(t, consumer1.LastDelivery.Push(nil))
+	assert.NoError(t, consumer1.LastDelivery.Push())
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue1.unackedCount()
 	assert.NoError(t, err)
@@ -618,7 +627,7 @@ func TestPushQueue(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 
 	require.Len(t, consumer2.LastDeliveries, 1)
-	assert.NoError(t, consumer2.LastDelivery.Push(nil))
+	assert.NoError(t, consumer2.LastDelivery.Push())
 	time.Sleep(2 * time.Millisecond)
 	count, err = queue2.rejectedCount()
 	assert.NoError(t, err)
@@ -626,7 +635,8 @@ func TestPushQueue(t *testing.T) {
 }
 
 func TestConsuming(t *testing.T) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -651,7 +661,8 @@ func TestConsuming(t *testing.T) {
 }
 
 func TestStopConsuming_Consumer(t *testing.T) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -695,7 +706,8 @@ func TestStopConsuming_Consumer(t *testing.T) {
 }
 
 func TestStopConsuming_BatchConsumer(t *testing.T) {
-	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "batchConsume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batchConsume-q")
 	assert.NoError(t, err)
@@ -743,11 +755,13 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 
 func BenchmarkQueue(b *testing.B) {
 	// open queue
-	connection, err := OpenConnection("bench-conn", "tcp", "localhost:6379", 1, nil)
+	ctx := context.Background()
+	connection, err := OpenConnection(ctx, "bench-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(b, err)
 	queueName := fmt.Sprintf("bench-q%d", b.N)
 	queue, err := connection.OpenQueue(queueName)
 	assert.NoError(b, err)
+	assert.NoError(b, queue.StartConsuming(10, time.Millisecond))
 
 	// add some consumers
 	numConsumers := 10
@@ -756,7 +770,6 @@ func BenchmarkQueue(b *testing.B) {
 		consumer := NewTestConsumer("bench-A")
 		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
-		assert.NoError(b, queue.StartConsuming(10, time.Millisecond))
 		_, err = queue.AddConsumer("bench-cons", consumer)
 		assert.NoError(b, err)
 	}

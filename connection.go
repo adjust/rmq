@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -46,6 +47,7 @@ type Connection interface {
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type redisConnection struct {
+	ctx             context.Context
 	Name            string
 	heartbeatKey    string // key to keep alive
 	queuesKey       string // key to list of queues consumed by this connection
@@ -59,31 +61,28 @@ type redisConnection struct {
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag, network, address string, db int, errChan chan<- error) (Connection, error) {
-	redisClient := redis.NewClient(&redis.Options{
-		Network: network,
-		Addr:    address,
-		DB:      db,
-	})
-	return OpenConnectionWithRedisClient(tag, redisClient, errChan)
+func OpenConnection(ctx context.Context, tag string, network string, address string, db int, errChan chan<- error) (Connection, error) {
+	redisClient := redis.NewClient(&redis.Options{Network: network, Addr: address, DB: db})
+	return OpenConnectionWithRedisClient(ctx, tag, redisClient, errChan)
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errChan)
+func OpenConnectionWithRedisClient(ctx context.Context, tag string, redisClient *redis.Client, errChan chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(ctx, tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
-func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (*redisConnection, error) {
-	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errChan)
+func OpenConnectionWithTestRedisClient(ctx context.Context, tag string, errChan chan<- error) (*redisConnection, error) {
+	return openConnectionWithRedisClient(ctx, tag, NewTestRedisClient(), errChan)
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (*redisConnection, error) {
+func openConnectionWithRedisClient(ctx context.Context, tag string, redisClient RedisClient, errChan chan<- error) (*redisConnection, error) {
 	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
 
 	connection := &redisConnection{
 		Name:            name,
+		ctx:             ctx,
 		heartbeatKey:    strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
 		queuesKey:       strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
 		redisClient:     redisClient,
@@ -249,6 +248,7 @@ func (connection *redisConnection) getConsumingQueues() ([]string, error) {
 // openQueue opens a queue without adding it to the set of queues
 func (connection *redisConnection) openQueue(name string) Queue {
 	return newQueue(
+		connection.ctx,
 		name,
 		connection.Name,
 		connection.queuesKey,
