@@ -230,8 +230,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 
 	queue.AddConsumer("multi-cons", consumer)
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 9)
-	c.Check(queue.UnackedCount(), Equals, 11)
+	c.Check(queue.ReadyCount(), Equals, 10)
+	c.Check(queue.UnackedCount(), Equals, 10)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(10 * time.Millisecond)
@@ -240,8 +240,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 8)
-	c.Check(queue.UnackedCount(), Equals, 11)
+	c.Check(queue.ReadyCount(), Equals, 9)
+	c.Check(queue.UnackedCount(), Equals, 10)
 
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(10 * time.Millisecond)
@@ -250,8 +250,8 @@ func (suite *QueueSuite) TestMulti(c *C) {
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 7)
-	c.Check(queue.UnackedCount(), Equals, 11)
+	c.Check(queue.ReadyCount(), Equals, 8)
+	c.Check(queue.UnackedCount(), Equals, 10)
 
 	queue.StopConsuming()
 	connection.StopHeartbeat()

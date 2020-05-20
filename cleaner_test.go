@@ -51,8 +51,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	queue.AddConsumer("consumer1", consumer)
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.ReadyCount(), Equals, 3)
+	c.Check(queue.UnackedCount(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 4)
 
 	c.Assert(consumer.LastDelivery, NotNil)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del1")
@@ -63,8 +63,8 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.ReadyCount(), Equals, 2)
+	c.Check(queue.UnackedCount(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 3)
 	c.Check(consumer.LastDelivery.Payload(), Equals, "del2")
 
 	queue.StopConsuming()
@@ -75,21 +75,21 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 	queue = conn.OpenQueue("q1").(*redisQueue)
 
 	queue.Publish("del7")
-	c.Check(queue.ReadyCount(), Equals, 3)
-	queue.Publish("del7")
 	c.Check(queue.ReadyCount(), Equals, 4)
-	queue.Publish("del8")
+	queue.Publish("del7")
 	c.Check(queue.ReadyCount(), Equals, 5)
-	queue.Publish("del9")
+	queue.Publish("del8")
 	c.Check(queue.ReadyCount(), Equals, 6)
-	queue.Publish("del10")
+	queue.Publish("del9")
 	c.Check(queue.ReadyCount(), Equals, 7)
+	queue.Publish("del10")
+	c.Check(queue.ReadyCount(), Equals, 8)
 
 	c.Check(queue.UnackedCount(), Equals, 0)
 	queue.StartConsuming(2, time.Millisecond)
 	time.Sleep(time.Millisecond)
 	c.Check(queue.UnackedCount(), Equals, 2)
-	c.Check(queue.ReadyCount(), Equals, 5)
+	c.Check(queue.ReadyCount(), Equals, 6)
 
 	consumer = NewTestConsumer("c-B")
 	consumer.AutoFinish = false
@@ -97,20 +97,20 @@ func (suite *CleanerSuite) TestCleaner(c *C) {
 
 	queue.AddConsumer("consumer2", consumer)
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.ReadyCount(), Equals, 4)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
+	c.Check(queue.UnackedCount(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 6)
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del4")
 
 	consumer.Finish() // unacked
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 4)
-	c.Check(queue.ReadyCount(), Equals, 3)
+	c.Check(queue.UnackedCount(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 6)
 
-	c.Check(consumer.LastDelivery.Payload(), Equals, "del6")
+	c.Check(consumer.LastDelivery.Payload(), Equals, "del5")
 	c.Check(consumer.LastDelivery.Ack(), Equals, true)
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.ReadyCount(), Equals, 3)
+	c.Check(queue.UnackedCount(), Equals, 2)
+	c.Check(queue.ReadyCount(), Equals, 5)
 
 	queue.StopConsuming()
 	conn.StopHeartbeat()
