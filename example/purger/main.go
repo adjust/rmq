@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/adjust/rmq/v2"
 )
 
 func main() {
-	connection, err := rmq.OpenConnection(context.Background(), "cleaner", "tcp", "localhost:6379", 2, nil)
+	connection, err := rmq.OpenConnection("cleaner", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

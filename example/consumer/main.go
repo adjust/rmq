@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -13,36 +12,20 @@ import (
 )
 
 const (
-	unackedLimit    = 1000
-	numConsumers    = 5
-	batchSize       = 1000
+	prefetchLimit = 1000
+	pollDuration  = 100 * time.Millisecond
+	numConsumers  = 5
+
+	reportBatchSize = 10000
 	consumeDuration = time.Millisecond
 	shouldLog       = false
 )
 
 func main() {
 	errChan := make(chan error, 10)
-	go func() {
-		for err := range errChan {
-			switch err := err.(type) {
-			case *rmq.ConsumeError:
-				log.Print("consume error: ", err)
-			case *rmq.HeartbeatError:
-				if err.Count == rmq.HeartbeatErrorLimit {
-					log.Print("heartbeat error (limit): ", err)
-				} else {
-					log.Print("heartbeat error: ", err)
-				}
-			case *rmq.DeliveryError:
-				log.Print("delivery error: ", err.Delivery, err)
-			default:
-				log.Print("other error: ", err)
-			}
-		}
-	}()
+	go logErrors(errChan)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	connection, err := rmq.OpenConnection(ctx, "consumer", "tcp", "localhost:6379", 2, errChan)
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errChan)
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +35,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := queue.StartConsuming(unackedLimit, 500*time.Millisecond); err != nil {
+	if err := queue.StartConsuming(prefetchLimit, pollDuration); err != nil {
 		panic(err)
 	}
 
@@ -73,11 +56,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	c := connection.StopAllConsuming()
-	// make sure Ack() and similar calls return with error so that they can be
-	// handled and the active Conume() calls can finish
-	cancel()
-	<-c // wait for all Conume() calls to finish
+	<-connection.StopAllConsuming() // wait for all Consume() calls to finish
 }
 
 type Consumer struct {
@@ -100,14 +79,14 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	time.Sleep(consumeDuration)
 
 	consumer.count++
-	if consumer.count%batchSize == 0 {
+	if consumer.count%reportBatchSize == 0 {
 		duration := time.Now().Sub(consumer.before)
 		consumer.before = time.Now()
-		perSecond := time.Second / (duration / batchSize)
+		perSecond := time.Second / (duration / reportBatchSize)
 		log.Printf("%s consumed %d %s %d", consumer.name, consumer.count, payload, perSecond)
 	}
 
-	if consumer.count%batchSize > 0 {
+	if consumer.count%reportBatchSize > 0 {
 		if err := delivery.Ack(); err != nil {
 			debugf("failed to ack %s: %s", payload, err)
 		} else {
@@ -118,6 +97,25 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 			debugf("failed to reject %s: %s", payload, err)
 		} else {
 			debugf("rejected %s", payload)
+		}
+	}
+}
+
+func logErrors(errChan <-chan error) {
+	for err := range errChan {
+		switch err := err.(type) {
+		case *rmq.ConsumeError:
+			log.Print("consume error: ", err)
+		case *rmq.HeartbeatError:
+			if err.Count == rmq.HeartbeatErrorLimit {
+				log.Print("heartbeat error (limit): ", err)
+			} else {
+				log.Print("heartbeat error: ", err)
+			}
+		case *rmq.DeliveryError:
+			log.Print("delivery error: ", err.Delivery, err)
+		default:
+			log.Print("other error: ", err)
 		}
 	}
 }

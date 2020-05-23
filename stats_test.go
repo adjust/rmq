@@ -1,7 +1,6 @@
 package rmq
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -10,15 +9,14 @@ import (
 )
 
 func TestStats(t *testing.T) {
-	ctx := context.Background()
-	connection, err := OpenConnection(ctx, "stats-conn", "tcp", "localhost:6379", 1, nil)
+	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	_, err = NewCleaner(connection).Clean()
 	require.NoError(t, err)
 
-	conn1, err := OpenConnection(ctx, "stats-conn1", "tcp", "localhost:6379", 1, nil)
+	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
-	conn2, err := OpenConnection(ctx, "stats-conn2", "tcp", "localhost:6379", 1, nil)
+	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	q1, err := conn2.OpenQueue("stats-q1")
 	assert.NoError(t, err)

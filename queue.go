@@ -41,7 +41,6 @@ type Queue interface {
 }
 
 type redisQueue struct {
-	ctx              context.Context
 	name             string
 	connectionName   string
 	queuesKey        string // key to list of queues consumed by this connection
@@ -57,10 +56,11 @@ type redisQueue struct {
 	pollDuration     time.Duration
 	consumingStopped chan struct{} // this chan gets closed when consuming on this queue got stopped
 	stopWg           sync.WaitGroup
+	ackCtx           context.Context
+	ackCancel        context.CancelFunc
 }
 
 func newQueue(
-	ctx context.Context,
 	name string,
 	connectionName string,
 	queuesKey string,
@@ -78,7 +78,6 @@ func newQueue(
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
 	queue := &redisQueue{
-		ctx:            ctx,
 		name:           name,
 		connectionName: connectionName,
 		queuesKey:      queuesKey,
@@ -138,6 +137,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
 	queue.consumingStopped = make(chan struct{})
+	queue.ackCtx, queue.ackCancel = context.WithCancel(context.Background())
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return nil
@@ -151,7 +151,7 @@ func (queue *redisQueue) consume() {
 		case nil: // success
 			errorCount = 0
 
-		case errorConsumingStopped:
+		case ErrorConsumingStopped:
 			close(queue.deliveryChan)
 			return
 
@@ -169,7 +169,7 @@ func (queue *redisQueue) consume() {
 func (queue *redisQueue) consumeBatch() error {
 	select {
 	case <-queue.consumingStopped:
-		return errorConsumingStopped
+		return ErrorConsumingStopped
 	default:
 	}
 
@@ -189,7 +189,7 @@ func (queue *redisQueue) consumeBatch() error {
 	for i := int64(0); i < batchSize; i++ {
 		select {
 		case <-queue.consumingStopped:
-			return errorConsumingStopped
+			return ErrorConsumingStopped
 		default:
 		}
 
@@ -212,7 +212,7 @@ func (queue *redisQueue) consumeBatch() error {
 
 func (queue *redisQueue) newDelivery(payload string) Delivery {
 	return newDelivery(
-		queue.ctx,
+		queue.ackCtx,
 		payload,
 		queue.unackedKey,
 		queue.rejectedKey,
@@ -243,6 +243,7 @@ func (queue *redisQueue) StopConsuming() <-chan struct{} {
 	// log.Printf("rmq queue stopping %s", queue)
 	close(queue.consumingStopped)
 	go func() {
+		queue.ackCancel()
 		queue.stopWg.Wait()
 		close(finishedChan)
 		// log.Printf("rmq queue stopped consuming %s", queue)

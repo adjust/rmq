@@ -55,8 +55,7 @@ func (delivery *redisDelivery) Payload() string {
 // blocking versions of the functions below with the following behavior:
 // 1. return immediately if the operation succeeded or failed with ErrorNotFound
 // 2. in case of other redis errors, send them to the errors chan and retry after a sleep
-// 3. if the context is cancalled or its timeout exceeded, context.Cancelled or
-//    context.DeadlineExceeded will be returned
+// 3. if redis errors occur after StopConsuming() has been called, ErrorConsumingStopped will be returned
 
 func (delivery *redisDelivery) Ack() error {
 	errorCount := 0
@@ -79,7 +78,7 @@ func (delivery *redisDelivery) Ack() error {
 		}
 
 		if err := delivery.ctx.Err(); err != nil {
-			return err
+			return ErrorConsumingStopped
 		}
 
 		time.Sleep(time.Second)

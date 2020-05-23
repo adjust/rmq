@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"math"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection(context.Background(), "returner", "tcp", "localhost:6379", 2, nil)
+	connection, err := rmq.OpenConnection("returner", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}

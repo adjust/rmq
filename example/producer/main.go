@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -15,7 +14,7 @@ const (
 )
 
 func main() {
-	connection, err := rmq.OpenConnection(context.Background(), "producer", "tcp", "localhost:6379", 2, nil)
+	connection, err := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +23,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	balls, err := connection.OpenQueue("balls")
+	foobars, err := connection.OpenQueue("foobars")
 	if err != nil {
 		panic(err)
 	}
@@ -41,7 +40,7 @@ func main() {
 			before = time.Now()
 			perSecond := time.Second / (duration / batchSize)
 			log.Printf("produced %d %s %d", i, delivery, perSecond)
-			if err := balls.Publish("ball"); err != nil {
+			if err := foobars.Publish("foo"); err != nil {
 				log.Printf("failed to publish: %s", err)
 			}
 		}
