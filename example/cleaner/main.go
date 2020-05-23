@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/adjust/rmq/v2"
+	"github.com/adjust/rmq/v3"
 )
 
 func main() {
