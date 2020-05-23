@@ -316,8 +316,10 @@ func (queue *redisQueue) consume() {
 }
 
 func (queue *redisQueue) batchSize() int {
-	prefetchCount := len(queue.deliveryChan)
-	prefetchLimit := queue.prefetchLimit - prefetchCount
+	// prefetchCount := len(queue.deliveryChan)
+	// prefetchLimit := queue.prefetchLimit - prefetchCount
+	prefetchLimit := queue.prefetchLimit - queue.UnackedCount() 
+
 	// TODO: ignore ready count here and just return prefetchLimit?
 	if readyCount := queue.ReadyCount(); readyCount < prefetchLimit {
 		return readyCount
