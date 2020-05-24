@@ -2,6 +2,7 @@ package rmq
 
 import (
 	"encoding/json"
+	"log"
 )
 
 type TestDelivery struct {
@@ -16,7 +17,7 @@ func NewTestDelivery(content interface{}) *TestDelivery {
 
 	bytes, err := json.Marshal(content)
 	if err != nil {
-		bytes = []byte("rmq.NewTestDelivery failed to marshal")
+		log.Panic("rmq.NewTestDelivery failed to marshal")
 	}
 
 	return NewTestDeliveryString(string(bytes))

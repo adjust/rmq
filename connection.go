@@ -64,17 +64,17 @@ func OpenConnection(tag string, network string, address string, db int, errChan 
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (*redisConnection, error) {
+func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (Connection, error) {
 	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
-func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (*redisConnection, error) {
+func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (Connection, error) {
 	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errChan)
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (*redisConnection, error) {
+func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
 	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	connection := &redisConnection{
