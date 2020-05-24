@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/adjust/uniuri"
 )
 
 const (
@@ -372,7 +370,7 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 		return "", ErrorNotConsuming
 	}
 
-	name = fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+	name = fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	// add consumer to list of consumers of this queue
 	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {

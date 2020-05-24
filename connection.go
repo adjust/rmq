@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adjust/uniuri"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -76,7 +75,7 @@ func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (*redis
 }
 
 func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (*redisConnection, error) {
-	name := fmt.Sprintf("%s-%s", tag, uniuri.NewLen(6))
+	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	connection := &redisConnection{
 		Name:            name,
