@@ -21,6 +21,10 @@ func (e *ConsumeError) Error() string {
 	return fmt.Sprintf("rmq.ConsumeError (%d): %s", e.Count, e.RedisErr.Error())
 }
 
+func (e *ConsumeError) Unwrap() error {
+	return e.RedisErr
+}
+
 type HeartbeatError struct {
 	RedisErr error
 	Count    int // number of consecutive errors
@@ -28,6 +32,10 @@ type HeartbeatError struct {
 
 func (e *HeartbeatError) Error() string {
 	return fmt.Sprintf("rmq.HeartbeatError (%d): %s", e.Count, e.RedisErr.Error())
+}
+
+func (e *HeartbeatError) Unwrap() error {
+	return e.RedisErr
 }
 
 type DeliveryError struct {
@@ -38,4 +46,8 @@ type DeliveryError struct {
 
 func (e *DeliveryError) Error() string {
 	return fmt.Sprintf("rmq.DeliveryError (%d): %s", e.Count, e.RedisErr.Error())
+}
+
+func (e *DeliveryError) Unwrap() error {
+	return e.RedisErr
 }
