@@ -29,7 +29,7 @@ func (cleaner *Cleaner) Clean() (returned int64, err error) {
 		case nil: // active connection
 			continue
 		case ErrorNotFound:
-			n, err := cleanConnection(hijackedConnection)
+			n, err := cleanStaleConnection(hijackedConnection)
 			if err != nil {
 				return 0, err
 			}
@@ -42,14 +42,14 @@ func (cleaner *Cleaner) Clean() (returned int64, err error) {
 	return returned, nil
 }
 
-func cleanConnection(hijackedConnection Connection) (returned int64, err error) {
-	queueNames, err := hijackedConnection.getConsumingQueues()
+func cleanStaleConnection(staleConnection Connection) (returned int64, err error) {
+	queueNames, err := staleConnection.getConsumingQueues()
 	if err != nil {
 		return 0, err
 	}
 
 	for _, queueName := range queueNames {
-		queue, err := hijackedConnection.OpenQueue(queueName)
+		queue, err := staleConnection.OpenQueue(queueName)
 		if err != nil {
 			return 0, err
 		}
@@ -62,11 +62,11 @@ func cleanConnection(hijackedConnection Connection) (returned int64, err error) 
 		returned += n
 	}
 
-	if err := hijackedConnection.closeStaleConnection(); err != nil {
+	if err := staleConnection.closeStaleConnection(); err != nil {
 		return 0, err
 	}
 
-	// log.Printf("rmq cleaner cleaned connection %s", hijackedConnection)
+	// log.Printf("rmq cleaner cleaned connection %s", staleConnection)
 	return returned, nil
 }
 

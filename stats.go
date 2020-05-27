@@ -98,10 +98,10 @@ func CollectStats(queueList []string, mainConnection Connection) (Stats, error) 
 	}
 
 	for _, connectionName := range connectionNames {
-		connection := mainConnection.hijackConnection(connectionName)
+		hijackedConnection := mainConnection.hijackConnection(connectionName)
 
 		var connectionActive bool
-		switch err := connection.checkHeartbeat(); err {
+		switch err := hijackedConnection.checkHeartbeat(); err {
 		case nil:
 			connectionActive = true
 		case ErrorNotFound:
@@ -110,7 +110,7 @@ func CollectStats(queueList []string, mainConnection Connection) (Stats, error) 
 			return stats, err
 		}
 
-		queueNames, err := connection.getConsumingQueues()
+		queueNames, err := hijackedConnection.getConsumingQueues()
 		if err != nil {
 			return stats, err
 		}
@@ -120,7 +120,7 @@ func CollectStats(queueList []string, mainConnection Connection) (Stats, error) 
 		}
 
 		for _, queueName := range queueNames {
-			queue := connection.openQueue(queueName)
+			queue := hijackedConnection.openQueue(queueName)
 			consumers, err := queue.getConsumers()
 			if err != nil {
 				return stats, err
