@@ -122,16 +122,15 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 		default:
 		}
 
-		if errorCount < HeartbeatErrorLimit {
-			// keep trying unless we hit the limit
-			continue
+		if errorCount >= HeartbeatErrorLimit {
+			// reached error limit
+			connection.heartbeatTicker.Stop()
+			finishedChan := connection.StopAllConsuming()
+			<-finishedChan // wait for all consuming to stop
+			return
 		}
-		// reached error limit
 
-		connection.heartbeatTicker.Stop()
-		finishedChan := connection.StopAllConsuming()
-		<-finishedChan // wait for all consuming to stop
-		return
+		// keep trying until we hit the limit
 	}
 }
 
