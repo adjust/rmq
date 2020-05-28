@@ -15,6 +15,7 @@ func TestConnections(t *testing.T) {
 	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
 	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1, nil)
