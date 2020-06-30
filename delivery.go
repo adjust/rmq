@@ -113,6 +113,10 @@ func (delivery *redisDelivery) move(key string) error {
 		default:
 		}
 
+		if err := delivery.ctx.Err(); err != nil {
+			return ErrorConsumingStopped
+		}
+
 		time.Sleep(time.Second)
 	}
 
