@@ -129,17 +129,20 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 
 		errorCount++
 
-		select { // try to add error to channel, but don't block
-		case errChan <- &HeartbeatError{RedisErr: err, Count: errorCount}:
-		default:
-		}
-
 		if errorCount >= HeartbeatErrorLimit {
 			// reached error limit
 			connection.StopAllConsuming()
+			// Clients reading from errChan need to see this error
+			// This allows them to shut themselves down
+			// Therefore we block adding it to errChan to ensure delivery
+			errChan <- &HeartbeatError{RedisErr: err, Count: errorCount}
 			return
+		} else {
+			select { // try to add error to channel, but don't block
+			case errChan <- &HeartbeatError{RedisErr: err, Count: errorCount}:
+			default:
+			}
 		}
-
 		// keep trying until we hit the limit
 	}
 }
