@@ -11,7 +11,7 @@ func NewCleaner(connection Connection) *Cleaner {
 }
 
 func (cleaner *Cleaner) Clean() error {
-	cleanerConnection, ok := cleaner.connection.(*redisConnection)
+	cleanerConnection, ok := cleaner.connection.(*RedisConnection)
 	if !ok {
 		return nil
 	}
@@ -30,7 +30,7 @@ func (cleaner *Cleaner) Clean() error {
 	return nil
 }
 
-func CleanConnection(connection *redisConnection) error {
+func CleanConnection(connection *RedisConnection) error {
 	queueNames := connection.GetConsumingQueues()
 	for _, queueName := range queueNames {
 		queue, ok := connection.OpenQueue(queueName).(*redisQueue)

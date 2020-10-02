@@ -77,7 +77,7 @@ func NewStats() Stats {
 	}
 }
 
-func CollectStats(queueList []string, mainConnection *redisConnection) Stats {
+func CollectStats(queueList []string, mainConnection *RedisConnection) Stats {
 	stats := NewStats()
 	for _, queueName := range queueList {
 		queue := mainConnection.openQueue(queueName)
