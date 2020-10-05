@@ -560,6 +560,86 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
+func TestStartConsuming_StoppedConsumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	deliveryCount := int64(30)
+
+	for i := int64(0); i < deliveryCount; i++ {
+		err := queue.Publish("d" + strconv.FormatInt(i, 10))
+		assert.NoError(t, err)
+	}
+
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+	consumer := NewTestConsumer("consumer")
+	_, err = queue.AddConsumer("consume", consumer)
+	assert.NoError(t, err)
+
+	finishedChan := queue.StopConsuming()
+	require.NotNil(t, finishedChan)
+
+	<-finishedChan
+
+	consumedCount := int64(len(consumer.LastDeliveries))
+
+	// make sure all deliveries are either ready, unacked or consumed (acked)
+	readyCount, err := queue.readyCount()
+	assert.NoError(t, err)
+	unackedCount, err := queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
+
+	// restart the stopped consumer
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+	_, err = queue.AddConsumer("consume", consumer)
+	assert.NoError(t, err)
+
+	time.Sleep(time.Second)
+
+	finishedChan = queue.StopConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan
+
+	consumedCount = int64(len(consumer.LastDeliveries))
+
+	// make sure all deliveries are consumed (acked)
+	readyCount, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Zero(t, readyCount)
+	unackedCount, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Zero(t, unackedCount)
+	assert.Equal(t, consumedCount, deliveryCount, "consumed counts %d = %d", consumedCount, deliveryCount)
+
+	assert.NoError(t, connection.stopHeartbeat())
+}
+
+func TestAddConsumer_Failure(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	// AddConsumer should fail on an unstarted queue
+	consumer := NewTestConsumer("consumer")
+	consumer.SleepDuration = time.Second
+	_, err = queue.AddConsumer("consume", consumer)
+	assert.Equal(t, ErrorNotConsuming, err)
+
+	// AddConsumer should fail on a just stopped queue
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+	assert.NotNil(t, queue.StopConsuming())
+	_, err = queue.AddConsumer("consume", consumer)
+	assert.Equal(t, ErrorConsumingStopped, err)
+}
+
 func TestStopConsuming_BatchConsumer(t *testing.T) {
 	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
