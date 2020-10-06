@@ -2,502 +2,754 @@ package rmq
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"testing"
 	"time"
 
-	. "github.com/adjust/gocheck"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestQueueSuite(t *testing.T) {
-	TestingSuiteT(&QueueSuite{}, t)
+func TestConnections(t *testing.T) {
+	flushConn, err := OpenConnection("conns-flush", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	assert.NoError(t, flushConn.stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, flushConn.stopHeartbeat())
+	assert.NoError(t, flushConn.flushDb())
+
+	connection, err := OpenConnection("conns-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
+	_, err = NewCleaner(connection).Clean()
+	require.NoError(t, err)
+
+	connections, err := connection.getConnections()
+	assert.NoError(t, err)
+	assert.Len(t, connections, 1) // cleaner connection remains
+
+	conn1, err := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	connections, err = connection.getConnections()
+	assert.NoError(t, err)
+	assert.Len(t, connections, 2)
+	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").checkHeartbeat())
+	assert.NoError(t, conn1.checkHeartbeat())
+	conn2, err := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	connections, err = connection.getConnections()
+	assert.NoError(t, err)
+	assert.Len(t, connections, 3)
+	assert.NoError(t, conn1.checkHeartbeat())
+	assert.NoError(t, conn2.checkHeartbeat())
+
+	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").stopHeartbeat())
+	assert.NoError(t, conn1.stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, conn1.checkHeartbeat())
+	assert.NoError(t, conn2.checkHeartbeat())
+	connections, err = connection.getConnections()
+	assert.NoError(t, err)
+	assert.Len(t, connections, 3)
+
+	assert.NoError(t, conn2.stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, conn1.checkHeartbeat())
+	assert.Equal(t, ErrorNotFound, conn2.checkHeartbeat())
+	connections, err = connection.getConnections()
+	assert.NoError(t, err)
+	assert.Len(t, connections, 3)
+
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-type QueueSuite struct{}
+func TestConnectionQueues(t *testing.T) {
+	connection, err := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
 
-func (suite *QueueSuite) TestConnections(c *C) {
-	flushConn := OpenConnection("conns-flush", "tcp", "localhost:6379", 1)
-	flushConn.flushDb()
-	flushConn.StopHeartbeat()
+	assert.NoError(t, connection.unlistAllQueues())
+	queues, err := connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 0)
 
-	connection := OpenConnection("conns-conn", "tcp", "localhost:6379", 1)
-	c.Assert(connection, NotNil)
-	c.Assert(NewCleaner(connection).Clean(), IsNil)
+	queue1, err := connection.OpenQueue("conn-q-q1")
+	assert.NoError(t, err)
+	require.NotNil(t, queue1)
+	queues, err = connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"conn-q-q1"}, queues)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 0)
+	assert.NoError(t, queue1.StartConsuming(1, time.Millisecond))
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"conn-q-q1"}, queues)
 
-	c.Check(connection.GetConnections(), HasLen, 1, Commentf("cleaner %s", connection.Name)) // cleaner connection remains
-
-	conn1 := OpenConnection("conns-conn1", "tcp", "localhost:6379", 1)
-	c.Check(connection.GetConnections(), HasLen, 2)
-	c.Check(connection.hijackConnection("nope").Check(), Equals, false)
-	c.Check(conn1.Check(), Equals, true)
-	conn2 := OpenConnection("conns-conn2", "tcp", "localhost:6379", 1)
-	c.Check(connection.GetConnections(), HasLen, 3)
-	c.Check(conn1.Check(), Equals, true)
-	c.Check(conn2.Check(), Equals, true)
-
-	connection.hijackConnection("nope").StopHeartbeat()
-	conn1.StopHeartbeat()
-	c.Check(conn1.Check(), Equals, false)
-	c.Check(conn2.Check(), Equals, true)
-	c.Check(connection.GetConnections(), HasLen, 3)
-
-	conn2.StopHeartbeat()
-	c.Check(conn1.Check(), Equals, false)
-	c.Check(conn2.Check(), Equals, false)
-	c.Check(connection.GetConnections(), HasLen, 3)
-
-	connection.StopHeartbeat()
-}
-
-func (suite *QueueSuite) TestConnectionQueues(c *C) {
-	connection := OpenConnection("conn-q-conn", "tcp", "localhost:6379", 1)
-	c.Assert(connection, NotNil)
-
-	connection.CloseAllQueues()
-	c.Check(connection.GetOpenQueues(), HasLen, 0)
-
-	queue1 := connection.OpenQueue("conn-q-q1").(*redisQueue)
-	c.Assert(queue1, NotNil)
-	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q1"})
-	c.Check(connection.GetConsumingQueues(), HasLen, 0)
-	queue1.StartConsuming(1, time.Millisecond)
-	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
-
-	queue2 := connection.OpenQueue("conn-q-q2").(*redisQueue)
-	c.Assert(queue2, NotNil)
-	c.Check(connection.GetOpenQueues(), HasLen, 2)
-	c.Check(connection.GetConsumingQueues(), HasLen, 1)
-	queue2.StartConsuming(1, time.Millisecond)
-	c.Check(connection.GetConsumingQueues(), HasLen, 2)
+	queue2, err := connection.OpenQueue("conn-q-q2")
+	assert.NoError(t, err)
+	require.NotNil(t, queue2)
+	queues, err = connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 2)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 1)
+	assert.NoError(t, queue2.StartConsuming(1, time.Millisecond))
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 2)
 
 	queue2.StopConsuming()
-	queue2.CloseInConnection()
-	c.Check(connection.GetOpenQueues(), HasLen, 2)
-	c.Check(connection.GetConsumingQueues(), DeepEquals, []string{"conn-q-q1"})
+	assert.NoError(t, queue2.closeInStaleConnection())
+	queues, err = connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 2)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"conn-q-q1"}, queues)
 
 	queue1.StopConsuming()
-	queue1.CloseInConnection()
-	c.Check(connection.GetOpenQueues(), HasLen, 2)
-	c.Check(connection.GetConsumingQueues(), HasLen, 0)
+	assert.NoError(t, queue1.closeInStaleConnection())
+	queues, err = connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 2)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 0)
 
-	queue1.Close()
-	c.Check(connection.GetOpenQueues(), DeepEquals, []string{"conn-q-q2"})
-	c.Check(connection.GetConsumingQueues(), HasLen, 0)
+	readyCount, rejectedCount, err := queue1.Destroy()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), readyCount)
+	assert.Equal(t, int64(0), rejectedCount)
+	queues, err = connection.GetOpenQueues()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"conn-q-q2"}, queues)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 0)
 
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) TestQueue(c *C) {
-	connection := OpenConnection("queue-conn", "tcp", "localhost:6379", 1)
-	c.Assert(connection, NotNil)
+func TestQueueCommon(t *testing.T) {
+	connection, err := OpenConnection("queue-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
 
-	queue := connection.OpenQueue("queue-q").(*redisQueue)
-	c.Assert(queue, NotNil)
-	queue.PurgeReady()
-	c.Check(queue.ReadyCount(), Equals, 0)
-	c.Check(queue.Publish("queue-d1"), Equals, true)
-	c.Check(queue.ReadyCount(), Equals, 1)
-	c.Check(queue.Publish("queue-d2"), Equals, true)
-	c.Check(queue.ReadyCount(), Equals, 2)
-	c.Check(queue.PurgeReady(), Equals, 2)
-	c.Check(queue.ReadyCount(), Equals, 0)
-	c.Check(queue.PurgeReady(), Equals, 0)
+	queue, err := connection.OpenQueue("queue-q")
+	assert.NoError(t, err)
+	require.NotNil(t, queue)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+	count, err := queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	assert.NoError(t, queue.Publish("queue-d1"))
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	assert.NoError(t, queue.Publish("queue-d2"))
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+	count, err = queue.PurgeReady()
+	assert.Equal(t, int64(2), count)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.PurgeReady()
+	assert.Equal(t, int64(0), count)
 
-	queue.RemoveAllConsumers()
-	c.Check(queue.GetConsumers(), HasLen, 0)
-	c.Check(connection.GetConsumingQueues(), HasLen, 0)
-	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, true)
-	c.Check(queue.StartConsuming(10, time.Millisecond), Equals, false)
-	cons1name := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
+	queues, err := connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 0)
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
+	assert.Equal(t, ErrorAlreadyConsuming, queue.StartConsuming(10, time.Millisecond))
+	cons1name, err := queue.AddConsumer("queue-cons1", NewTestConsumer("queue-A"))
+	assert.NoError(t, err)
 	time.Sleep(time.Millisecond)
-	c.Check(connection.GetConsumingQueues(), HasLen, 1)
-	c.Check(queue.GetConsumers(), DeepEquals, []string{cons1name})
-	cons2name := queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
-	c.Check(queue.GetConsumers(), HasLen, 2)
-	c.Check(queue.RemoveConsumer("queue-cons3"), Equals, false)
-	c.Check(queue.RemoveConsumer(cons1name), Equals, true)
-	c.Check(queue.GetConsumers(), DeepEquals, []string{cons2name})
-	c.Check(queue.RemoveConsumer(cons2name), Equals, true)
-	c.Check(queue.GetConsumers(), HasLen, 0)
+	queues, err = connection.getConsumingQueues()
+	assert.NoError(t, err)
+	assert.Len(t, queues, 1)
+	consumers, err := queue.getConsumers()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{cons1name}, consumers)
+	_, err = queue.AddConsumer("queue-cons2", NewTestConsumer("queue-B"))
+	assert.NoError(t, err)
+	consumers, err = queue.getConsumers()
+	assert.NoError(t, err)
+	assert.Len(t, consumers, 2)
 
 	queue.StopConsuming()
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) TestConsumer(c *C) {
-	connection := OpenConnection("cons-conn", "tcp", "localhost:6379", 1)
-	c.Assert(connection, NotNil)
+func TestConsumerCommon(t *testing.T) {
+	connection, err := OpenConnection("cons-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
 
-	queue1 := connection.OpenQueue("cons-q").(*redisQueue)
-	c.Assert(queue1, NotNil)
-	queue1.PurgeReady()
+	queue1, err := connection.OpenQueue("cons-q")
+	assert.NoError(t, err)
+	require.NotNil(t, queue1)
+	_, err = queue1.PurgeReady()
+	assert.NoError(t, err)
 
 	consumer := NewTestConsumer("cons-A")
 	consumer.AutoAck = false
-	queue1.StartConsuming(10, time.Millisecond)
-	queue1.AddConsumer("cons-cons", consumer)
-	c.Check(consumer.LastDelivery, IsNil)
+	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond))
+	_, err = queue1.AddConsumer("cons-cons", consumer)
+	assert.NoError(t, err)
+	assert.Nil(t, consumer.LastDelivery)
 
-	c.Check(queue1.Publish("cons-d1"), Equals, true)
+	assert.NoError(t, queue1.Publish("cons-d1"))
 	time.Sleep(2 * time.Millisecond)
-	c.Assert(consumer.LastDelivery, NotNil)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d1")
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 1)
+	require.NotNil(t, consumer.LastDelivery)
+	assert.Equal(t, "cons-d1", consumer.LastDelivery.Payload())
+	count, err := queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 
-	c.Check(queue1.Publish("cons-d2"), Equals, true)
+	assert.NoError(t, queue1.Publish("cons-d2"))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d2")
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 2)
+	assert.Equal(t, "cons-d2", consumer.LastDelivery.Payload())
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
 
-	c.Check(consumer.LastDeliveries[0].Ack(), Equals, true)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 1)
+	assert.NoError(t, consumer.LastDeliveries[0].Ack())
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 
-	c.Check(consumer.LastDeliveries[1].Ack(), Equals, true)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 0)
+	assert.NoError(t, consumer.LastDeliveries[1].Ack())
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
-	c.Check(consumer.LastDeliveries[0].Ack(), Equals, false)
+	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack())
 
-	c.Check(queue1.Publish("cons-d3"), Equals, true)
+	assert.NoError(t, queue1.Publish("cons-d3"))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 1)
-	c.Check(queue1.RejectedCount(), Equals, 0)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d3")
-	c.Check(consumer.LastDelivery.Reject(), Equals, true)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 0)
-	c.Check(queue1.RejectedCount(), Equals, 1)
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	count, err = queue1.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	assert.Equal(t, "cons-d3", consumer.LastDelivery.Payload())
+	assert.NoError(t, consumer.LastDelivery.Reject())
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 
-	c.Check(queue1.Publish("cons-d4"), Equals, true)
+	assert.NoError(t, queue1.Publish("cons-d4"))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 1)
-	c.Check(queue1.RejectedCount(), Equals, 1)
-	c.Check(consumer.LastDelivery.Payload(), Equals, "cons-d4")
-	c.Check(consumer.LastDelivery.Reject(), Equals, true)
-	c.Check(queue1.ReadyCount(), Equals, 0)
-	c.Check(queue1.UnackedCount(), Equals, 0)
-	c.Check(queue1.RejectedCount(), Equals, 2)
-	c.Check(queue1.PurgeRejected(), Equals, 2)
-	c.Check(queue1.RejectedCount(), Equals, 0)
-	c.Check(queue1.PurgeRejected(), Equals, 0)
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	count, err = queue1.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	assert.Equal(t, "cons-d4", consumer.LastDelivery.Payload())
+	assert.NoError(t, consumer.LastDelivery.Reject())
+	count, err = queue1.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+	count, err = queue1.PurgeRejected()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+	count, err = queue1.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue1.PurgeRejected()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
-	queue2 := connection.OpenQueue("cons-func-q").(*redisQueue)
-	queue2.StartConsuming(10, time.Millisecond)
+	queue2, err := connection.OpenQueue("cons-func-q")
+	assert.NoError(t, err)
+	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond))
 
 	payloadChan := make(chan string, 1)
 	payload := "cons-func-payload"
 
-	queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
-		delivery.Ack()
+	_, err = queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
+		err = delivery.Ack()
+		assert.NoError(t, err)
 		payloadChan <- delivery.Payload()
 	})
+	assert.NoError(t, err)
 
-	c.Check(queue2.Publish(payload), Equals, true)
+	assert.NoError(t, queue2.Publish(payload))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(<-payloadChan, Equals, payload)
-	c.Check(queue2.ReadyCount(), Equals, 0)
-	c.Check(queue2.UnackedCount(), Equals, 0)
+	assert.Equal(t, payload, <-payloadChan)
+	count, err = queue2.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue2.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
 	queue1.StopConsuming()
 	queue2.StopConsuming()
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) TestMulti(c *C) {
-	connection := OpenConnection("multi-conn", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("multi-q").(*redisQueue)
-	queue.PurgeReady()
+func TestMulti(t *testing.T) {
+	connection, err := OpenConnection("multi-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("multi-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
-		c.Check(queue.Publish(fmt.Sprintf("multi-d%d", i)), Equals, true)
+		err := queue.Publish(fmt.Sprintf("multi-d%d", i))
+		assert.NoError(t, err)
 	}
-	c.Check(queue.ReadyCount(), Equals, 20)
-	c.Check(queue.UnackedCount(), Equals, 0)
+	count, err := queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(20), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
-	queue.StartConsuming(10, time.Millisecond)
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 10)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
 	consumer := NewTestConsumer("multi-cons")
 	consumer.AutoAck = false
 	consumer.AutoFinish = false
 
-	queue.AddConsumer("multi-cons", consumer)
+	_, err = queue.AddConsumer("multi-cons", consumer)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 10)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
-	c.Check(consumer.LastDelivery.Ack(), Equals, true)
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 9)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(9), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 9)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(9), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
-	c.Check(consumer.LastDelivery.Ack(), Equals, true)
+	assert.NoError(t, consumer.LastDelivery.Ack())
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 8)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(8), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 8)
-	c.Check(queue.UnackedCount(), Equals, 10)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(8), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
 
 	queue.StopConsuming()
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) TestBatch(c *C) {
-	connection := OpenConnection("batch-conn", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("batch-q").(*redisQueue)
-	queue.PurgeRejected()
-	queue.PurgeReady()
+func TestBatch(t *testing.T) {
+	connection, err := OpenConnection("batch-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("batch-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeRejected()
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		c.Check(queue.Publish(fmt.Sprintf("batch-d%d", i)), Equals, true)
+		err := queue.Publish(fmt.Sprintf("batch-d%d", i))
+		assert.NoError(t, err)
 	}
 
-	queue.StartConsuming(10, time.Millisecond)
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(10 * time.Millisecond)
-	c.Check(queue.UnackedCount(), Equals, 5)
+	count, err := queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), count)
 
 	consumer := NewTestBatchConsumer()
-	queue.AddBatchConsumerWithTimeout("batch-cons", 2, 50*time.Millisecond, consumer)
+	_, err = queue.AddBatchConsumer("batch-cons", 2, 50*time.Millisecond, consumer)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 2)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d0")
-	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d1")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 3)
-	c.Check(queue.RejectedCount(), Equals, 1)
+	require.Len(t, consumer.LastBatch, 2)
+	assert.Equal(t, "batch-d0", consumer.LastBatch[0].Payload())
+	assert.Equal(t, "batch-d1", consumer.LastBatch[1].Payload())
+	assert.NoError(t, consumer.LastBatch[0].Reject())
+	assert.NoError(t, consumer.LastBatch[1].Ack())
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 2)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d2")
-	c.Check(consumer.LastBatch[1].Payload(), Equals, "batch-d3")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(consumer.LastBatch[1].Ack(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 1)
-	c.Check(queue.RejectedCount(), Equals, 2)
+	require.Len(t, consumer.LastBatch, 2)
+	assert.Equal(t, "batch-d2", consumer.LastBatch[0].Payload())
+	assert.Equal(t, "batch-d3", consumer.LastBatch[1].Payload())
+	assert.NoError(t, consumer.LastBatch[0].Reject())
+	assert.NoError(t, consumer.LastBatch[1].Ack())
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
 
 	consumer.Finish()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(consumer.LastBatch, HasLen, 0)
-	c.Check(queue.UnackedCount(), Equals, 1)
-	c.Check(queue.RejectedCount(), Equals, 2)
+	assert.Len(t, consumer.LastBatch, 0)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count)
 
 	time.Sleep(60 * time.Millisecond)
-	c.Assert(consumer.LastBatch, HasLen, 1)
-	c.Check(consumer.LastBatch[0].Payload(), Equals, "batch-d4")
-	c.Check(consumer.LastBatch[0].Reject(), Equals, true)
-	c.Check(queue.UnackedCount(), Equals, 0)
-	c.Check(queue.RejectedCount(), Equals, 3)
+	require.Len(t, consumer.LastBatch, 1)
+	assert.Equal(t, "batch-d4", consumer.LastBatch[0].Payload())
+	assert.NoError(t, consumer.LastBatch[0].Reject())
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), count)
 }
 
-func (suite *QueueSuite) TestReturnRejected(c *C) {
-	connection := OpenConnection("return-conn", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("return-q").(*redisQueue)
-	queue.PurgeReady()
+func TestReturnRejected(t *testing.T) {
+	connection, err := OpenConnection("return-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("return-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
 
 	for i := 0; i < 6; i++ {
-		c.Check(queue.Publish(fmt.Sprintf("return-d%d", i)), Equals, true)
+		err := queue.Publish(fmt.Sprintf("return-d%d", i))
+		assert.NoError(t, err)
 	}
 
-	c.Check(queue.ReadyCount(), Equals, 6)
-	c.Check(queue.UnackedCount(), Equals, 0)
-	c.Check(queue.RejectedCount(), Equals, 0)
+	count, err := queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(6), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
-	queue.StartConsuming(10, time.Millisecond)
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
 	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 0)
-	c.Check(queue.UnackedCount(), Equals, 6)
-	c.Check(queue.RejectedCount(), Equals, 0)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(6), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
 	consumer := NewTestConsumer("return-cons")
 	consumer.AutoAck = false
-	queue.AddConsumer("cons", consumer)
+	_, err = queue.AddConsumer("cons", consumer)
+	assert.NoError(t, err)
 	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 0)
-	c.Check(queue.UnackedCount(), Equals, 6)
-	c.Check(queue.RejectedCount(), Equals, 0)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(6), count)
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 
-	c.Check(consumer.LastDeliveries, HasLen, 6)
-	consumer.LastDeliveries[0].Reject()
-	consumer.LastDeliveries[1].Ack()
-	consumer.LastDeliveries[2].Reject()
-	consumer.LastDeliveries[3].Reject()
+	assert.Len(t, consumer.LastDeliveries, 6)
+	assert.NoError(t, consumer.LastDeliveries[0].Reject())
+	assert.NoError(t, consumer.LastDeliveries[1].Ack())
+	assert.NoError(t, consumer.LastDeliveries[2].Reject())
+	assert.NoError(t, consumer.LastDeliveries[3].Reject())
 	// delivery 4 still open
-	consumer.LastDeliveries[5].Reject()
+	assert.NoError(t, consumer.LastDeliveries[5].Reject())
 
 	time.Sleep(time.Millisecond)
-	c.Check(queue.ReadyCount(), Equals, 0)
-	c.Check(queue.UnackedCount(), Equals, 1)  // delivery 4
-	c.Check(queue.RejectedCount(), Equals, 4) // delivery 0, 2, 3, 5
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count) // delivery 4
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
 
 	queue.StopConsuming()
 
-	queue.ReturnRejected(2)
-	c.Check(queue.ReadyCount(), Equals, 2)    // delivery 0, 2
-	c.Check(queue.UnackedCount(), Equals, 1)  // delivery 4
-	c.Check(queue.RejectedCount(), Equals, 2) // delivery 3, 5
+	n, err := queue.ReturnRejected(2)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count) // delivery 0, 2
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count) // delivery 4
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), count) // delivery 3, 5
 
-	queue.ReturnAllRejected()
-	c.Check(queue.ReadyCount(), Equals, 4)   // delivery 0, 2, 3, 5
-	c.Check(queue.UnackedCount(), Equals, 1) // delivery 4
-	c.Check(queue.RejectedCount(), Equals, 0)
+	n, err = queue.ReturnRejected(math.MaxInt64)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+	count, err = queue.readyCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
+	count, err = queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count) // delivery 4
+	count, err = queue.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
 }
 
-func (suite *QueueSuite) TestPushQueue(c *C) {
-	connection := OpenConnection("push", "tcp", "localhost:6379", 1)
-	queue1 := connection.OpenQueue("queue1").(*redisQueue)
-	queue2 := connection.OpenQueue("queue2").(*redisQueue)
+func TestPushQueue(t *testing.T) {
+	connection, err := OpenConnection("push", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue1, err := connection.OpenQueue("queue1")
+	assert.NoError(t, err)
+	queue2, err := connection.OpenQueue("queue2")
+	assert.NoError(t, err)
 	queue1.SetPushQueue(queue2)
-	c.Check(queue1.pushKey, Equals, queue2.readyKey)
+	assert.Equal(t, queue2.(*redisQueue).readyKey, queue1.(*redisQueue).pushKey)
 
 	consumer1 := NewTestConsumer("push-cons")
 	consumer1.AutoAck = false
 	consumer1.AutoFinish = false
-	queue1.StartConsuming(10, time.Millisecond)
-	queue1.AddConsumer("push-cons", consumer1)
+	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond))
+	_, err = queue1.AddConsumer("push-cons", consumer1)
+	assert.NoError(t, err)
 
 	consumer2 := NewTestConsumer("push-cons")
 	consumer2.AutoAck = false
 	consumer2.AutoFinish = false
-	queue2.StartConsuming(10, time.Millisecond)
-	queue2.AddConsumer("push-cons", consumer2)
+	assert.NoError(t, queue2.StartConsuming(10, time.Millisecond))
+	_, err = queue2.AddConsumer("push-cons", consumer2)
+	assert.NoError(t, err)
 
-	queue1.Publish("d1")
+	assert.NoError(t, queue1.Publish("d1"))
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue1.UnackedCount(), Equals, 1)
-	c.Assert(consumer1.LastDeliveries, HasLen, 1)
+	count, err := queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+	require.Len(t, consumer1.LastDeliveries, 1)
 
-	c.Check(consumer1.LastDelivery.Push(), Equals, true)
+	assert.NoError(t, consumer1.LastDelivery.Push())
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue1.UnackedCount(), Equals, 0)
-	c.Check(queue2.UnackedCount(), Equals, 1)
+	count, err = queue1.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	count, err = queue2.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 
-	c.Assert(consumer2.LastDeliveries, HasLen, 1)
-	c.Check(consumer2.LastDelivery.Push(), Equals, true)
+	require.Len(t, consumer2.LastDeliveries, 1)
+	assert.NoError(t, consumer2.LastDelivery.Push())
 	time.Sleep(2 * time.Millisecond)
-	c.Check(queue2.RejectedCount(), Equals, 1)
+	count, err = queue2.rejectedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
 }
 
-func (suite *QueueSuite) TestConsuming(c *C) {
-	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("consume-q").(*redisQueue)
+func TestConsuming(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
 
 	finishedChan := queue.StopConsuming()
-	c.Check(finishedChan, NotNil)
+	assert.NotNil(t, finishedChan)
 	select {
 	case <-finishedChan:
 	default:
-		c.FailNow() // should return closed finishedChan
+		t.FailNow() // should return closed finishedChan
 	}
 
-	queue.StartConsuming(10, time.Millisecond)
-	c.Check(queue.StopConsuming(), NotNil)
+	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
+	assert.NotNil(t, queue.StopConsuming())
 	// already stopped
-	c.Check(queue.StopConsuming(), NotNil)
+	assert.NotNil(t, queue.StopConsuming())
 	select {
 	case <-finishedChan:
 	default:
-		c.FailNow() // should return closed finishedChan
+		t.FailNow() // should return closed finishedChan
 	}
 }
 
-func (suite *QueueSuite) TestStopConsuming_Consumer(c *C) {
-	connection := OpenConnection("consume", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("consume-q").(*redisQueue)
-	queue.PurgeReady()
+func TestStopConsuming_Consumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
 
-	deliveryCount := 30
+	deliveryCount := int64(30)
 
-	for i := 0; i < deliveryCount; i++ {
-		queue.Publish("d" + strconv.Itoa(i))
+	for i := int64(0); i < deliveryCount; i++ {
+		err := queue.Publish("d" + strconv.FormatInt(i, 10))
+		assert.NoError(t, err)
 	}
 
-	queue.StartConsuming(20, time.Millisecond)
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 	var consumers []*TestConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
 		consumers = append(consumers, consumer)
-		queue.AddConsumer("consume", consumer)
+		_, err = queue.AddConsumer("consume", consumer)
+		assert.NoError(t, err)
 	}
 
 	finishedChan := queue.StopConsuming()
-	c.Assert(finishedChan, NotNil)
+	require.NotNil(t, finishedChan)
 
 	<-finishedChan
 
-	var consumedCount int
+	var consumedCount int64
 	for i := 0; i < 10; i++ {
-		consumedCount += len(consumers[i].LastDeliveries)
+		consumedCount += int64(len(consumers[i].LastDeliveries))
 	}
 
-	// make sure all fetched deliveries are consumed
-	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
-	c.Check(queue.deliveryChan, HasLen, 0)
+	// make sure all deliveries are either ready, unacked or consumed (acked)
+	readyCount, err := queue.readyCount()
+	assert.NoError(t, err)
+	unackedCount, err := queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
 
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) TestStopConsuming_BatchConsumer(c *C) {
-	connection := OpenConnection("batchConsume", "tcp", "localhost:6379", 1)
-	queue := connection.OpenQueue("batchConsume-q").(*redisQueue)
-	queue.PurgeReady()
+func TestStopConsuming_BatchConsumer(t *testing.T) {
+	connection, err := OpenConnection("batchConsume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("batchConsume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
 
-	deliveryCount := 50
+	deliveryCount := int64(50)
 
-	for i := 0; i < deliveryCount; i++ {
-		queue.Publish("d" + strconv.Itoa(i))
+	for i := int64(0); i < deliveryCount; i++ {
+		err := queue.Publish("d" + strconv.FormatInt(i, 10))
+		assert.NoError(t, err)
 	}
 
-	queue.StartConsuming(20, time.Millisecond)
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 
 	var consumers []*TestBatchConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestBatchConsumer()
 		consumer.AutoFinish = true
 		consumers = append(consumers, consumer)
-		queue.AddBatchConsumer("consume", 5, consumer)
+		_, err = queue.AddBatchConsumer("consume", 5, time.Second, consumer)
+		assert.NoError(t, err)
 	}
-	consumer := NewTestBatchConsumer()
-	consumer.AutoFinish = true
 
+	time.Sleep(2 * time.Millisecond)
 	finishedChan := queue.StopConsuming()
-	c.Assert(finishedChan, NotNil)
+	require.NotNil(t, finishedChan)
 
 	<-finishedChan
 
-	var consumedCount int
+	var consumedCount int64
 	for i := 0; i < 10; i++ {
 		consumedCount += consumers[i].ConsumedCount
 	}
 
-	// make sure all fetched deliveries are consumed
-	c.Check(consumedCount, Equals, deliveryCount-queue.ReadyCount())
-	c.Check(queue.deliveryChan, HasLen, 0)
+	// make sure all deliveries are either ready, unacked or consumed (acked)
+	readyCount, err := queue.readyCount()
+	assert.NoError(t, err)
+	unackedCount, err := queue.unackedCount()
+	assert.NoError(t, err)
+	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
 
-	connection.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func (suite *QueueSuite) BenchmarkQueue(c *C) {
+func BenchmarkQueue(b *testing.B) {
 	// open queue
-	connection := OpenConnection("bench-conn", "tcp", "localhost:6379", 1)
-	queueName := fmt.Sprintf("bench-q%d", c.N)
-	queue := connection.OpenQueue(queueName).(*redisQueue)
+	connection, err := OpenConnection("bench-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(b, err)
+	queueName := fmt.Sprintf("bench-q%d", b.N)
+	queue, err := connection.OpenQueue(queueName)
+	assert.NoError(b, err)
+	assert.NoError(b, queue.StartConsuming(10, time.Millisecond))
 
 	// add some consumers
 	numConsumers := 10
@@ -506,20 +758,23 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 		consumer := NewTestConsumer("bench-A")
 		// consumer.SleepDuration = time.Microsecond
 		consumers = append(consumers, consumer)
-		queue.StartConsuming(10, time.Millisecond)
-		queue.AddConsumer("bench-cons", consumer)
+		_, err = queue.AddConsumer("bench-cons", consumer)
+		assert.NoError(b, err)
 	}
 
 	// publish deliveries
-	for i := 0; i < c.N; i++ {
-		c.Check(queue.Publish("bench-d"), Equals, true)
+	for i := 0; i < b.N; i++ {
+		err := queue.Publish("bench-d")
+		assert.NoError(b, err)
 	}
 
 	// wait until all are consumed
 	for {
-		ready := queue.ReadyCount()
-		unacked := queue.UnackedCount()
-		fmt.Printf("%d unacked %d %d\n", c.N, ready, unacked)
+		ready, err := queue.readyCount()
+		assert.NoError(b, err)
+		unacked, err := queue.unackedCount()
+		assert.NoError(b, err)
+		fmt.Printf("%d unacked %d %d\n", b.N, ready, unacked)
 		if ready == 0 && unacked == 0 {
 			break
 		}
@@ -534,5 +789,5 @@ func (suite *QueueSuite) BenchmarkQueue(c *C) {
 	}
 	fmt.Printf("consumed %d\n", sum)
 
-	connection.StopHeartbeat()
+	assert.NoError(b, connection.stopHeartbeat())
 }

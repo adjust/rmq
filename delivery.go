@@ -1,70 +1,126 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
+	"time"
 )
 
 type Delivery interface {
 	Payload() string
-	Ack() bool
-	Reject() bool
-	Push() bool
+
+	Ack() error
+	Reject() error
+	Push() error
 }
 
-type wrapDelivery struct {
+type redisDelivery struct {
+	ctx         context.Context
 	payload     string
 	unackedKey  string
 	rejectedKey string
 	pushKey     string
 	redisClient RedisClient
+	errChan     chan<- error
 }
 
-func newDelivery(payload, unackedKey, rejectedKey, pushKey string, redisClient RedisClient) *wrapDelivery {
-	return &wrapDelivery{
+func newDelivery(
+	ctx context.Context,
+	payload string,
+	unackedKey string,
+	rejectedKey string,
+	pushKey string,
+	redisClient RedisClient,
+	errChan chan<- error,
+) *redisDelivery {
+	return &redisDelivery{
+		ctx:         ctx,
 		payload:     payload,
 		unackedKey:  unackedKey,
 		rejectedKey: rejectedKey,
 		pushKey:     pushKey,
 		redisClient: redisClient,
+		errChan:     errChan,
 	}
 }
 
-func (delivery *wrapDelivery) String() string {
+func (delivery *redisDelivery) String() string {
 	return fmt.Sprintf("[%s %s]", delivery.payload, delivery.unackedKey)
 }
 
-func (delivery *wrapDelivery) Payload() string {
+func (delivery *redisDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *wrapDelivery) Ack() bool {
-	// debug(fmt.Sprintf("delivery ack %s", delivery)) // COMMENTOUT
+// blocking versions of the functions below with the following behavior:
+// 1. return immediately if the operation succeeded or failed with ErrorNotFound
+// 2. in case of other redis errors, send them to the errors chan and retry after a sleep
+// 3. if redis errors occur after StopConsuming() has been called, ErrorConsumingStopped will be returned
 
-	count, ok := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
-	return ok && count == 1
+func (delivery *redisDelivery) Ack() error {
+	errorCount := 0
+	for {
+		count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+		if err == nil { // no redis error
+			if count == 0 {
+				return ErrorNotFound
+			}
+			return nil
+		}
+
+		// redis error
+
+		errorCount++
+
+		select { // try to add error to channel, but don't block
+		case delivery.errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		if err := delivery.ctx.Err(); err != nil {
+			return ErrorConsumingStopped
+		}
+
+		time.Sleep(time.Second)
+	}
 }
 
-func (delivery *wrapDelivery) Reject() bool {
+func (delivery *redisDelivery) Reject() error {
 	return delivery.move(delivery.rejectedKey)
 }
 
-func (delivery *wrapDelivery) Push() bool {
-	if delivery.pushKey != "" {
-		return delivery.move(delivery.pushKey)
-	} else {
-		return delivery.move(delivery.rejectedKey)
+func (delivery *redisDelivery) Push() error {
+	if delivery.pushKey == "" {
+		return delivery.Reject() // fall back to rejecting
 	}
+
+	return delivery.move(delivery.pushKey)
 }
 
-func (delivery *wrapDelivery) move(key string) bool {
-	if ok := delivery.redisClient.LPush(key, delivery.payload); !ok {
-		return false
+func (delivery *redisDelivery) move(key string) error {
+	errorCount := 0
+	for {
+		_, err := delivery.redisClient.LPush(key, delivery.payload)
+		if err == nil { // success
+			break
+		}
+		// error
+
+		errorCount++
+
+		select { // try to add error to channel, but don't block
+		case delivery.errChan <- &DeliveryError{Delivery: delivery, RedisErr: err, Count: errorCount}:
+		default:
+		}
+
+		if err := delivery.ctx.Err(); err != nil {
+			return ErrorConsumingStopped
+		}
+
+		time.Sleep(time.Second)
 	}
 
-	if _, ok := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload); !ok {
-		return false
-	}
-
-	// debug(fmt.Sprintf("delivery rejected %s", delivery)) // COMMENTOUT
-	return true
+	return delivery.Ack()
 }
+
+// lower level functions which don't retry but just return the first error

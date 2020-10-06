@@ -1,9 +1,12 @@
 package rmq
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 )
+
+var errorNotSupported = errors.New("not supported")
 
 type TestConnection struct {
 	queues *sync.Map
@@ -15,14 +18,25 @@ func NewTestConnection() TestConnection {
 	}
 }
 
-func (connection TestConnection) OpenQueue(name string) Queue {
+func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 	queue, _ := connection.queues.LoadOrStore(name, NewTestQueue(name))
-	return queue.(*TestQueue)
+	return queue.(*TestQueue), nil
 }
 
-func (connection TestConnection) CollectStats(queueList []string) Stats {
-	return Stats{}
-}
+func (TestConnection) CollectStats([]string) (Stats, error)  { panic(errorNotSupported) }
+func (TestConnection) GetOpenQueues() ([]string, error)      { panic(errorNotSupported) }
+func (TestConnection) StopAllConsuming() <-chan struct{}     { panic(errorNotSupported) }
+func (TestConnection) checkHeartbeat() error                 { panic(errorNotSupported) }
+func (TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
+func (TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }
+func (TestConnection) closeStaleConnection() error           { panic(errorNotSupported) }
+func (TestConnection) getConsumingQueues() ([]string, error) { panic(errorNotSupported) }
+func (TestConnection) unlistAllQueues() error                { panic(errorNotSupported) }
+func (TestConnection) openQueue(string) Queue                { panic(errorNotSupported) }
+func (TestConnection) stopHeartbeat() error                  { panic(errorNotSupported) }
+func (TestConnection) flushDb() error                        { panic(errorNotSupported) }
+
+// test helpers for test inspection and similar
 
 func (connection TestConnection) GetDeliveries(queueName string) []string {
 	queue, ok := connection.queues.Load(queueName)
@@ -47,8 +61,4 @@ func (connection TestConnection) Reset() {
 		v.(*TestQueue).Reset()
 		return true
 	})
-}
-
-func (connection TestConnection) GetOpenQueues() []string {
-	return []string{}
 }

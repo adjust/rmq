@@ -23,7 +23,7 @@ func NewTestRedisClient() *TestRedisClient {
 // Set sets key to hold the string value.
 // If key already holds a value, it is overwritten, regardless of its type.
 // Any previous time to live associated with the key is discarded on successful SET operation.
-func (client *TestRedisClient) Set(key string, value string, expiration time.Duration) bool {
+func (client *TestRedisClient) Set(key string, value string, expiration time.Duration) error {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -38,36 +38,36 @@ func (client *TestRedisClient) Set(key string, value string, expiration time.Dur
 		client.ttl.Store(key, time.Now().Add(expiration).Unix())
 	}
 
-	return true
+	return nil
 }
 
 // Get the value of key.
 // If the key does not exist or isn't a string
 // the special value nil is returned.
-func (client *TestRedisClient) Get(key string) string {
+func (client *TestRedisClient) Get(key string) (string, error) {
 
 	value, found := client.store.Load(key)
 
 	if found {
 		if stringValue, casted := value.(string); casted {
-			return stringValue
+			return stringValue, nil
 		}
 	}
 
-	return "nil"
+	return "nil", nil
 }
 
 //Del removes the specified key. A key is ignored if it does not exist.
-func (client *TestRedisClient) Del(key string) (affected int, ok bool) {
+func (client *TestRedisClient) Del(key string) (affected int64, err error) {
 
 	_, found := client.store.Load(key)
 	client.store.Delete(key)
 	client.ttl.Delete(key)
 
 	if found {
-		return 1, true
+		return 1, nil
 	}
-	return 0, false
+	return 0, nil
 
 }
 
@@ -77,7 +77,7 @@ func (client *TestRedisClient) Del(key string) (affected int, ok bool) {
 // Starting with Redis 2.8 the return value in case of error changed:
 // The command returns -2 if the key does not exist.
 // The command returns -1 if the key exists but has no associated expire.
-func (client *TestRedisClient) TTL(key string) (ttl time.Duration, ok bool) {
+func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 
 	//Lookup the expiration map
 	expiration, found := client.ttl.Load(key)
@@ -88,11 +88,11 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, ok bool) {
 		//It was there, but it expired; removing it now
 		if expiration.(int64) < time.Now().Unix() {
 			client.ttl.Delete(key)
-			return -2, false
+			return -2, nil
 		}
 
 		ttl = time.Duration(expiration.(int64) - time.Now().Unix())
-		return ttl, true
+		return ttl, nil
 	}
 
 	//Lookup the store in case this key exists but don't have an expiration
@@ -102,10 +102,10 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, ok bool) {
 	//The key was in store but didn't have an expiration associated
 	//to it.
 	if found {
-		return -1, false
+		return -1, nil
 	}
 
-	return -2, false
+	return -2, nil
 }
 
 // LPush inserts the specified value at the head of the list stored at key.
@@ -114,7 +114,7 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, ok bool) {
 // It is possible to push multiple elements using a single command call just specifying multiple arguments
 // at the end of the command. Elements are inserted one after the other to the head of the list,
 // from the leftmost element to the rightmost element.
-func (client *TestRedisClient) LPush(key string, value ...string) bool {
+func (client *TestRedisClient) LPush(key string, value ...string) (total int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -122,23 +122,23 @@ func (client *TestRedisClient) LPush(key string, value ...string) bool {
 	list, err := client.findList(key)
 
 	if err != nil {
-		return false
+		return 0, nil
 	}
 
 	client.storeList(key, append(value, list...))
-	return true
+	return int64(len(list)) + 1, nil
 }
 
 //LLen returns the length of the list stored at key.
 //If key does not exist, it is interpreted as an empty list and 0 is returned.
 //An error is returned when the value stored at key is not a list.
-func (client *TestRedisClient) LLen(key string) (affected int, ok bool) {
+func (client *TestRedisClient) LLen(key string) (affected int64, err error) {
 	list, err := client.findList(key)
 
 	if err != nil {
-		return 0, false
+		return 0, nil
 	}
-	return len(list), true
+	return int64(len(list)), nil
 }
 
 // LRem removes the first count occurrences of elements equal to
@@ -150,7 +150,7 @@ func (client *TestRedisClient) LLen(key string) (affected int, ok bool) {
 // LREM list -2 "hello" will remove the last two occurrences of "hello" in
 // the list stored at list. Note that non-existing keys are treated like empty
 // lists, so when key does not exist, the command will always return 0.
-func (client *TestRedisClient) LRem(key string, count int, value string) (affected int, ok bool) {
+func (client *TestRedisClient) LRem(key string, count int64, value string) (affected int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -159,7 +159,7 @@ func (client *TestRedisClient) LRem(key string, count int, value string) (affect
 
 	//Wasn't a list, or is empty
 	if err != nil || len(list) == 0 {
-		return 0, true
+		return 0, nil
 	}
 
 	//Create a list that have the capacity to store
@@ -169,7 +169,7 @@ func (client *TestRedisClient) LRem(key string, count int, value string) (affect
 	newList := make([]string, 0, len(list))
 
 	if err != nil {
-		return 0, false
+		return 0, nil
 	}
 
 	//left to right removal of count elements
@@ -178,7 +178,7 @@ func (client *TestRedisClient) LRem(key string, count int, value string) (affect
 		//All the elements are to be removed.
 		//Set count to max possible elements
 		if count == 0 {
-			count = len(list)
+			count = int64(len(list))
 		}
 		//left to right traversal
 		for index := 0; index < len(list); index++ {
@@ -209,7 +209,7 @@ func (client *TestRedisClient) LRem(key string, count int, value string) (affect
 	//store the updated list
 	client.storeList(key, newList)
 
-	return affected, true
+	return affected, nil
 }
 
 // LTrim trims an existing list so that it will contain only the specified range of elements specified.
@@ -221,7 +221,7 @@ func (client *TestRedisClient) LRem(key string, count int, value string) (affect
 // Out of range indexes will not produce an error: if start is larger than the end of the list,
 // or start > end, the result will be an empty list (which causes key to be removed).
 // If end is larger than the end of the list, Redis will treat it like the last element of the list
-func (client *TestRedisClient) LTrim(key string, start, stop int) {
+func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -230,23 +230,24 @@ func (client *TestRedisClient) LTrim(key string, start, stop int) {
 
 	//Wasn't a list, or is empty
 	if err != nil || len(list) == 0 {
-		return
+		return nil
 	}
 
 	if start < 0 {
-		start += len(list)
+		start += int64(len(list))
 	}
 	if stop < 0 {
-		stop += len(list)
+		stop += int64(len(list))
 	}
 
 	//invalid values cause the remove of the key
 	if start > stop {
 		client.store.Delete(key)
-		return
+		return nil
 	}
 
 	client.storeList(key, list[start:stop])
+	return nil
 }
 
 // RPopLPush atomically returns and removes the last element (tail) of the list stored at source,
@@ -257,7 +258,7 @@ func (client *TestRedisClient) LTrim(key string, start, stop int) {
 // If source and destination are the same, the operation is equivalent to removing the
 // last element from the list and pushing it as first element of the list,
 // so it can be considered as a list rotation command.
-func (client *TestRedisClient) RPopLPush(source, destination string) (value string, ok bool) {
+func (client *TestRedisClient) RPopLPush(source, destination string) (value string, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -267,75 +268,46 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 
 	//One of the two isn't a list
 	if sourceErr != nil || destErr != nil {
-		return "", false
+		return "", ErrorNotFound
 	}
-	//we have one element to move
-	if len(sourceList) > 0 {
-		//Remove the last element of source (tail)
-		client.storeList(source, sourceList[0:len(sourceList)-1])
-		//Put the last element of source (tail) and prepend it to dest
-		client.storeList(destination, append([]string{sourceList[len(sourceList)-1]}, destList...))
-
-		return sourceList[len(sourceList)-1], true
+	//we have nothing to move
+	if len(sourceList) == 0 {
+		return "", ErrorNotFound
 	}
 
-	return "", false
-}
+	//Remove the last element of source (tail)
+	client.storeList(source, sourceList[0:len(sourceList)-1])
+	//Put the last element of source (tail) and prepend it to dest
+	client.storeList(destination, append([]string{sourceList[len(sourceList)-1]}, destList...))
 
-// LRange returns the specified elements of the list stored at key.
-// The offsets start and stop are zero-based indexes, with 0 being
-// the first element of the list (the head of the list), 1 being
-// the next element and so on.
-// These offsets can also be negative numbers indicating offsets
-// starting at the end of the list. For example, -1 is the last
-// element of the list, -2 the penultimate, and so on.
-func (client *TestRedisClient) LRange(key string, start, end int) []string {
-
-	list, err := client.findList(key)
-	if list == nil || err != nil || len(list) == 0 || end < 0 {
-		return []string{}
-	}
-
-	if start >= 0 {
-		if end >= len(list) {
-			end = len(list)
-		}
-		return list[start:end]
-	}
-
-	if end > -start {
-		return list[len(list)+start:]
-	}
-
-	return list[len(list)+start : len(list)+start+end]
-
+	return sourceList[len(sourceList)-1], nil
 }
 
 // SAdd adds the specified members to the set stored at key.
 // Specified members that are already a member of this set are ignored.
 // If key does not exist, a new set is created before adding the specified members.
 // An error is returned when the value stored at key is not a set.
-func (client *TestRedisClient) SAdd(key, value string) bool {
+func (client *TestRedisClient) SAdd(key, value string) (total int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
 
 	set, err := client.findSet(key)
 	if err != nil {
-		return false
+		return 0, err
 	}
 
 	set[value] = struct{}{}
 	client.storeSet(key, set)
-	return true
+	return int64(len(set)), nil
 }
 
 // SMembers returns all the members of the set value stored at key.
 // This has the same effect as running SINTER with one argument key.
-func (client *TestRedisClient) SMembers(key string) (members []string) {
+func (client *TestRedisClient) SMembers(key string) (members []string, err error) {
 	set, err := client.findSet(key)
 	if err != nil {
-		return members
+		return members, nil
 	}
 
 	members = make([]string, 0, len(set))
@@ -343,35 +315,36 @@ func (client *TestRedisClient) SMembers(key string) (members []string) {
 		members = append(members, k)
 	}
 
-	return members
+	return members, nil
 }
 
 // SRem removes the specified members from the set stored at key.
 // Specified members that are not a member of this set are ignored.
 // If key does not exist, it is treated as an empty set and this command returns 0.
 // An error is returned when the value stored at key is not a set.
-func (client *TestRedisClient) SRem(key, value string) (affected int, ok bool) {
+func (client *TestRedisClient) SRem(key, value string) (affected int64, err error) {
 
 	lock.Lock()
 	defer lock.Unlock()
 
 	set, err := client.findSet(key)
 	if err != nil || len(set) == 0 {
-		return 0, false
+		return 0, nil
 	}
 
 	if _, found := set[value]; found != false {
 		delete(set, value)
-		return 1, true
+		return 1, nil
 	}
 
-	return 0, true
+	return 0, nil
 }
 
 // FlushDb delete all the keys of the currently selected DB. This command never fails.
-func (client *TestRedisClient) FlushDb() {
+func (client *TestRedisClient) FlushDb() error {
 	client.store = *new(sync.Map)
 	client.ttl = *new(sync.Map)
+	return nil
 }
 
 //storeSet stores a set

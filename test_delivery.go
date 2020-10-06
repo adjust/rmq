@@ -1,6 +1,9 @@
 package rmq
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"log"
+)
 
 type TestDelivery struct {
 	State   State
@@ -14,7 +17,7 @@ func NewTestDelivery(content interface{}) *TestDelivery {
 
 	bytes, err := json.Marshal(content)
 	if err != nil {
-		bytes = []byte("rmq.NewTestDelivery failed to marshal")
+		log.Panic("rmq.NewTestDelivery failed to marshal")
 	}
 
 	return NewTestDeliveryString(string(bytes))
@@ -30,26 +33,26 @@ func (delivery *TestDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *TestDelivery) Ack() bool {
-	if delivery.State == Unacked {
-		delivery.State = Acked
-		return true
+func (delivery *TestDelivery) Ack() error {
+	if delivery.State != Unacked {
+		return ErrorNotFound
 	}
-	return false
+	delivery.State = Acked
+	return nil
 }
 
-func (delivery *TestDelivery) Reject() bool {
-	if delivery.State == Unacked {
-		delivery.State = Rejected
-		return true
+func (delivery *TestDelivery) Reject() error {
+	if delivery.State != Unacked {
+		return ErrorNotFound
 	}
-	return false
+	delivery.State = Rejected
+	return nil
 }
 
-func (delivery *TestDelivery) Push() bool {
-	if delivery.State == Unacked {
-		delivery.State = Pushed
-		return true
+func (delivery *TestDelivery) Push() error {
+	if delivery.State != Unacked {
+		return ErrorNotFound
 	}
-	return false
+	delivery.State = Pushed
+	return nil
 }

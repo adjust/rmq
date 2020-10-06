@@ -3,26 +3,60 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/adjust/rmq/v2"
+	"github.com/adjust/rmq/v3"
 )
 
 const (
-	unackedLimit = 1000
-	numConsumers = 10
-	batchSize    = 1000
+	prefetchLimit = 1000
+	pollDuration  = 100 * time.Millisecond
+	numConsumers  = 5
+
+	reportBatchSize = 10000
+	consumeDuration = time.Millisecond
+	shouldLog       = false
 )
 
 func main() {
-	connection := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2)
-	queue := connection.OpenQueue("things")
-	queue.StartConsuming(unackedLimit, 500*time.Millisecond)
+	errChan := make(chan error, 10)
+	go logErrors(errChan)
+
+	connection, err := rmq.OpenConnection("consumer", "tcp", "localhost:6379", 2, errChan)
+	if err != nil {
+		panic(err)
+	}
+
+	queue, err := connection.OpenQueue("things")
+	if err != nil {
+		panic(err)
+	}
+
+	if err := queue.StartConsuming(prefetchLimit, pollDuration); err != nil {
+		panic(err)
+	}
+
 	for i := 0; i < numConsumers; i++ {
 		name := fmt.Sprintf("consumer %d", i)
-		queue.AddConsumer(name, NewConsumer(i))
+		if _, err := queue.AddConsumer(name, NewConsumer(i)); err != nil {
+			panic(err)
+		}
 	}
-	select {}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT)
+	defer signal.Stop(signals)
+
+	<-signals // wait for signal
+	go func() {
+		<-signals // hard exit on second signal (in case shutdown gets stuck)
+		os.Exit(1)
+	}()
+
+	<-connection.StopAllConsuming() // wait for all Consume() calls to finish
 }
 
 type Consumer struct {
@@ -40,17 +74,54 @@ func NewConsumer(tag int) *Consumer {
 }
 
 func (consumer *Consumer) Consume(delivery rmq.Delivery) {
+	payload := delivery.Payload()
+	debugf("start consume %s", payload)
+	time.Sleep(consumeDuration)
+
 	consumer.count++
-	if consumer.count%batchSize == 0 {
+	if consumer.count%reportBatchSize == 0 {
 		duration := time.Now().Sub(consumer.before)
 		consumer.before = time.Now()
-		perSecond := time.Second / (duration / batchSize)
-		log.Printf("%s consumed %d %s %d", consumer.name, consumer.count, delivery.Payload(), perSecond)
+		perSecond := time.Second / (duration / reportBatchSize)
+		log.Printf("%s consumed %d %s %d", consumer.name, consumer.count, payload, perSecond)
 	}
-	time.Sleep(time.Millisecond)
-	if consumer.count%batchSize == 0 {
-		delivery.Reject()
-	} else {
-		delivery.Ack()
+
+	if consumer.count%reportBatchSize > 0 {
+		if err := delivery.Ack(); err != nil {
+			debugf("failed to ack %s: %s", payload, err)
+		} else {
+			debugf("acked %s", payload)
+		}
+	} else { // reject one per batch
+		if err := delivery.Reject(); err != nil {
+			debugf("failed to reject %s: %s", payload, err)
+		} else {
+			debugf("rejected %s", payload)
+		}
+	}
+}
+
+func logErrors(errChan <-chan error) {
+	for err := range errChan {
+		switch err := err.(type) {
+		case *rmq.HeartbeatError:
+			if err.Count == rmq.HeartbeatErrorLimit {
+				log.Print("heartbeat error (limit): ", err)
+			} else {
+				log.Print("heartbeat error: ", err)
+			}
+		case *rmq.ConsumeError:
+			log.Print("consume error: ", err)
+		case *rmq.DeliveryError:
+			log.Print("delivery error: ", err.Delivery, err)
+		default:
+			log.Print("other error: ", err)
+		}
+	}
+}
+
+func debugf(format string, args ...interface{}) {
+	if shouldLog {
+		log.Printf(format, args...)
 	}
 }

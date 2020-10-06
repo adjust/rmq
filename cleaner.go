@@ -1,6 +1,6 @@
 package rmq
 
-import "fmt"
+import "math"
 
 type Cleaner struct {
 	connection Connection
@@ -10,52 +10,74 @@ func NewCleaner(connection Connection) *Cleaner {
 	return &Cleaner{connection: connection}
 }
 
-func (cleaner *Cleaner) Clean() error {
-	cleanerConnection, ok := cleaner.connection.(*redisConnection)
-	if !ok {
-		return nil
+// Clean cleans the connection of the cleaner. This is useful to make sure no
+// deliveries get lost. The main use case is if your consumers get restarted
+// there will be unacked deliveries assigned to the connection. Once the
+// heartbeat of that connection dies the cleaner can recognize that and remove
+// those unacked deliveries back to the ready list. If there was no error it
+// returns the number of deliveries which have been returned from unacked lists
+// to ready lists across all cleaned connections and queues.
+func (cleaner *Cleaner) Clean() (returned int64, err error) {
+	connectionNames, err := cleaner.connection.getConnections()
+	if err != nil {
+		return 0, err
 	}
-	connectionNames := cleanerConnection.GetConnections()
+
 	for _, connectionName := range connectionNames {
-		connection := cleanerConnection.hijackConnection(connectionName)
-		if connection.Check() {
-			continue // skip active connections!
-		}
-
-		if err := CleanConnection(connection); err != nil {
-			return err
+		hijackedConnection := cleaner.connection.hijackConnection(connectionName)
+		switch err := hijackedConnection.checkHeartbeat(); err {
+		case nil: // active connection
+			continue
+		case ErrorNotFound:
+			n, err := cleanStaleConnection(hijackedConnection)
+			if err != nil {
+				return 0, err
+			}
+			returned += n
+		default:
+			return 0, err
 		}
 	}
 
-	return nil
+	return returned, nil
 }
 
-func CleanConnection(connection *redisConnection) error {
-	queueNames := connection.GetConsumingQueues()
+func cleanStaleConnection(staleConnection Connection) (returned int64, err error) {
+	queueNames, err := staleConnection.getConsumingQueues()
+	if err != nil {
+		return 0, err
+	}
+
 	for _, queueName := range queueNames {
-		queue, ok := connection.OpenQueue(queueName).(*redisQueue)
-		if !ok {
-			return fmt.Errorf("rmq cleaner failed to open queue %s", queueName)
+		queue, err := staleConnection.OpenQueue(queueName)
+		if err != nil {
+			return 0, err
 		}
 
-		CleanQueue(queue)
+		n, err := cleanQueue(queue)
+		if err != nil {
+			return 0, err
+		}
+
+		returned += n
 	}
 
-	if !connection.Close() {
-		return fmt.Errorf("rmq cleaner failed to close connection %s", connection)
+	if err := staleConnection.closeStaleConnection(); err != nil {
+		return 0, err
 	}
 
-	if err := connection.CloseAllQueuesInConnection(); err != nil {
-		return fmt.Errorf("rmq cleaner failed to close all queues %s %s", connection, err)
-	}
-
-	// log.Printf("rmq cleaner cleaned connection %s", connection)
-	return nil
+	// log.Printf("rmq cleaner cleaned connection %s", staleConnection)
+	return returned, nil
 }
 
-func CleanQueue(queue *redisQueue) {
-	returned := queue.ReturnAllUnacked()
-	queue.CloseInConnection()
-	_ = returned
+func cleanQueue(queue Queue) (returned int64, err error) {
+	returned, err = queue.ReturnUnacked(math.MaxInt64)
+	if err != nil {
+		return 0, err
+	}
+	if err := queue.closeInStaleConnection(); err != nil {
+		return 0, err
+	}
 	// log.Printf("rmq cleaner cleaned queue %s %d", queue, returned)
+	return returned, nil
 }

@@ -8,7 +8,7 @@ import (
 
 type ConnectionStat struct {
 	active       bool
-	unackedCount int
+	unackedCount int64
 	consumers    []string
 }
 
@@ -22,12 +22,12 @@ func (stat ConnectionStat) String() string {
 type ConnectionStats map[string]ConnectionStat
 
 type QueueStat struct {
-	ReadyCount      int `json:"ready"`
-	RejectedCount   int `json:"rejected"`
+	ReadyCount      int64 `json:"ready"`
+	RejectedCount   int64 `json:"rejected"`
 	connectionStats ConnectionStats
 }
 
-func NewQueueStat(readyCount, rejectedCount int) QueueStat {
+func NewQueueStat(readyCount, rejectedCount int64) QueueStat {
 	return QueueStat{
 		ReadyCount:      readyCount,
 		RejectedCount:   rejectedCount,
@@ -43,24 +43,24 @@ func (stat QueueStat) String() string {
 	)
 }
 
-func (stat QueueStat) UnackedCount() int {
-	unacked := 0
+func (stat QueueStat) UnackedCount() int64 {
+	unacked := int64(0)
 	for _, connectionStat := range stat.connectionStats {
 		unacked += connectionStat.unackedCount
 	}
 	return unacked
 }
 
-func (stat QueueStat) ConsumerCount() int {
-	consumer := 0
+func (stat QueueStat) ConsumerCount() int64 {
+	consumer := int64(0)
 	for _, connectionStat := range stat.connectionStats {
-		consumer += len(connectionStat.consumers)
+		consumer += int64(len(connectionStat.consumers))
 	}
 	return consumer
 }
 
-func (stat QueueStat) ConnectionCount() int {
-	return len(stat.connectionStats)
+func (stat QueueStat) ConnectionCount() int64 {
+	return int64(len(stat.connectionStats))
 }
 
 type QueueStats map[string]QueueStat
@@ -77,40 +77,71 @@ func NewStats() Stats {
 	}
 }
 
-func CollectStats(queueList []string, mainConnection *redisConnection) Stats {
+func CollectStats(queueList []string, mainConnection Connection) (Stats, error) {
 	stats := NewStats()
 	for _, queueName := range queueList {
 		queue := mainConnection.openQueue(queueName)
-		stats.QueueStats[queueName] = NewQueueStat(queue.ReadyCount(), queue.RejectedCount())
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return stats, err
+		}
+		rejectedCount, err := queue.rejectedCount()
+		if err != nil {
+			return stats, err
+		}
+		stats.QueueStats[queueName] = NewQueueStat(readyCount, rejectedCount)
 	}
 
-	connectionNames := mainConnection.GetConnections()
-	for _, connectionName := range connectionNames {
-		connection := mainConnection.hijackConnection(connectionName)
-		connectionActive := connection.Check()
+	connectionNames, err := mainConnection.getConnections()
+	if err != nil {
+		return stats, err
+	}
 
-		queueNames := connection.GetConsumingQueues()
+	for _, connectionName := range connectionNames {
+		hijackedConnection := mainConnection.hijackConnection(connectionName)
+
+		var connectionActive bool
+		switch err := hijackedConnection.checkHeartbeat(); err {
+		case nil:
+			connectionActive = true
+		case ErrorNotFound:
+			connectionActive = false
+		default:
+			return stats, err
+		}
+
+		queueNames, err := hijackedConnection.getConsumingQueues()
+		if err != nil {
+			return stats, err
+		}
 		if len(queueNames) == 0 {
 			stats.otherConnections[connectionName] = connectionActive
 			continue
 		}
 
 		for _, queueName := range queueNames {
-			queue := connection.openQueue(queueName)
-			consumers := queue.GetConsumers()
+			queue := hijackedConnection.openQueue(queueName)
+			consumers, err := queue.getConsumers()
+			if err != nil {
+				return stats, err
+			}
 			openQueueStat, ok := stats.QueueStats[queueName]
 			if !ok {
 				continue
 			}
+			unackedCount, err := queue.unackedCount()
+			if err != nil {
+				return stats, err
+			}
 			openQueueStat.connectionStats[connectionName] = ConnectionStat{
 				active:       connectionActive,
-				unackedCount: queue.UnackedCount(),
+				unackedCount: unackedCount,
 				consumers:    consumers,
 			}
 		}
 	}
 
-	return stats
+	return stats, nil
 }
 
 func (stats Stats) String() string {

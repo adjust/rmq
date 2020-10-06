@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/adjust/rmq/v2"
+	"github.com/adjust/rmq/v3"
 )
 
 const (
@@ -14,20 +14,35 @@ const (
 )
 
 func main() {
-	connection := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2)
-	things := connection.OpenQueue("things")
-	balls := connection.OpenQueue("balls")
-	var before time.Time
+	connection, err := rmq.OpenConnection("producer", "tcp", "localhost:6379", 2, nil)
+	if err != nil {
+		panic(err)
+	}
 
+	things, err := connection.OpenQueue("things")
+	if err != nil {
+		panic(err)
+	}
+	foobars, err := connection.OpenQueue("foobars")
+	if err != nil {
+		panic(err)
+	}
+
+	var before time.Time
 	for i := 0; i < numDeliveries; i++ {
 		delivery := fmt.Sprintf("delivery %d", i)
-		things.Publish(delivery)
+		if err := things.Publish(delivery); err != nil {
+			log.Printf("failed to publish: %s", err)
+		}
+
 		if i%batchSize == 0 {
 			duration := time.Now().Sub(before)
 			before = time.Now()
 			perSecond := time.Second / (duration / batchSize)
 			log.Printf("produced %d %s %d", i, delivery, perSecond)
-			balls.Publish("ball")
+			if err := foobars.Publish("foo"); err != nil {
+				log.Printf("failed to publish: %s", err)
+			}
 		}
 	}
 }

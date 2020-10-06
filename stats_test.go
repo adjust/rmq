@@ -4,48 +4,57 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/adjust/gocheck"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestStatsSuite(t *testing.T) {
-	TestingSuiteT(&StatsSuite{}, t)
-}
+func TestStats(t *testing.T) {
+	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	_, err = NewCleaner(connection).Clean()
+	require.NoError(t, err)
 
-type StatsSuite struct{}
-
-func (suite *StatsSuite) TestStats(c *C) {
-	connection := OpenConnection("stats-conn", "tcp", "localhost:6379", 1)
-	c.Assert(NewCleaner(connection).Clean(), IsNil)
-
-	conn1 := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1)
-	conn2 := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1)
-	q1 := conn2.OpenQueue("stats-q1").(*redisQueue)
-	q1.PurgeReady()
-	q1.Publish("stats-d1")
-	q2 := conn2.OpenQueue("stats-q2").(*redisQueue)
-	q2.PurgeReady()
+	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	q1, err := conn2.OpenQueue("stats-q1")
+	assert.NoError(t, err)
+	_, err = q1.PurgeReady()
+	assert.NoError(t, err)
+	assert.NoError(t, q1.Publish("stats-d1"))
+	q2, err := conn2.OpenQueue("stats-q2")
+	assert.NoError(t, err)
+	_, err = q2.PurgeReady()
+	assert.NoError(t, err)
 	consumer := NewTestConsumer("hand-A")
 	consumer.AutoAck = false
-	q2.StartConsuming(10, time.Millisecond)
-	q2.AddConsumer("stats-cons1", consumer)
-	q2.Publish("stats-d2")
-	q2.Publish("stats-d3")
-	q2.Publish("stats-d4")
+	assert.NoError(t, q2.StartConsuming(10, time.Millisecond))
+	_, err = q2.AddConsumer("stats-cons1", consumer)
+	assert.NoError(t, err)
+	assert.NoError(t, q2.Publish("stats-d2"))
+	assert.NoError(t, q2.Publish("stats-d3"))
+	assert.NoError(t, q2.Publish("stats-d4"))
 	time.Sleep(2 * time.Millisecond)
-	consumer.LastDeliveries[0].Ack()
-	consumer.LastDeliveries[1].Reject()
-	q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
+	assert.NoError(t, consumer.LastDeliveries[0].Ack())
+	assert.NoError(t, consumer.LastDeliveries[1].Reject())
+	_, err = q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
+	assert.NoError(t, err)
 
-	stats := CollectStats(connection.GetOpenQueues(), connection)
+	queues, err := connection.GetOpenQueues()
+	assert.NoError(t, err)
+	stats, err := CollectStats(queues, connection)
+	assert.NoError(t, err)
 	// log.Printf("stats\n%s", stats)
 	html := stats.GetHtml("", "")
-	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*")
-	c.Check(html, Matches, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*1.*2.*conn2.*1.*2.*")
+	assert.Regexp(t, ".*queue.*ready.*connection.*unacked.*consumers.*q1.*1.*0.*0.*", html)
+	assert.Regexp(t, ".*queue.*ready.*connection.*unacked.*consumers.*q2.*0.*1.*1.*2.*conn2.*1.*2.*", html)
 
-	stats = CollectStats([]string{"stats-q1", "stats-q2"}, connection)
+	stats, err = CollectStats([]string{"stats-q1", "stats-q2"}, connection)
+	assert.NoError(t, err)
 
 	for key, _ := range stats.QueueStats {
-		c.Check(key, Matches, "stats.*")
+		assert.Regexp(t, "stats.*", key)
 	}
 	/*
 		<html><body><table style="font-family:monospace">
@@ -59,7 +68,7 @@ func (suite *StatsSuite) TestStats(c *C) {
 	*/
 
 	q2.StopConsuming()
-	connection.StopHeartbeat()
-	conn1.StopHeartbeat()
-	conn2.StopHeartbeat()
+	assert.NoError(t, connection.stopHeartbeat())
+	assert.NoError(t, conn1.stopHeartbeat())
+	assert.NoError(t, conn2.stopHeartbeat())
 }
