@@ -1,4 +1,4 @@
-module github.com/adjust/rmq/v3
+module github.com/adjust/rmq/v4
 
 go 1.13
 
