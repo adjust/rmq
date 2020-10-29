@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -65,16 +65,18 @@ func OpenConnection(tag string, network string, address string, db int, errChan 
 
 // OpenConnectionWithRedisClient opens and returns a new connection
 func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (Connection, error) {
-	return openConnectionWithRedisClient(tag, RedisWrapper{redisClient}, errChan)
+	return OpenConnectionWithRmqRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
 func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (Connection, error) {
-	return openConnectionWithRedisClient(tag, NewTestRedisClient(), errChan)
+	return OpenConnectionWithRmqRedisClient(tag, NewTestRedisClient(), errChan)
 }
 
-func openConnectionWithRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
+// If you would like to use a redis client other than the ones supported in the constructors above, you can implement
+// the RedisClient interface yourself
+func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
 	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	connection := &redisConnection{
