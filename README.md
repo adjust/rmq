@@ -226,7 +226,7 @@ internally):
    channel as `ConsumeError`.
 
 3. The delivery functions `Ack()`, `Reject()` and `Push()` have a built-in
-   retry mechanism. This is because because failing to acknowledge a delivery
+   retry mechanism. This is because failing to acknowledge a delivery
    is potentially dangerous. The consumer has already handled the delivery, so
    if it can't ack it the cleaner might end up moving it back to the ready list
    so another consumer might end up consuming it again in the future, leading
