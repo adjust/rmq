@@ -116,7 +116,7 @@ err := taskQueue.StartConsuming(10, time.Second)
 
 This sets the prefetch limit to 10 and the poll duration to one second. This
 means the queue will fetch up to 10 deliveries at a time before giving them to
-the consumers. To avoid idling producers while the queues are full, the
+the consumers. To avoid idling consumers while the queues are full, the
 prefetch limit should always be greater than the number of consumers you are
 going to add. If the queue gets empty, the poll duration sets how long rmq will
 wait before checking for new deliveries in Redis.
