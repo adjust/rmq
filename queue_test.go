@@ -677,8 +677,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 
 	finishedChan := queue.StopConsuming()
 	require.NotNil(t, finishedChan)
-
-	<-finishedChan
+	<-finishedChan // wait for stopping to finish
 
 	var consumedCount int64
 	for i := 0; i < 10; i++ {
@@ -740,6 +739,53 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
 
 	assert.NoError(t, connection.stopHeartbeat())
+}
+
+func TestStopAllConsuming_CantOpenQueue(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	queue, err := connection.OpenQueue("consume-q")
+	require.Nil(t, queue)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestStopAllConsuming_CantStartConsuming(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	err = queue.StartConsuming(20, time.Millisecond)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestStopAllConsuming_CantAddConsumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	_, err = queue.AddConsumer("late-consume", NewTestConsumer("late-consumer"))
+	require.Equal(t, ErrorConsumingStopped, err)
 }
 
 func BenchmarkQueue(b *testing.B) {

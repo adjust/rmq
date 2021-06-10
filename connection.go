@@ -3,6 +3,7 @@ package rmq
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -52,6 +53,8 @@ type redisConnection struct {
 	errChan       chan<- error
 	heartbeatStop chan chan struct{}
 
+	lock    sync.Mutex
+	stopped bool
 	// list of all queues that have been opened in this connection
 	// this is used to handle heartbeat errors without relying on the redis connection
 	openQueues []Queue
@@ -155,6 +158,13 @@ func (connection *redisConnection) String() string {
 
 // OpenQueue opens and returns the queue with a given name
 func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
+	connection.lock.Lock()
+	defer connection.lock.Unlock()
+
+	if connection.stopped {
+		return nil, ErrorConsumingStopped
+	}
+
 	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
 		return nil, err
 	}
@@ -180,9 +190,18 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 // finish their current Consume() call. This is useful to implement graceful
 // shutdown.
 func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
+	connection.lock.Lock()
+	defer func() {
+		// regardless of how we exit this method, the connection is always stopped when we return
+		connection.stopped = true
+		connection.lock.Unlock()
+	}()
+
 	finishedChan := make(chan struct{})
-	if len(connection.openQueues) == 0 {
-		close(finishedChan) // nothing to do
+
+	// If we are already stopped or there are no open queues, then there is nothing to do
+	if connection.stopped || len(connection.openQueues) == 0 {
+		close(finishedChan)
 		return finishedChan
 	}
 
