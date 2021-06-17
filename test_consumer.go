@@ -49,3 +49,7 @@ func (consumer *TestConsumer) Consume(delivery Delivery) {
 func (consumer *TestConsumer) Finish() {
 	consumer.finish <- 1
 }
+
+func (consumer *TestConsumer) FinishAll() {
+	close(consumer.finish)
+}

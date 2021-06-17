@@ -99,7 +99,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	queue2.StopConsuming()
+	<-queue2.StopConsuming()
 	assert.NoError(t, queue2.closeInStaleConnection())
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
@@ -108,7 +108,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"conn-q-q1"}, queues)
 
-	queue1.StopConsuming()
+	<-queue1.StopConsuming()
 	assert.NoError(t, queue1.closeInStaleConnection())
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
@@ -180,7 +180,7 @@ func TestQueueCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, consumers, 2)
 
-	queue.StopConsuming()
+	<-queue.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -320,8 +320,8 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 
-	queue1.StopConsuming()
-	queue2.StopConsuming()
+	<-queue1.StopConsuming()
+	<-queue2.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -403,7 +403,11 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), count)
 
-	queue.StopConsuming()
+	// This prevents the consumer from blocking internally inside a call to Consume, which allows the queue to complete
+	// the call to StopConsuming
+	consumer.FinishAll()
+
+	<-queue.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -549,8 +553,7 @@ func TestReturnRejected(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
 
-	finishedChan := queue.StopConsuming()
-	<-finishedChan // wait for stop to complete
+	<-queue.StopConsuming()
 
 	n, err := queue.ReturnRejected(2)
 	assert.NoError(t, err)
