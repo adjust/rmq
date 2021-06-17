@@ -309,7 +309,6 @@ func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) 
 // timeout limits the amount of time waiting to fill an entire batch
 // The timer is only started when the first message in a batch is received
 func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
-	queue.stopWg.Add(1)
 	name, err := queue.addConsumer(tag)
 	if err != nil {
 		return "", err
