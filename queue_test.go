@@ -626,31 +626,6 @@ func TestPushQueue(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 }
 
-func TestConsuming(t *testing.T) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
-	assert.NoError(t, err)
-	queue, err := connection.OpenQueue("consume-q")
-	assert.NoError(t, err)
-
-	finishedChan := queue.StopConsuming()
-	assert.NotNil(t, finishedChan)
-	select {
-	case <-finishedChan:
-	default:
-		t.FailNow() // should return closed finishedChan
-	}
-
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	assert.NotNil(t, queue.StopConsuming())
-	// already stopped
-	assert.NotNil(t, queue.StopConsuming())
-	select {
-	case <-finishedChan:
-	default:
-		t.FailNow() // should return closed finishedChan
-	}
-}
-
 func TestStopConsuming_Consumer(t *testing.T) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
@@ -667,6 +642,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	}
 
 	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
 	var consumers []*TestConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
@@ -723,8 +699,7 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	time.Sleep(2 * time.Millisecond)
 	finishedChan := queue.StopConsuming()
 	require.NotNil(t, finishedChan)
-
-	<-finishedChan
+	<-finishedChan // wait for stopping to finish
 
 	var consumedCount int64
 	for i := 0; i < 10; i++ {
@@ -741,7 +716,7 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestStopAllConsuming_CantOpenQueue(t *testing.T) {
+func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 
@@ -754,7 +729,7 @@ func TestStopAllConsuming_CantOpenQueue(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestStopAllConsuming_CantStartConsuming(t *testing.T) {
+func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
@@ -770,7 +745,23 @@ func TestStopAllConsuming_CantStartConsuming(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestStopAllConsuming_CantAddConsumer(t *testing.T) {
+func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	finishedChan := queue.StopConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	err = queue.StartConsuming(20, time.Millisecond)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
 	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
@@ -781,6 +772,24 @@ func TestStopAllConsuming_CantAddConsumer(t *testing.T) {
 	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 
 	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	_, err = queue.AddConsumer("late-consume", NewTestConsumer("late-consumer"))
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestQueue_StopConsuming_CantAddConsumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
+	finishedChan := queue.StopConsuming()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
 
