@@ -549,7 +549,8 @@ func TestReturnRejected(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
 
-	queue.StopConsuming()
+	finishedChan := queue.StopConsuming()
+	<-finishedChan // wait for stop to complete
 
 	n, err := queue.ReturnRejected(2)
 	assert.NoError(t, err)
