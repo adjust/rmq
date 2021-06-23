@@ -39,23 +39,25 @@ type Queue interface {
 }
 
 type redisQueue struct {
-	name             string
-	connectionName   string
-	queuesKey        string // key to list of queues consumed by this connection
-	consumersKey     string // key to set of consumers using this connection
-	readyKey         string // key to list of ready deliveries
-	rejectedKey      string // key to list of rejected deliveries
-	unackedKey       string // key to list of currently consuming deliveries
-	pushKey          string // key to list of pushed deliveries
-	redisClient      RedisClient
-	errChan          chan<- error
-	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
-	prefetchLimit    int64         // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
-	pollDuration     time.Duration
-	consumingStopped chan struct{} // this chan gets closed when consuming on this queue got stopped
+	name           string
+	connectionName string
+	queuesKey      string // key to list of queues consumed by this connection
+	consumersKey   string // key to set of consumers using this connection
+	readyKey       string // key to list of ready deliveries
+	rejectedKey    string // key to list of rejected deliveries
+	unackedKey     string // key to list of currently consuming deliveries
+	pushKey        string // key to list of pushed deliveries
+	redisClient    RedisClient
+	errChan        chan<- error
+	prefetchLimit  int64 // max number of prefetched deliveries number of unacked can go up to prefetchLimit + numConsumers
+	pollDuration   time.Duration
+
+	lock             sync.Mutex    // protects the fields below related to starting and stopping this queue
+	consumingStopped chan struct{} // this chan gets closed when consuming on this queue has stopped
 	stopWg           sync.WaitGroup
 	ackCtx           context.Context
 	ackCancel        context.CancelFunc
+	deliveryChan     chan Delivery // nil for publish channels, not nil for consuming channels
 }
 
 func newQueue(
@@ -75,16 +77,22 @@ func newQueue(
 	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
 
+	consumingStopped := make(chan struct{})
+	ackCtx, ackCancel := context.WithCancel(context.Background())
+
 	queue := &redisQueue{
-		name:           name,
-		connectionName: connectionName,
-		queuesKey:      queuesKey,
-		consumersKey:   consumersKey,
-		readyKey:       readyKey,
-		rejectedKey:    rejectedKey,
-		unackedKey:     unackedKey,
-		redisClient:    redisClient,
-		errChan:        errChan,
+		name:             name,
+		connectionName:   connectionName,
+		queuesKey:        queuesKey,
+		consumersKey:     consumersKey,
+		readyKey:         readyKey,
+		rejectedKey:      rejectedKey,
+		unackedKey:       unackedKey,
+		redisClient:      redisClient,
+		errChan:          errChan,
+		consumingStopped: consumingStopped,
+		ackCtx:           ackCtx,
+		ackCancel:        ackCancel,
 	}
 	return queue
 }
@@ -122,8 +130,18 @@ func (queue *redisQueue) SetPushQueue(pushQueue Queue) {
 // must be called before consumers can be added!
 // pollDuration is the duration the queue sleeps before checking for new deliveries
 func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.Duration) error {
+	queue.lock.Lock()
+	defer queue.lock.Unlock()
+
+	// If deliveryChan is set, then we are already consuming
 	if queue.deliveryChan != nil {
 		return ErrorAlreadyConsuming
+	}
+	select {
+	case <-queue.consumingStopped:
+		// If consuming is stopped then we must not try to
+		return ErrorConsumingStopped
+	default:
 	}
 
 	// add queue to list of queues consumed on this connection
@@ -134,8 +152,6 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	queue.prefetchLimit = prefetchLimit
 	queue.pollDuration = pollDuration
 	queue.deliveryChan = make(chan Delivery, prefetchLimit)
-	queue.consumingStopped = make(chan struct{})
-	queue.ackCtx, queue.ackCancel = context.WithCancel(context.Background())
 	// log.Printf("rmq queue started consuming %s %d %s", queue, prefetchLimit, pollDuration)
 	go queue.consume()
 	return nil
@@ -225,26 +241,23 @@ func (queue *redisQueue) newDelivery(payload string) Delivery {
 // current Consume() call. This is useful to implement graceful shutdown.
 func (queue *redisQueue) StopConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
-
-	if queue.deliveryChan == nil { // not consuming
-		close(finishedChan)
-		return finishedChan
-	}
-
-	select {
-	case <-queue.consumingStopped: // already stopped
-		close(finishedChan)
-		return finishedChan
-	default:
-	}
-
-	// log.Printf("rmq queue stopping %s", queue)
-	close(queue.consumingStopped)
+	// We only stop consuming once
+	// This function returns immediately, while the work of actually stopping runs in a separate goroutine
 	go func() {
-		queue.ackCancel()
-		queue.stopWg.Wait()
-		close(finishedChan)
-		// log.Printf("rmq queue stopped consuming %s", queue)
+		queue.lock.Lock()
+		defer queue.lock.Unlock()
+
+		select {
+		case <-queue.consumingStopped:
+			// already stopped, nothing to do
+			close(finishedChan)
+			return
+		default:
+			close(queue.consumingStopped)
+			queue.ackCancel()
+			queue.stopWg.Wait()
+			close(finishedChan)
+		}
 	}()
 
 	return finishedChan
@@ -252,7 +265,6 @@ func (queue *redisQueue) StopConsuming() <-chan struct{} {
 
 // AddConsumer adds a consumer to the queue and returns its internal name
 func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string, err error) {
-	queue.stopWg.Add(1)
 	name, err = queue.addConsumer(tag)
 	if err != nil {
 		return "", err
@@ -262,7 +274,9 @@ func (queue *redisQueue) AddConsumer(tag string, consumer Consumer) (name string
 }
 
 func (queue *redisQueue) consumerConsume(consumer Consumer) {
-	defer queue.stopWg.Done()
+	defer func() {
+		queue.stopWg.Done()
+	}()
 	for {
 		select {
 		case <-queue.consumingStopped: // prefer this case
@@ -295,7 +309,6 @@ func (queue *redisQueue) AddConsumerFunc(tag string, consumerFunc ConsumerFunc) 
 // timeout limits the amount of time waiting to fill an entire batch
 // The timer is only started when the first message in a batch is received
 func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error) {
-	queue.stopWg.Add(1)
 	name, err := queue.addConsumer(tag)
 	if err != nil {
 		return "", err
@@ -305,7 +318,9 @@ func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout t
 }
 
 func (queue *redisQueue) consumerBatchConsume(batchSize int64, timeout time.Duration, consumer BatchConsumer) {
-	defer queue.stopWg.Done()
+	defer func() {
+		queue.stopWg.Done()
+	}()
 	batch := []Delivery{}
 	for {
 		select {
@@ -366,8 +381,11 @@ func (queue *redisQueue) batchTimeout(batchSize int64, batch []Delivery, timeout
 }
 
 func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
-	if queue.deliveryChan == nil {
-		return "", ErrorNotConsuming
+	queue.lock.Lock()
+	defer queue.lock.Unlock()
+
+	if err := queue.ensureConsuming(); err != nil {
+		return "", err
 	}
 
 	name = fmt.Sprintf("%s-%s", tag, RandomString(6))
@@ -377,6 +395,7 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 		return "", err
 	}
 
+	queue.stopWg.Add(1)
 	// log.Printf("rmq queue added consumer %s %s", queue, name)
 	return name, nil
 }
@@ -500,4 +519,17 @@ func (queue *redisQueue) rejectedCount() (int64, error) {
 
 func (queue *redisQueue) getConsumers() ([]string, error) {
 	return queue.redisClient.SMembers(queue.consumersKey)
+}
+
+// The caller of this method should be holding the queue.lock mutex
+func (queue *redisQueue) ensureConsuming() error {
+	if queue.deliveryChan == nil {
+		return ErrorNotConsuming
+	}
+	select {
+	case <-queue.consumingStopped:
+		return ErrorConsumingStopped
+	default:
+		return nil
+	}
 }

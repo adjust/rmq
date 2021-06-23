@@ -99,7 +99,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	queue2.StopConsuming()
+	<-queue2.StopConsuming()
 	assert.NoError(t, queue2.closeInStaleConnection())
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
@@ -108,7 +108,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"conn-q-q1"}, queues)
 
-	queue1.StopConsuming()
+	<-queue1.StopConsuming()
 	assert.NoError(t, queue1.closeInStaleConnection())
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
@@ -141,22 +141,14 @@ func TestQueueCommon(t *testing.T) {
 	require.NotNil(t, queue)
 	_, err = queue.PurgeReady()
 	assert.NoError(t, err)
-	count, err := queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 0)
 	assert.NoError(t, queue.Publish("queue-d1"))
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyReady(t, queue, 1)
 	assert.NoError(t, queue.Publish("queue-d2"))
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
+	eventuallyReady(t, queue, 2)
+	count, err := queue.PurgeReady()
 	assert.Equal(t, int64(2), count)
-	count, err = queue.PurgeReady()
-	assert.Equal(t, int64(2), count)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 0)
 	count, err = queue.PurgeReady()
 	assert.Equal(t, int64(0), count)
 
@@ -180,7 +172,7 @@ func TestQueueCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, consumers, 2)
 
-	queue.StopConsuming()
+	<-queue.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -203,95 +195,49 @@ func TestConsumerCommon(t *testing.T) {
 	assert.Nil(t, consumer.LastDelivery)
 
 	assert.NoError(t, queue1.Publish("cons-d1"))
-	time.Sleep(2 * time.Millisecond)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 1)
 	require.NotNil(t, consumer.LastDelivery)
 	assert.Equal(t, "cons-d1", consumer.LastDelivery.Payload())
-	count, err := queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
 
 	assert.NoError(t, queue1.Publish("cons-d2"))
-	time.Sleep(2 * time.Millisecond)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 2)
 	assert.Equal(t, "cons-d2", consumer.LastDelivery.Payload())
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count)
 
 	assert.NoError(t, consumer.LastDeliveries[0].Ack())
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 1)
 
 	assert.NoError(t, consumer.LastDeliveries[1].Ack())
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 0)
 
 	assert.Equal(t, ErrorNotFound, consumer.LastDeliveries[0].Ack())
 
 	assert.NoError(t, queue1.Publish("cons-d3"))
-	time.Sleep(2 * time.Millisecond)
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-	count, err = queue1.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 1)
+	eventuallyRejected(t, queue1, 0)
 	assert.Equal(t, "cons-d3", consumer.LastDelivery.Payload())
 	assert.NoError(t, consumer.LastDelivery.Reject())
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 0)
+	eventuallyRejected(t, queue1, 1)
 
 	assert.NoError(t, queue1.Publish("cons-d4"))
-	time.Sleep(2 * time.Millisecond)
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-	count, err = queue1.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 1)
+	eventuallyRejected(t, queue1, 1)
 	assert.Equal(t, "cons-d4", consumer.LastDelivery.Payload())
 	assert.NoError(t, consumer.LastDelivery.Reject())
-	count, err = queue1.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue1.rejectedCount()
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 0)
+	eventuallyRejected(t, queue1, 2)
+	count, err := queue1.PurgeRejected()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), count)
-	count, err = queue1.PurgeRejected()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count)
-	count, err = queue1.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyRejected(t, queue1, 0)
 	count, err = queue1.PurgeRejected()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), count)
@@ -311,17 +257,12 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, queue2.Publish(payload))
-	time.Sleep(2 * time.Millisecond)
+	eventuallyReady(t, queue2, 0)
+	eventuallyUnacked(t, queue2, 0)
 	assert.Equal(t, payload, <-payloadChan)
-	count, err = queue2.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue2.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
 
-	queue1.StopConsuming()
-	queue2.StopConsuming()
+	<-queue1.StopConsuming()
+	<-queue2.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -337,21 +278,24 @@ func TestMulti(t *testing.T) {
 		err := queue.Publish(fmt.Sprintf("multi-d%d", i))
 		assert.NoError(t, err)
 	}
-	count, err := queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(20), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 20)
+	eventuallyUnacked(t, queue, 0)
 
 	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	time.Sleep(2 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+
+	// Assert that eventually the ready count drops to 10 and unacked rises to 10
+	// TODO use the util funcs instead
+	assert.Eventually(t, func() bool {
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return false
+		}
+		unackedCount, err := queue.unackedCount()
+		if err != nil {
+			return false
+		}
+		return readyCount == 10 && unackedCount == 10
+	}, 10*time.Second, 2*time.Millisecond)
 
 	consumer := NewTestConsumer("multi-cons")
 	consumer.AutoAck = false
@@ -359,51 +303,56 @@ func TestMulti(t *testing.T) {
 
 	_, err = queue.AddConsumer("multi-cons", consumer)
 	assert.NoError(t, err)
-	time.Sleep(10 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+
+	// After we add the consumer - ready and unacked do not change
+	eventuallyReady(t, queue, 10)
+	eventuallyUnacked(t, queue, 10)
 
 	assert.NoError(t, consumer.LastDelivery.Ack())
-	time.Sleep(10 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(9), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+	// Assert that after the consumer acks a message the ready count drops to 9 and unacked remains at 10
+	// TODO use util funcs instead
+	assert.Eventually(t, func() bool {
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return false
+		}
+		unackedCount, err := queue.unackedCount()
+		if err != nil {
+			return false
+		}
+		return readyCount == 9 && unackedCount == 10
+	}, 10*time.Second, 2*time.Millisecond)
 
 	consumer.Finish()
-	time.Sleep(10 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(9), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+	// Assert that after the consumer finishes processing the first message ready and unacked do not change
+	eventuallyReady(t, queue, 9)
+	eventuallyUnacked(t, queue, 10)
 
 	assert.NoError(t, consumer.LastDelivery.Ack())
-	time.Sleep(10 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(8), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+	// Assert that after the consumer acks a message the ready count drops to 8 and unacked remains at 10
+	// TODO use the util funcs instead
+	assert.Eventually(t, func() bool {
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return false
+		}
+		unackedCount, err := queue.unackedCount()
+		if err != nil {
+			return false
+		}
+		return readyCount == 8 && unackedCount == 10
+	}, 10*time.Second, 2*time.Millisecond)
 
 	consumer.Finish()
-	time.Sleep(10 * time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(8), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(10), count)
+	// Assert that after the consumer finishes processing the second message ready and unacked do not change
+	eventuallyReady(t, queue, 8)
+	eventuallyUnacked(t, queue, 10)
 
-	queue.StopConsuming()
+	// This prevents the consumer from blocking internally inside a call to Consume, which allows the queue to complete
+	// the call to StopConsuming
+	consumer.FinishAll()
+
+	<-queue.StopConsuming()
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
@@ -423,61 +372,46 @@ func TestBatch(t *testing.T) {
 	}
 
 	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	time.Sleep(10 * time.Millisecond)
-	count, err := queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(5), count)
+	eventuallyUnacked(t, queue, 5)
 
 	consumer := NewTestBatchConsumer()
 	_, err = queue.AddBatchConsumer("batch-cons", 2, 50*time.Millisecond, consumer)
 	assert.NoError(t, err)
-	time.Sleep(10 * time.Millisecond)
-	require.Len(t, consumer.LastBatch, 2)
+	assert.Eventually(t, func() bool {
+		return len(consumer.LastBatch) == 2
+	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d0", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d1", consumer.LastBatch[1].Payload())
 	assert.NoError(t, consumer.LastBatch[0].Reject())
 	assert.NoError(t, consumer.LastBatch[1].Ack())
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(3), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyUnacked(t, queue, 3)
+	eventuallyRejected(t, queue, 1)
 
 	consumer.Finish()
-	time.Sleep(10 * time.Millisecond)
-	require.Len(t, consumer.LastBatch, 2)
+	assert.Eventually(t, func() bool {
+		return len(consumer.LastBatch) == 2
+	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d2", consumer.LastBatch[0].Payload())
 	assert.Equal(t, "batch-d3", consumer.LastBatch[1].Payload())
 	assert.NoError(t, consumer.LastBatch[0].Reject())
 	assert.NoError(t, consumer.LastBatch[1].Ack())
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count)
+	eventuallyUnacked(t, queue, 1)
+	eventuallyRejected(t, queue, 2)
 
 	consumer.Finish()
-	time.Sleep(10 * time.Millisecond)
+	// Last Batch is cleared out
 	assert.Len(t, consumer.LastBatch, 0)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count)
+	eventuallyUnacked(t, queue, 1)
+	eventuallyRejected(t, queue, 2)
 
-	time.Sleep(60 * time.Millisecond)
-	require.Len(t, consumer.LastBatch, 1)
+	// After a pause the batch consumer will pull down another batch
+	assert.Eventually(t, func() bool {
+		return len(consumer.LastBatch) == 1
+	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d4", consumer.LastBatch[0].Payload())
 	assert.NoError(t, consumer.LastBatch[0].Reject())
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(3), count)
+	eventuallyUnacked(t, queue, 0)
+	eventuallyRejected(t, queue, 3)
 }
 
 func TestReturnRejected(t *testing.T) {
@@ -493,42 +427,22 @@ func TestReturnRejected(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	count, err := queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(6), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 6)
+	eventuallyUnacked(t, queue, 0)
+	eventuallyRejected(t, queue, 0)
 
 	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	time.Sleep(time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(6), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 0)
+	eventuallyUnacked(t, queue, 6)
+	eventuallyRejected(t, queue, 0)
 
 	consumer := NewTestConsumer("return-cons")
 	consumer.AutoAck = false
 	_, err = queue.AddConsumer("cons", consumer)
 	assert.NoError(t, err)
-	time.Sleep(time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(6), count)
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 0)
+	eventuallyUnacked(t, queue, 6)
+	eventuallyRejected(t, queue, 0)
 
 	assert.Len(t, consumer.LastDeliveries, 6)
 	assert.NoError(t, consumer.LastDeliveries[0].Reject())
@@ -538,44 +452,25 @@ func TestReturnRejected(t *testing.T) {
 	// delivery 4 still open
 	assert.NoError(t, consumer.LastDeliveries[5].Reject())
 
-	time.Sleep(time.Millisecond)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count) // delivery 4
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
+	eventuallyReady(t, queue, 0)
+	eventuallyUnacked(t, queue, 1)  // delivery 4
+	eventuallyRejected(t, queue, 4) // delivery 0, 2, 3, 5
 
-	queue.StopConsuming()
+	<-queue.StopConsuming()
 
 	n, err := queue.ReturnRejected(2)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), n)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count) // delivery 0, 2
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count) // delivery 4
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(2), count) // delivery 3, 5
+	eventuallyReady(t, queue, 2)
+	eventuallyUnacked(t, queue, 1)  // delivery 4
+	eventuallyRejected(t, queue, 2) // delivery 3, 5
 
 	n, err = queue.ReturnRejected(math.MaxInt64)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), n)
-	count, err = queue.readyCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(4), count) // delivery 0, 2, 3, 5
-	count, err = queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count) // delivery 4
-	count, err = queue.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
+	eventuallyReady(t, queue, 4)
+	eventuallyUnacked(t, queue, 1) // delivery 4
+	eventuallyRejected(t, queue, 0)
 }
 
 func TestPushQueue(t *testing.T) {
@@ -603,52 +498,16 @@ func TestPushQueue(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, queue1.Publish("d1"))
-	time.Sleep(2 * time.Millisecond)
-	count, err := queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
+	eventuallyUnacked(t, queue1, 1)
 	require.Len(t, consumer1.LastDeliveries, 1)
 
 	assert.NoError(t, consumer1.LastDelivery.Push())
-	time.Sleep(2 * time.Millisecond)
-	count, err = queue1.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-	count, err = queue2.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-
+	eventuallyUnacked(t, queue1, 0)
+	eventuallyUnacked(t, queue2, 1)
 	require.Len(t, consumer2.LastDeliveries, 1)
+
 	assert.NoError(t, consumer2.LastDelivery.Push())
-	time.Sleep(2 * time.Millisecond)
-	count, err = queue2.rejectedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-}
-
-func TestConsuming(t *testing.T) {
-	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
-	assert.NoError(t, err)
-	queue, err := connection.OpenQueue("consume-q")
-	assert.NoError(t, err)
-
-	finishedChan := queue.StopConsuming()
-	assert.NotNil(t, finishedChan)
-	select {
-	case <-finishedChan:
-	default:
-		t.FailNow() // should return closed finishedChan
-	}
-
-	assert.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	assert.NotNil(t, queue.StopConsuming())
-	// already stopped
-	assert.NotNil(t, queue.StopConsuming())
-	select {
-	case <-finishedChan:
-	default:
-		t.FailNow() // should return closed finishedChan
-	}
+	eventuallyRejected(t, queue2, 1)
 }
 
 func TestStopConsuming_Consumer(t *testing.T) {
@@ -667,6 +526,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	}
 
 	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
 	var consumers []*TestConsumer
 	for i := 0; i < 10; i++ {
 		consumer := NewTestConsumer("c" + strconv.Itoa(i))
@@ -677,8 +537,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 
 	finishedChan := queue.StopConsuming()
 	require.NotNil(t, finishedChan)
-
-	<-finishedChan
+	<-finishedChan // wait for stopping to finish
 
 	var consumedCount int64
 	for i := 0; i < 10; i++ {
@@ -686,11 +545,17 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	}
 
 	// make sure all deliveries are either ready, unacked or consumed (acked)
-	readyCount, err := queue.readyCount()
-	assert.NoError(t, err)
-	unackedCount, err := queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
+	assert.Eventually(t, func() bool {
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return false
+		}
+		unackedCount, err := queue.unackedCount()
+		if err != nil {
+			return false
+		}
+		return readyCount+unackedCount+consumedCount == deliveryCount
+	}, 10*time.Second, 2*time.Millisecond)
 
 	assert.NoError(t, connection.stopHeartbeat())
 }
@@ -721,11 +586,9 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	time.Sleep(2 * time.Millisecond)
 	finishedChan := queue.StopConsuming()
 	require.NotNil(t, finishedChan)
-
-	<-finishedChan
+	<-finishedChan // wait for stopping to finish
 
 	var consumedCount int64
 	for i := 0; i < 10; i++ {
@@ -733,13 +596,100 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	}
 
 	// make sure all deliveries are either ready, unacked or consumed (acked)
-	readyCount, err := queue.readyCount()
-	assert.NoError(t, err)
-	unackedCount, err := queue.unackedCount()
-	assert.NoError(t, err)
-	assert.Equal(t, readyCount+unackedCount+consumedCount, deliveryCount, "counts %d+%d+%d = %d", consumedCount, readyCount, unackedCount, deliveryCount)
+	assert.Eventually(t, func() bool {
+		readyCount, err := queue.readyCount()
+		if err != nil {
+			return false
+		}
+		unackedCount, err := queue.unackedCount()
+		if err != nil {
+			return false
+		}
+		return readyCount+unackedCount+consumedCount == deliveryCount
+	}, 10*time.Second, 2*time.Millisecond)
 
 	assert.NoError(t, connection.stopHeartbeat())
+}
+
+func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	queue, err := connection.OpenQueue("consume-q")
+	require.Nil(t, queue)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	err = queue.StartConsuming(20, time.Millisecond)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	finishedChan := queue.StopConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	err = queue.StartConsuming(20, time.Millisecond)
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	_, err = queue.AddConsumer("late-consume", NewTestConsumer("late-consumer"))
+	require.Equal(t, ErrorConsumingStopped, err)
+}
+
+func TestQueue_StopConsuming_CantAddConsumer(t *testing.T) {
+	connection, err := OpenConnection("consume", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	queue, err := connection.OpenQueue("consume-q")
+	assert.NoError(t, err)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
+
+	finishedChan := queue.StopConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	_, err = queue.AddConsumer("late-consume", NewTestConsumer("late-consumer"))
+	require.Equal(t, ErrorConsumingStopped, err)
 }
 
 func BenchmarkQueue(b *testing.B) {
