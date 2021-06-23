@@ -5,7 +5,7 @@
 
 **Note**: We recently updated rmq to expose Redis errors instead of panicking.
 This is a major change as almost all functions now return errors. It's
-recommended to switch to this new version `rmq/v3` so rmq won't crash your
+recommended to switch to the latest version `rmq/v4` so rmq won't crash your
 services anymore on Redis errors.
 
 If you don't want to upgrade yet, you can continue using `rmq/v2`.
@@ -29,7 +29,7 @@ Let's take a look at how to use rmq.
 Of course you need to import rmq wherever you want to use it.
 
 ```go
-import "github.com/adjust/rmq/v3"
+import "github.com/adjust/rmq/v4"
 ```
 
 ### Connection
