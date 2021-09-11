@@ -10,7 +10,7 @@ import (
 var unusedContext = context.TODO()
 
 type RedisWrapper struct {
-	rawClient *redis.Client
+	rawClient redis.Cmdable
 }
 
 func (wrapper RedisWrapper) Set(key string, value string, expiration time.Duration) error {
