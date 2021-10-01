@@ -3,7 +3,6 @@ package rmq
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 )
@@ -40,6 +39,7 @@ type Queue interface {
 
 type redisQueue struct {
 	name           string
+	namespace      string
 	connectionName string
 	queuesKey      string // key to list of queues consumed by this connection
 	consumersKey   string // key to set of consumers using this connection
@@ -61,27 +61,26 @@ type redisQueue struct {
 }
 
 func newQueue(
-	name string,
+	name,
+	namespace,
 	connectionName string,
 	queuesKey string,
 	redisClient RedisClient,
 	errChan chan<- error,
 ) *redisQueue {
+	connKeys := keys{namespace: namespace}
 
-	consumersKey := strings.Replace(connectionQueueConsumersTemplate, phConnection, connectionName, 1)
-	consumersKey = strings.Replace(consumersKey, phQueue, name, 1)
-
-	readyKey := strings.Replace(queueReadyTemplate, phQueue, name, 1)
-	rejectedKey := strings.Replace(queueRejectedTemplate, phQueue, name, 1)
-
-	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
-	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
+	consumersKey := connKeys.connectionQueueConsumers(connectionName, name)
+	readyKey := connKeys.queueReady(name)
+	rejectedKey := connKeys.queueRejected(name)
+	unackedKey := connKeys.connectionQueueUnacked(connectionName, name)
 
 	consumingStopped := make(chan struct{})
 	ackCtx, ackCancel := context.WithCancel(context.Background())
 
 	queue := &redisQueue{
 		name:             name,
+		namespace:        namespace,
 		connectionName:   connectionName,
 		queuesKey:        queuesKey,
 		consumersKey:     consumersKey,
@@ -473,7 +472,7 @@ func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) 
 		return 0, 0, err
 	}
 
-	count, err := queue.redisClient.SRem(queuesKey, queue.name)
+	count, err := queue.redisClient.SRem(keys{namespace: queue.namespace}.queuesKey(), queue.name)
 	if err != nil {
 		return 0, 0, err
 	}

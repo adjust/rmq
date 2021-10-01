@@ -1,5 +1,7 @@
 package rmq
 
+import "strings"
+
 const (
 	connectionsKey                   = "rmq::connections"                                           // Set of connection names
 	connectionHeartbeatTemplate      = "rmq::connection::{connection}::heartbeat"                   // expires after {connection} died
@@ -15,3 +17,53 @@ const (
 	phQueue      = "{queue}"      // queue name
 	phConsumer   = "{consumer}"   // consumer name (consisting of tag and token)
 )
+
+type keys struct {
+	namespace string
+}
+
+func (k keys) connectionsKey() string {
+	return namespaced(k.namespace, connectionsKey)
+}
+
+func (k keys) connectionHeartbeat(connection string) string {
+	return strings.Replace(namespaced(k.namespace, connectionHeartbeatTemplate), phConnection, connection, 1)
+}
+
+func (k keys) connectionQueues(connection string) string {
+	return strings.Replace(namespaced(k.namespace, connectionQueuesTemplate), phConnection, connection, 1)
+}
+
+func (k keys) connectionQueueConsumers(connection, queue string) string {
+	s := strings.Replace(namespaced(k.namespace, connectionQueueConsumersTemplate), phConnection, connection, 1)
+	s = strings.Replace(s, phQueue, queue, 1)
+
+	return s
+}
+
+func (k keys) connectionQueueUnacked(connection, queue string) string {
+	s := strings.Replace(namespaced(k.namespace, connectionQueueUnackedTemplate), phConnection, connection, 1)
+	s = strings.Replace(s, phQueue, queue, 1)
+
+	return s
+}
+
+func (k keys) queuesKey() string {
+	return namespaced(k.namespace, queuesKey)
+}
+
+func (k keys) queueReady(queue string) string {
+	return strings.Replace(namespaced(k.namespace, queueReadyTemplate), phQueue, queue, 1)
+}
+
+func (k keys) queueRejected(queue string) string {
+	return strings.Replace(namespaced(k.namespace, queueRejectedTemplate), phQueue, queue, 1)
+}
+
+func namespaced(namespace, key string) string {
+	if namespace == "" {
+		return key
+	}
+
+	return namespace + "::" + key
+}
