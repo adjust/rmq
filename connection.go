@@ -67,7 +67,7 @@ func OpenConnection(tag string, network string, address string, db int, errChan 
 }
 
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (Connection, error) {
+func OpenConnectionWithRedisClient(tag string, redisClient redis.Cmdable, errChan chan<- error) (Connection, error) {
 	return OpenConnectionWithRmqRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
