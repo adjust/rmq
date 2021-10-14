@@ -9,8 +9,13 @@ import (
 
 var unusedContext = context.TODO()
 
+// NewRedisWrapper returns wrapper with provided redis.Cmdable.
+func NewRedisWrapper(rawClient redis.Cmdable) RedisWrapper {
+	return RedisWrapper{rawClient: rawClient}
+}
+
 type RedisWrapper struct {
-	rawClient *redis.Client
+	rawClient redis.Cmdable
 }
 
 func (wrapper RedisWrapper) Set(key string, value string, expiration time.Duration) error {

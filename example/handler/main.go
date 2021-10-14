@@ -6,10 +6,35 @@ import (
 	"net/http"
 
 	"github.com/adjust/rmq/v4"
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
-	connection, err := rmq.OpenConnection("handler", "tcp", "localhost:6379", 2, nil)
+	rc := rmq.NewRedisWrapper(
+		redis.NewClient(
+			&redis.Options{
+				Addr: "localhost:6379",
+				DB:   2,
+			},
+		),
+	)
+
+	errChan := make(chan error)
+
+	go func() {
+		for  {
+			fmt.Printf("handle error: %v\n", <- errChan)
+		}
+	}()
+
+	opts := []rmq.Option{
+		rmq.WithTag("handler"),
+		rmq.WithRedisClient(rc),
+		rmq.WithNamespace("example-project"),
+		rmq.WithErrChan(errChan),
+	}
+
+	connection, err := rmq.OpenConnectionWithOptions(opts...)
 	if err != nil {
 		panic(err)
 	}

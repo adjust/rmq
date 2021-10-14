@@ -67,27 +67,88 @@ func OpenConnection(tag string, network string, address string, db int, errChan 
 	return OpenConnectionWithRedisClient(tag, redisClient, errChan)
 }
 
+// Option function type configures connection.
+type Option func(*redisConnection)
+
+// WithNamespace option adds namespace to connection.
+func WithNamespace(namespace string) Option {
+	return func(rc *redisConnection) {
+		rc.namespace = namespace
+	}
+}
+
+// WithTag option adds tag to connection.
+func WithTag(tag string) Option {
+	return func(rc *redisConnection) {
+		rc.Name = fmt.Sprintf("%s-%s", tag, RandomString(6))
+	}
+}
+
+// WithRedisClient option adds RedisClient to connection.
+func WithRedisClient(redisClient RedisClient) Option {
+	return func(rc *redisConnection) {
+		rc.redisClient = redisClient
+	}
+}
+
+// WithErrChan option adds err channel to connection.
+func WithErrChan(errChan chan<- error) Option {
+	return func(rc *redisConnection) {
+		rc.errChan = errChan
+	}
+}
+
+// OpenConnectionWithOptions configures connection.
+func OpenConnectionWithOptions(opts ...Option) (Connection, error) {
+	conn := &redisConnection{
+		Name:          RandomString(6),
+		heartbeatStop: make(chan chan struct{}, 1),
+	}
+
+	for _, opt := range opts {
+		opt(conn)
+	}
+
+	connKeys := keys{namespace: conn.namespace}
+
+	conn.keys = connKeys
+	conn.heartbeatKey = connKeys.connectionHeartbeat(conn.Name)
+	conn.queuesKey = connKeys.connectionQueues(conn.Name)
+
+	if err := conn.updateHeartbeat(); err != nil { // checks the connection
+		return nil, err
+	}
+
+	// add to connection set after setting heartbeat to avoid race with cleaner
+	if _, err := conn.redisClient.SAdd(connKeys.connectionsKey(), conn.Name); err != nil {
+		return nil, err
+	}
+
+	go conn.heartbeat(conn.errChan)
+
+	return conn, nil
+}
+
 // OpenConnectionWithRedisClient opens and returns a new connection
-func OpenConnectionWithRedisClient(tag string, redisClient *redis.Client, errChan chan<- error) (Connection, error) {
-	return OpenConnectionWithRmqRedisClient("", tag, RedisWrapper{redisClient}, errChan)
+func OpenConnectionWithRedisClient(tag string, redisClient redis.Cmdable, errChan chan<- error) (Connection, error) {
+	return OpenConnectionWithRmqRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
 // uses a test redis client internally. This is useful in integration tests.
 func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (Connection, error) {
-	return OpenConnectionWithRmqRedisClient("", tag, NewTestRedisClient(), errChan)
+	return OpenConnectionWithRmqRedisClient(tag, NewTestRedisClient(), errChan)
 }
 
 // If you would like to use a redis client other than the ones supported in the constructors above, you can implement
 // the RedisClient interface yourself
-func OpenConnectionWithRmqRedisClient(namespace, tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
+func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
 	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 
-	connKeys := keys{namespace: namespace}
+	connKeys := keys{}
 
 	connection := &redisConnection{
 		Name:          name,
-		namespace:     namespace,
 		keys:          connKeys,
 		heartbeatKey:  connKeys.connectionHeartbeat(name),
 		queuesKey:     connKeys.connectionQueues(name),
