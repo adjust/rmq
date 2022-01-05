@@ -129,6 +129,27 @@ func (client *TestRedisClient) LPush(key string, value ...string) (total int64, 
 	return int64(len(list)) + 1, nil
 }
 
+// RPush inserts the specified value at the tail of the list stored at key.
+// If key does not exist, it is created as empty list before performing the push operations.
+// When key holds a value that is not a list, an error is returned.
+// It is possible to push multiple elements using a single command call just specifying multiple arguments
+// at the end of the command. Elements are inserted one after the other to the head of the list,
+// from the leftmost element to the rightmost element.
+func (client *TestRedisClient) RPush(key string, value ...string) (total int64, err error) {
+
+	lock.Lock()
+	defer lock.Unlock()
+
+	list, err := client.findList(key)
+
+	if err != nil {
+		return 0, nil
+	}
+
+	client.storeList(key, append(list, value...))
+	return int64(len(list)) + 1, nil
+}
+
 //LLen returns the length of the list stored at key.
 //If key does not exist, it is interpreted as an empty list and 0 is returned.
 //An error is returned when the value stored at key is not a list.

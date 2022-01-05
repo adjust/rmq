@@ -30,6 +30,10 @@ func (wrapper RedisWrapper) LPush(key string, value ...string) (total int64, err
 	return wrapper.rawClient.LPush(unusedContext, key, value).Result()
 }
 
+func (wrapper RedisWrapper) RPush(key string, value ...string) (total int64, err error) {
+	return wrapper.rawClient.RPush(unusedContext, key, value).Result()
+}
+
 func (wrapper RedisWrapper) LLen(key string) (affected int64, err error) {
 	return wrapper.rawClient.LLen(unusedContext, key).Result()
 }

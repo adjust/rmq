@@ -56,3 +56,11 @@ func (delivery *TestDelivery) Push() error {
 	delivery.State = Pushed
 	return nil
 }
+
+func (delivery *TestDelivery) PushPriority() error {
+	if delivery.State != Unacked {
+		return ErrorNotFound
+	}
+	delivery.State = Pushed
+	return nil
+}

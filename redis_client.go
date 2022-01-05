@@ -10,6 +10,7 @@ type RedisClient interface {
 
 	// lists
 	LPush(key string, value ...string) (total int64, err error)
+	RPush(key string, value ...string) (total int64, err error)
 	LLen(key string) (affected int64, err error)
 	LRem(key string, count int64, value string) (affected int64, err error)
 	LTrim(key string, start, stop int64) error

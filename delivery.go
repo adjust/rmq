@@ -12,6 +12,7 @@ type Delivery interface {
 	Ack() error
 	Reject() error
 	Push() error
+	PushPriority() error
 }
 
 type redisDelivery struct {
@@ -86,7 +87,7 @@ func (delivery *redisDelivery) Ack() error {
 }
 
 func (delivery *redisDelivery) Reject() error {
-	return delivery.move(delivery.rejectedKey)
+	return delivery.move(delivery.rejectedKey, false)
 }
 
 func (delivery *redisDelivery) Push() error {
@@ -94,13 +95,26 @@ func (delivery *redisDelivery) Push() error {
 		return delivery.Reject() // fall back to rejecting
 	}
 
-	return delivery.move(delivery.pushKey)
+	return delivery.move(delivery.pushKey, false)
 }
 
-func (delivery *redisDelivery) move(key string) error {
+func (delivery *redisDelivery) PushPriority() error {
+	if delivery.pushKey == "" {
+		return delivery.Reject() // fall back to rejecting
+	}
+
+	return delivery.move(delivery.pushKey, true)
+}
+
+func (delivery *redisDelivery) move(key string, append bool) error {
 	errorCount := 0
 	for {
-		_, err := delivery.redisClient.LPush(key, delivery.payload)
+		var err error
+		if append {
+			_, err = delivery.redisClient.RPush(key, delivery.payload)
+		} else {
+			_, err = delivery.redisClient.LPush(key, delivery.payload)
+		}
 		if err == nil { // success
 			break
 		}
