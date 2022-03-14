@@ -412,6 +412,16 @@ func TestBatch(t *testing.T) {
 	assert.NoError(t, consumer.LastBatch[0].Reject())
 	eventuallyUnacked(t, queue, 0)
 	eventuallyRejected(t, queue, 3)
+
+	for i := 0; i < 5; i++ {
+		err := queue.Publish(fmt.Sprintf("batch-d%d", i))
+		assert.NoError(t, err)
+	}
+	_, err = queue.AddBatchConsumerFunc("batch-cons-func", 2, 50*time.Millisecond, func(batch Deliveries) {
+		errMap := batch.Ack()
+		assert.Empty(t, errMap)
+	})
+	assert.NoError(t, err)
 }
 
 func TestReturnRejected(t *testing.T) {
