@@ -741,3 +741,11 @@ func BenchmarkQueue(b *testing.B) {
 
 	assert.NoError(b, connection.stopHeartbeat())
 }
+
+func Test_jitteredDuration(t *testing.T) {
+	dur := 100 * time.Millisecond
+	for i := 0; i < 5000; i++ {
+		assert.LessOrEqual(t, int64(90*time.Millisecond), int64(jitteredDuration(dur)))
+		assert.GreaterOrEqual(t, int64(110*time.Millisecond), int64(jitteredDuration(dur)))
+	}
+}

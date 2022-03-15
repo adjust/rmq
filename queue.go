@@ -3,6 +3,7 @@ package rmq
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -175,7 +176,7 @@ func (queue *redisQueue) consume() {
 			case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
-			time.Sleep(queue.pollDuration) // sleep before retry
+			time.Sleep(jitteredDuration(queue.pollDuration)) // sleep before we consume the next batch
 		}
 	}
 }
@@ -532,4 +533,20 @@ func (queue *redisQueue) ensureConsuming() error {
 	default:
 		return nil
 	}
+}
+
+// jitteredDuration calculates and applies a jittered duration of 10% and .
+func jitteredDuration(duration time.Duration) time.Duration {
+	factor := int64(10) // a jitter factor of 10%
+
+	// We add a jitter variation of +/- the factor as a percentage%
+	jitterFraction := int64(duration) * 2 / factor
+	if jitterFraction == 0 {
+		// If the baseSleep is too small we don't jitter it at all
+		return duration
+	}
+	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+	jitter := time.Duration(randSrc.Int63n(jitterFraction))
+	sleep := duration - time.Duration(int64(duration)/factor) + jitter
+	return sleep
 }
