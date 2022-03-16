@@ -14,6 +14,8 @@ const (
 	purgeBatchSize      = int64(100)
 )
 
+var randSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 type Queue interface {
 	Publish(payload ...string) error
 	PublishBytes(payload ...[]byte) error
@@ -176,7 +178,8 @@ func (queue *redisQueue) consume() {
 			case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
-			time.Sleep(jitteredDuration(queue.pollDuration)) // sleep before we consume the next batch
+
+			time.Sleep(jitteredDuration(queue.pollDuration))
 		}
 	}
 }
@@ -535,18 +538,8 @@ func (queue *redisQueue) ensureConsuming() error {
 	}
 }
 
-// jitteredDuration calculates and applies a jittered duration of 10% and .
+// jitteredDuration calculates and returns a value that is +/-10% the input duration
 func jitteredDuration(duration time.Duration) time.Duration {
-	factor := int64(10) // a jitter factor of 10%
-
-	// We add a jitter variation of +/- the factor as a percentage%
-	jitterFraction := int64(duration) * 2 / factor
-	if jitterFraction == 0 {
-		// If the baseSleep is too small we don't jitter it at all
-		return duration
-	}
-	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
-	jitter := time.Duration(randSrc.Int63n(jitterFraction))
-	sleep := duration - time.Duration(int64(duration)/factor) + jitter
-	return sleep
+	factor := 0.9 + randSrc.Float64() * 0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
+	return time.Duration(float64(duration) * factor)
 }
