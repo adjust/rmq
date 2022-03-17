@@ -3,6 +3,7 @@ package rmq
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,8 @@ const (
 	defaultBatchTimeout = time.Second
 	purgeBatchSize      = int64(100)
 )
+
+var randSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type Queue interface {
 	Publish(payload ...string) error
@@ -175,7 +178,8 @@ func (queue *redisQueue) consume() {
 			case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
-			time.Sleep(queue.pollDuration) // sleep before retry
+
+			time.Sleep(jitteredDuration(queue.pollDuration))
 		}
 	}
 }
@@ -532,4 +536,10 @@ func (queue *redisQueue) ensureConsuming() error {
 	default:
 		return nil
 	}
+}
+
+// jitteredDuration calculates and returns a value that is +/-10% the input duration
+func jitteredDuration(duration time.Duration) time.Duration {
+	factor := 0.9 + randSrc.Float64() * 0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
+	return time.Duration(float64(duration) * factor)
 }
