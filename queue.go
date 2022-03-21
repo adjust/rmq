@@ -178,9 +178,8 @@ func (queue *redisQueue) consume() {
 			case queue.errChan <- &ConsumeError{RedisErr: err, Count: errorCount}:
 			default:
 			}
-
-			time.Sleep(jitteredDuration(queue.pollDuration))
 		}
+		time.Sleep(jitteredDuration(queue.pollDuration))
 	}
 }
 
@@ -199,8 +198,6 @@ func (queue *redisQueue) consumeBatch() error {
 
 	batchSize := queue.prefetchLimit - unackedCount
 	if batchSize <= 0 {
-		// already at prefetch limit, wait for consumers to finish
-		time.Sleep(queue.pollDuration) // sleep before retry
 		return nil
 	}
 
@@ -213,8 +210,6 @@ func (queue *redisQueue) consumeBatch() error {
 
 		payload, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if err == ErrorNotFound {
-			// ready list currently empty, wait for new deliveries
-			time.Sleep(queue.pollDuration)
 			return nil
 		}
 
@@ -540,6 +535,6 @@ func (queue *redisQueue) ensureConsuming() error {
 
 // jitteredDuration calculates and returns a value that is +/-10% the input duration
 func jitteredDuration(duration time.Duration) time.Duration {
-	factor := 0.9 + randSrc.Float64() * 0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
+	factor := 0.9 + randSrc.Float64()*0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
 	return time.Duration(float64(duration) * factor)
 }
