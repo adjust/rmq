@@ -14,8 +14,6 @@ const (
 	purgeBatchSize      = int64(100)
 )
 
-var randSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 type Queue interface {
 	Publish(payload ...string) error
 	PublishBytes(payload ...[]byte) error
@@ -535,6 +533,6 @@ func (queue *redisQueue) ensureConsuming() error {
 
 // jitteredDuration calculates and returns a value that is +/-10% the input duration
 func jitteredDuration(duration time.Duration) time.Duration {
-	factor := 0.9 + randSrc.Float64()*0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
+	factor := 0.9 + rand.Float64()*0.2 // a jitter factor between 0.9 and 1.1 (+-10%)
 	return time.Duration(float64(duration) * factor)
 }
