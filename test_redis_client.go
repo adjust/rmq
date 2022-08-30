@@ -126,7 +126,7 @@ func (client *TestRedisClient) LPush(key string, value ...string) (total int64, 
 	}
 
 	client.storeList(key, append(value, list...))
-	return int64(len(list)) + 1, nil
+	return int64(len(list) + len(value)), nil
 }
 
 // LLen returns the length of the list stored at key.
