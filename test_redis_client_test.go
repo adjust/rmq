@@ -31,21 +31,21 @@ func TestTestRedisClient_Set(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			//add
+			// add
 			err := tt.client.Set(tt.args.key, tt.args.value, tt.args.expiration)
 			assert.NoError(t, err)
 
-			//get
+			// get
 			v, err := tt.client.Get(tt.args.key)
 			assert.Equal(t, tt.args.value, v)
 			assert.NoError(t, err)
 
-			//delete
+			// delete
 			affected, err := tt.client.Del(tt.args.key)
 			assert.Equal(t, int64(1), affected)
 			assert.NoError(t, err)
 
-			//delete it again
+			// delete it again
 			affected, err = tt.client.Del(tt.args.key)
 			assert.Equal(t, int64(0), affected)
 			assert.NoError(t, err)
@@ -117,27 +117,27 @@ func TestTestRedisClient_LPush(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			//Push
+			// Push
 			total, err := tt.client.LPush(tt.args.key, tt.args.value)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.total, total)
 
-			//Len
+			// Len
 			count, err := tt.client.LLen(tt.args.key)
 			assert.Equal(t, int64(1), count)
 			assert.NoError(t, err)
 
-			//Len of non-existing
+			// Len of non-existing
 			count, err = tt.client.LLen(tt.args.key + "nonsense")
 			assert.Equal(t, int64(0), count)
 			assert.NoError(t, err)
 
-			//Lrem
+			// Lrem
 			count, err = tt.client.LRem(tt.args.key, 100, tt.args.value)
 			assert.Equal(t, int64(1), count)
 			assert.NoError(t, err)
 
-			//Len again
+			// Len again
 			count, err = tt.client.LLen(tt.args.key)
 			assert.Equal(t, int64(0), count)
 			assert.NoError(t, err)

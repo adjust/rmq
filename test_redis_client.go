@@ -29,12 +29,12 @@ func (client *TestRedisClient) Set(key string, value string, expiration time.Dur
 	defer lock.Unlock()
 
 	client.store.Store(key, value)
-	//Delete any previous time to live associated with the key
+	// Delete any previous time to live associated with the key
 	client.ttl.Delete(key)
 
-	//0.0 expiration means that the value won't expire
+	// 0.0 expiration means that the value won't expire
 	if expiration.Seconds() != 0.0 {
-		//Store the unix time at which we should delete this
+		// Store the unix time at which we should delete this
 		client.ttl.Store(key, time.Now().Add(expiration).Unix())
 	}
 
@@ -79,13 +79,13 @@ func (client *TestRedisClient) Del(key string) (affected int64, err error) {
 // The command returns -1 if the key exists but has no associated expire.
 func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 
-	//Lookup the expiration map
+	// Lookup the expiration map
 	expiration, found := client.ttl.Load(key)
 
-	//Found an expiration time
+	// Found an expiration time
 	if found {
 
-		//It was there, but it expired; removing it now
+		// It was there, but it expired; removing it now
 		if expiration.(int64) < time.Now().Unix() {
 			client.ttl.Delete(key)
 			return -2, nil
@@ -95,12 +95,12 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 		return ttl, nil
 	}
 
-	//Lookup the store in case this key exists but don't have an expiration
-	//date
+	// Lookup the store in case this key exists but don't have an expiration
+	// date
 	_, found = client.store.Load(key)
 
-	//The key was in store but didn't have an expiration associated
-	//to it.
+	// The key was in store but didn't have an expiration associated
+	// to it.
 	if found {
 		return -1, nil
 	}
@@ -157,48 +157,48 @@ func (client *TestRedisClient) LRem(key string, count int64, value string) (affe
 
 	list, err := client.findList(key)
 
-	//Wasn't a list, or is empty
+	// Wasn't a list, or is empty
 	if err != nil || len(list) == 0 {
 		return 0, nil
 	}
 
-	//Create a list that have the capacity to store
-	//the old one
-	//This will be much more performant in case of
-	//very long list
+	// Create a list that have the capacity to store
+	// the old one
+	// This will be much more performant in case of
+	// very long list
 	newList := make([]string, 0, len(list))
 
 	if err != nil {
 		return 0, nil
 	}
 
-	//left to right removal of count elements
+	// left to right removal of count elements
 	if count >= 0 {
 
-		//All the elements are to be removed.
-		//Set count to max possible elements
+		// All the elements are to be removed.
+		// Set count to max possible elements
 		if count == 0 {
 			count = int64(len(list))
 		}
-		//left to right traversal
+		// left to right traversal
 		for index := 0; index < len(list); index++ {
 
-			//isn't what we look for or we found enough element already
+			// isn't what we look for or we found enough element already
 			if strings.Compare(list[index], value) != 0 || affected > count {
 				newList = append(newList, list[index])
 			} else {
 				affected++
 			}
 		}
-		//right to left removal of count elements
+		// right to left removal of count elements
 	} else if count < 0 {
 
-		//right to left traversal
+		// right to left traversal
 		for index := len(list) - 1; index >= 0; index-- {
 
-			//isn't what we look for or we found enough element already
+			// isn't what we look for or we found enough element already
 			if strings.Compare(list[index], value) != 0 || affected > count {
-				//prepend instead of append to keep the order
+				// prepend instead of append to keep the order
 				newList = append([]string{list[index]}, newList...)
 			} else {
 				affected++
@@ -206,7 +206,7 @@ func (client *TestRedisClient) LRem(key string, count int64, value string) (affe
 		}
 	}
 
-	//store the updated list
+	// store the updated list
 	client.storeList(key, newList)
 
 	return affected, nil
@@ -228,7 +228,7 @@ func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 
 	list, err := client.findList(key)
 
-	//Wasn't a list, or is empty
+	// Wasn't a list, or is empty
 	if err != nil || len(list) == 0 {
 		return nil
 	}
@@ -240,7 +240,7 @@ func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 		stop += int64(len(list))
 	}
 
-	//invalid values cause the remove of the key
+	// invalid values cause the remove of the key
 	if start > stop {
 		client.store.Delete(key)
 		return nil
@@ -266,18 +266,18 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 	sourceList, sourceErr := client.findList(source)
 	destList, destErr := client.findList(destination)
 
-	//One of the two isn't a list
+	// One of the two isn't a list
 	if sourceErr != nil || destErr != nil {
 		return "", ErrorNotFound
 	}
-	//we have nothing to move
+	// we have nothing to move
 	if len(sourceList) == 0 {
 		return "", ErrorNotFound
 	}
 
-	//Remove the last element of source (tail)
+	// Remove the last element of source (tail)
 	client.storeList(source, sourceList[0:len(sourceList)-1])
-	//Put the last element of source (tail) and prepend it to dest
+	// Put the last element of source (tail) and prepend it to dest
 	client.storeList(destination, append([]string{sourceList[len(sourceList)-1]}, destList...))
 
 	return sourceList[len(sourceList)-1], nil
@@ -354,10 +354,10 @@ func (client *TestRedisClient) storeSet(key string, set map[string]struct{}) {
 
 // findSet finds a set
 func (client *TestRedisClient) findSet(key string) (map[string]struct{}, error) {
-	//Lookup the store for the list
+	// Lookup the store for the list
 	storedValue, found := client.store.Load(key)
 	if found {
-		//list are stored as pointer to []string
+		// list are stored as pointer to []string
 		set, casted := storedValue.(map[string]struct{})
 
 		if casted {
@@ -367,7 +367,7 @@ func (client *TestRedisClient) findSet(key string) (map[string]struct{}, error) 
 		return nil, errors.New("Stored value wasn't a set")
 	}
 
-	//return an empty set if not found
+	// return an empty set if not found
 	return make(map[string]struct{}), nil
 }
 
@@ -380,30 +380,30 @@ func (client *TestRedisClient) storeList(key string, list []string) {
 // if key doesn't exist, an empty list is returned
 // an error is returned when the value at key isn't a list
 func (client *TestRedisClient) findList(key string) ([]string, error) {
-	//Lookup the store for the list
+	// Lookup the store for the list
 	storedValue, found := client.store.Load(key)
 	if found {
 
-		//list are stored as pointer to []string
+		// list are stored as pointer to []string
 		list, casted := storedValue.(*[]string)
 
-		//Successful cass from interface{} to *[]string
-		//Preprend the new key
+		// Successful cass from interface{} to *[]string
+		// Preprend the new key
 		if casted {
 
-			//This mock use sync.Map to be thread safe.
-			//sync.Map only accepts interface{} as values and
-			//in order to store an array as interface{}, you need
-			//to use a pointer to it.
-			//We could return the pointer instead of the value
-			//and gain some performances here. Returning the pointer,
-			//however, will open us up to race conditions.
+			// This mock use sync.Map to be thread safe.
+			// sync.Map only accepts interface{} as values and
+			// in order to store an array as interface{}, you need
+			// to use a pointer to it.
+			// We could return the pointer instead of the value
+			// and gain some performances here. Returning the pointer,
+			// however, will open us up to race conditions.
 			return *list, nil
 		}
 
 		return nil, errors.New("Stored value wasn't a list")
 	}
 
-	//return an empty list if not found
+	// return an empty list if not found
 	return []string{}, nil
 }
