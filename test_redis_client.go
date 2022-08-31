@@ -11,11 +11,11 @@ import (
 type TestRedisClient struct {
 	store sync.Map
 	ttl   sync.Map
+	mx sync.Mutex
 }
 
-var lock sync.Mutex
-
 // NewTestRedisClient returns a NewTestRedisClient
+
 func NewTestRedisClient() *TestRedisClient {
 	return &TestRedisClient{}
 }
@@ -25,8 +25,8 @@ func NewTestRedisClient() *TestRedisClient {
 // Any previous time to live associated with the key is discarded on successful SET operation.
 func (client *TestRedisClient) Set(key string, value string, expiration time.Duration) error {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	client.store.Store(key, value)
 	//Delete any previous time to live associated with the key
@@ -114,10 +114,10 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 // It is possible to push multiple elements using a single command call just specifying multiple arguments
 // at the end of the command. Elements are inserted one after the other to the head of the list,
 // from the leftmost element to the rightmost element.
-func (client *TestRedisClient) LPush(key string, value ...string) (total int64, err error) {
+func (client *TestRedisClient) LPush(key string, values ...string) (total int64, err error) {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	list, err := client.findList(key)
 
@@ -125,8 +125,9 @@ func (client *TestRedisClient) LPush(key string, value ...string) (total int64, 
 		return 0, nil
 	}
 
-	client.storeList(key, append(value, list...))
-	return int64(len(list) + len(value)), nil
+	newList := append(values, list...)
+	client.storeList(key, newList)
+	return int64(len(newList)), nil
 }
 
 // LLen returns the length of the list stored at key.
@@ -152,8 +153,8 @@ func (client *TestRedisClient) LLen(key string) (affected int64, err error) {
 // lists, so when key does not exist, the command will always return 0.
 func (client *TestRedisClient) LRem(key string, count int64, value string) (affected int64, err error) {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	list, err := client.findList(key)
 
@@ -223,8 +224,8 @@ func (client *TestRedisClient) LRem(key string, count int64, value string) (affe
 // If end is larger than the end of the list, Redis will treat it like the last element of the list
 func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	list, err := client.findList(key)
 
@@ -260,8 +261,8 @@ func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 // so it can be considered as a list rotation command.
 func (client *TestRedisClient) RPopLPush(source, destination string) (value string, err error) {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	sourceList, sourceErr := client.findList(source)
 	destList, destErr := client.findList(destination)
@@ -289,8 +290,8 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 // An error is returned when the value stored at key is not a set.
 func (client *TestRedisClient) SAdd(key, value string) (total int64, err error) {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	set, err := client.findSet(key)
 	if err != nil {
@@ -324,8 +325,8 @@ func (client *TestRedisClient) SMembers(key string) (members []string, err error
 // An error is returned when the value stored at key is not a set.
 func (client *TestRedisClient) SRem(key, value string) (affected int64, err error) {
 
-	lock.Lock()
-	defer lock.Unlock()
+	client.mx.Lock()
+	defer client.mx.Unlock()
 
 	set, err := client.findSet(key)
 	if err != nil || len(set) == 0 {
