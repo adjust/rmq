@@ -43,6 +43,10 @@ func (wrapper RedisWrapper) LTrim(key string, start, stop int64) error {
 	return wrapper.rawClient.LTrim(unusedContext, key, int64(start), int64(stop)).Err()
 }
 
+func (wrapper RedisWrapper) RPop(key string) (value string, err error) {
+	return wrapper.rawClient.RPop(unusedContext, key).Result()
+}
+
 func (wrapper RedisWrapper) RPopLPush(source, destination string) (value string, err error) {
 	value, err = wrapper.rawClient.RPopLPush(unusedContext, source, destination).Result()
 	// println("RPopLPush", source, destination, value, err)

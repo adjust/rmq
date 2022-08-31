@@ -11,7 +11,7 @@ import (
 type TestRedisClient struct {
 	store sync.Map
 	ttl   sync.Map
-	mx sync.Mutex
+	mx    sync.Mutex
 }
 
 // NewTestRedisClient returns a NewTestRedisClient
@@ -128,6 +128,29 @@ func (client *TestRedisClient) LPush(key string, values ...string) (total int64,
 	newList := append(values, list...)
 	client.storeList(key, newList)
 	return int64(len(newList)), nil
+}
+
+// RPop removes and returns one value from the tail of the list stored at key.
+// When key holds a value that is not a list, an error is returned.
+func (client *TestRedisClient) RPop(key string) (value string, err error) {
+
+	client.mx.Lock()
+	defer client.mx.Unlock()
+
+	list, err := client.findList(key)
+	// not a list
+	if err != nil {
+		return "", ErrorNotFound
+	}
+	// list is empty
+	if len(list) == 0 {
+		return "", ErrorNotFound
+	}
+
+	// Remove the last element of source (tail)
+	client.storeList(key, list[0:len(list)-1])
+
+	return list[len(list)-1], nil
 }
 
 // LLen returns the length of the list stored at key.
