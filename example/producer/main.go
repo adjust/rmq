@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/adjust/rmq/v4"
+	"github.com/adjust/rmq/v5"
 )
 
 const (
