@@ -14,6 +14,7 @@ type RedisClient interface {
 	LRem(key string, count int64, value string) (affected int64, err error)
 	LTrim(key string, start, stop int64) error
 	RPopLPush(source, destination string) (value string, err error)
+	RPop(key string) (value string, err error)
 
 	// sets
 	SAdd(key, value string) (total int64, err error)

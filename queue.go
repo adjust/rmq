@@ -28,6 +28,7 @@ type Queue interface {
 	ReturnUnacked(max int64) (int64, error)
 	ReturnRejected(max int64) (int64, error)
 	Destroy() (readyCount, rejectedCount int64, err error)
+	Drain(count int64) ([]string, error)
 
 	// internals
 	// used in cleaner
@@ -457,6 +458,26 @@ func (queue *redisQueue) move(from, to string, max int64) (n int64, error error)
 		}
 	}
 	return n, nil
+}
+
+// Drain removes and returns 'count' elements from the queue. In case of an error,
+// Drain return all elements removed until the error occurred and the error itself.
+func (queue *redisQueue) Drain(count int64) ([]string, error) {
+	var (
+		n   int64
+		err error
+	)
+	out := make([]string, 0, count)
+
+	for n = 0; n < count; n++ {
+		val, err := queue.redisClient.RPop(queue.readyKey)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, val)
+	}
+
+	return out, err
 }
 
 // Destroy purges and removes the queue from the list of queues

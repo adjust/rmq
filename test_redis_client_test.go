@@ -157,3 +157,20 @@ func TestTestRedisClient_LPush_Len(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(6), total)
 }
+
+func TestTestRedisClient_RPop(t *testing.T) {
+	client := NewTestRedisClient()
+	key := "list-key"
+
+	total, err := client.LPush(key, "1", "2", "3")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+
+	value, err := client.RPop(key)
+	assert.NoError(t, err)
+	assert.Equal(t, "3", value)
+
+	total, err = client.LLen(key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+}

@@ -750,3 +750,25 @@ func Test_jitteredDuration(t *testing.T) {
 		assert.GreaterOrEqual(t, int64(110*time.Millisecond), int64(d))
 	}
 }
+
+func TestQueueDrain(t *testing.T) {
+	connection, err := OpenConnection("drain-connection", "tcp", "localhost:6379", 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
+
+	queue, err := connection.OpenQueue("drain-queue")
+	assert.NoError(t, err)
+
+	for x := 0; x < 100; x++ {
+		queue.Publish(fmt.Sprintf("%d", x))
+	}
+
+	eventuallyReady(t, queue, 100)
+
+	for x := 1; x <= 10; x++ {
+		values, err := queue.Drain(10)
+		assert.NoError(t, err)
+		assert.Equal(t, 10, len(values))
+		eventuallyReady(t, queue, int64(100-x*10))
+	}
+}
