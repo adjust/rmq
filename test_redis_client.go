@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 // TestRedisClient is a mock for redis
@@ -140,11 +142,11 @@ func (client *TestRedisClient) RPop(key string) (value string, err error) {
 	list, err := client.findList(key)
 	// not a list
 	if err != nil {
-		return "", ErrorNotFound
+		return "", err
 	}
 	// list is empty
 	if len(list) == 0 {
-		return "", ErrorNotFound
+		return "", redis.Nil
 	}
 
 	// Remove the last element of source (tail)
