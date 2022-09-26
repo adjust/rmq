@@ -13,7 +13,7 @@ import (
 )
 
 var sOp = &redis.Options{
-	Addr:     "8.142.103.74:32639",
+	Addr:     "localhost:6701",
 	Password: "MTIzNDUzCg==",
 }
 
