@@ -6,31 +6,32 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testRedis(t testing.TB) (addr string, closer func()) {
+func testRedis(t testing.TB) (options *redis.Options, closer func()) {
 	t.Helper()
 
 	if redisAddr, ok := os.LookupEnv("REDIS_ADDR"); ok {
-		return redisAddr, func() {}
+		return &redis.Options{Addr: redisAddr}, func() {}
 	}
 
 	mr := miniredis.RunT(t)
-	return mr.Addr(), mr.Close
+	return &redis.Options{Addr: mr.Addr()}, mr.Close
 }
 
 func TestCleaner(t *testing.T) {
-	redisAddr, closer := testRedis(t)
+	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	flushConn, err := OpenConnection("cleaner-flush", "tcp", redisAddr, 1, nil)
+	flushConn, err := OpenConnection("cleaner-flush", redisOptions, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	conn, err := OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
+	conn, err := OpenConnection("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queues, err := conn.GetOpenQueues()
 	assert.NoError(t, err)
@@ -91,7 +92,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
+	conn, err = OpenConnection("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)
@@ -138,7 +139,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", redisAddr, 1, nil)
+	cleanerConn, err := OpenConnection("cleaner-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	cleaner := NewCleaner(cleanerConn)
 	returned, err := cleaner.Clean()
@@ -149,7 +150,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
+	conn, err = OpenConnection("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)
