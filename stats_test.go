@@ -9,14 +9,17 @@ import (
 )
 
 func TestStats(t *testing.T) {
-	connection, err := OpenConnection("stats-conn", "tcp", "localhost:6379", 1, nil)
+	redisAddr, closer := testRedis(t)
+	defer closer()
+
+	connection, err := OpenConnection("stats-conn", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	_, err = NewCleaner(connection).Clean()
 	require.NoError(t, err)
 
-	conn1, err := OpenConnection("stats-conn1", "tcp", "localhost:6379", 1, nil)
+	conn1, err := OpenConnection("stats-conn1", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
-	conn2, err := OpenConnection("stats-conn2", "tcp", "localhost:6379", 1, nil)
+	conn2, err := OpenConnection("stats-conn2", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	q1, err := conn2.OpenQueue("stats-q1")
 	assert.NoError(t, err)

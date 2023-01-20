@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/adjust/rmq.svg?branch=master)](https://travis-ci.org/adjust/rmq)
-[![GoDoc](https://godoc.org/github.com/adjust/rmq?status.svg)](https://godoc.org/github.com/adjust/rmq)
+[![Build Status](https://github.com/adjust/rmq/workflows/test/badge.svg)](https://github.com/adjust/rmq/actions?query=branch%3Amaster+workflow%3Atest)
+[![GoDoc](https://pkg.go.dev/badge/github.com/adjust/rmq)](https://pkg.go.dev/github.com/adjust/rmq)
 
 ---
 
