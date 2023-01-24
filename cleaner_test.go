@@ -1,20 +1,36 @@
 package rmq
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+func testRedis(t testing.TB) (addr string, closer func()) {
+	t.Helper()
+
+	if redisAddr, ok := os.LookupEnv("REDIS_ADDR"); ok {
+		return redisAddr, func() {}
+	}
+
+	mr := miniredis.RunT(t)
+	return mr.Addr(), mr.Close
+}
+
 func TestCleaner(t *testing.T) {
-	flushConn, err := OpenConnection("cleaner-flush", "tcp", "localhost:6379", 1, nil)
+	redisAddr, closer := testRedis(t)
+	defer closer()
+
+	flushConn, err := OpenConnection("cleaner-flush", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	conn, err := OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err := OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	queues, err := conn.GetOpenQueues()
 	assert.NoError(t, err)
@@ -75,7 +91,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err = OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)
@@ -122,7 +138,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", "localhost:6379", 1, nil)
+	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	cleaner := NewCleaner(cleanerConn)
 	returned, err := cleaner.Clean()
@@ -133,7 +149,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	conn, err = OpenConnection("cleaner-conn1", "tcp", "localhost:6379", 1, nil)
+	conn, err = OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)

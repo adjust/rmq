@@ -1,0 +1,42 @@
+name: cloc
+on:
+  pull_request:
+
+# Cancel the workflow in progress in newer build is about to start.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  cloc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          path: pr
+      - name: Checkout base code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - name: Count lines of code
+        id: loc
+        run: |
+          curl -sLO https://github.com/vearutop/sccdiff/releases/download/v1.0.3/linux_amd64.tar.gz && tar xf linux_amd64.tar.gz
+          sccdiff_hash=$(git hash-object ./sccdiff)
+          [ "$sccdiff_hash" == "ae8a07b687bd3dba60861584efe724351aa7ff63" ] || (echo "::error::unexpected hash for sccdiff, possible tampering: $sccdiff_hash" && exit 1)
+          OUTPUT=$(cd pr && ../sccdiff -basedir ../base)
+          echo "${OUTPUT}"
+          echo "diff<<EOF" >> $GITHUB_OUTPUT && echo "$OUTPUT" >> $GITHUB_OUTPUT && echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment lines of code
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          header: LOC
+          message: |
+            ### Lines Of Code
+
+            ${{ steps.loc.outputs.diff }}

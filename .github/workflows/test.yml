@@ -1,0 +1,140 @@
+name: test
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+# Cancel the workflow in progress in newer build is about to start.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  GO111MODULE: "on"
+  RUN_BASE_COVERAGE: "on"  # Runs test for PR base in case base test coverage is missing.
+  COV_GO_VERSION: 1.19.x   # Version of Go to collect coverage
+  TARGET_DELTA_COV: 90     # Target coverage of changed lines, in percents
+  REDIS_ADDR: "localhost:6379"
+jobs:
+  test:
+    strategy:
+      matrix:
+        go-version: [ 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x ]
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Install Go stable
+        if: matrix.go-version != 'tip'
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install Go tip
+        if: matrix.go-version == 'tip'
+        run: |
+          curl -sL https://storage.googleapis.com/go-build-snap/go/linux-amd64/$(git ls-remote https://github.com/golang/go.git HEAD | awk '{print $1;}').tar.gz -o gotip.tar.gz
+          ls -lah gotip.tar.gz
+          mkdir -p ~/sdk/gotip
+          tar -C ~/sdk/gotip -xzf gotip.tar.gz
+          ~/sdk/gotip/bin/go version
+          echo "PATH=$HOME/go/bin:$HOME/sdk/gotip/bin/:$PATH" >> $GITHUB_ENV
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Go cache
+        uses: actions/cache@v2
+        with:
+          # In order:
+          # * Module download cache
+          # * Build cache (Linux)
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-cache-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-cache
+
+      - name: Restore base test coverage
+        id: base-coverage
+        if: matrix.go-version == env.COV_GO_VERSION && github.event.pull_request.base.sha != ''
+        uses: actions/cache@v2
+        with:
+          path: |
+            unit-base.txt
+          # Use base sha for PR or new commit hash for master/main push in test result key.
+          key: ${{ runner.os }}-unit-test-coverage-${{ (github.event.pull_request.base.sha != github.event.after) && github.event.pull_request.base.sha || github.event.after }}
+
+      - name: Run test for base code
+        if: matrix.go-version == env.COV_GO_VERSION && env.RUN_BASE_COVERAGE == 'on' && steps.base-coverage.outputs.cache-hit != 'true' && github.event.pull_request.base.sha != ''
+        run: |
+          git fetch origin master ${{ github.event.pull_request.base.sha }}
+          HEAD=$(git rev-parse HEAD)
+          git reset --hard ${{ github.event.pull_request.base.sha }}
+          go test -coverprofile=unit.coverprofile -covermode=atomic ./... && go tool cover -func=./unit.coverprofile > unit-base.txt
+          git reset --hard $HEAD
+
+      - name: Test
+        id: test
+        run: |
+          go test -coverprofile=unit.coverprofile -covermode=atomic ./...
+          go tool cover -func=./unit.coverprofile > unit.txt
+          TOTAL=$(grep 'total:' unit.txt)
+          echo "${TOTAL}"
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+      - name: Annotate missing test coverage
+        id: annotate
+        if: matrix.go-version == env.COV_GO_VERSION && github.event.pull_request.base.sha != ''
+        run: |
+          curl -sLO https://github.com/vearutop/gocovdiff/releases/download/v1.3.6/linux_amd64.tar.gz && tar xf linux_amd64.tar.gz
+          gocovdiff_hash=$(git hash-object ./gocovdiff)
+          [ "$gocovdiff_hash" == "8e507e0d671d4d6dfb3612309b72b163492f28eb" ] || (echo "::error::unexpected hash for gocovdiff, possible tampering: $gocovdiff_hash" && exit 1)
+          git fetch origin master ${{ github.event.pull_request.base.sha }}
+          REP=$(./gocovdiff -cov unit.coverprofile -gha-annotations gha-unit.txt -delta-cov-file delta-cov-unit.txt -target-delta-cov ${TARGET_DELTA_COV})
+          echo "${REP}"
+          cat gha-unit.txt
+          DIFF=$(test -e unit-base.txt && ./gocovdiff -func-cov unit.txt -func-base-cov unit-base.txt || echo "Missing base coverage file.")
+          TOTAL=$(cat delta-cov-unit.txt)
+          echo "rep<<EOF" >> $GITHUB_OUTPUT && echo "$REP" >> $GITHUB_OUTPUT && echo "EOF" >> $GITHUB_OUTPUT
+          echo "diff<<EOF" >> $GITHUB_OUTPUT && echo "$DIFF" >> $GITHUB_OUTPUT && echo "EOF" >> $GITHUB_OUTPUT
+          echo "total<<EOF" >> $GITHUB_OUTPUT && echo "$TOTAL" >> $GITHUB_OUTPUT && echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment test coverage
+        continue-on-error: true
+        if: matrix.go-version == env.COV_GO_VERSION && github.event.pull_request.base.sha != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          header: unit-test
+          message: |
+            ### Unit Test Coverage
+            ${{ steps.test.outputs.total }}
+            ${{ steps.annotate.outputs.total }}
+            <details><summary>Coverage of changed lines</summary>
+            
+            ${{ steps.annotate.outputs.rep }}
+
+            </details>
+
+            <details><summary>Coverage diff with base branch</summary>
+
+            ${{ steps.annotate.outputs.diff }}
+            
+            </details>
+
+      - name: Store base coverage
+        if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+        run: cp unit.txt unit-base.txt
