@@ -75,9 +75,9 @@ func TestCleaner(t *testing.T) {
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 4)
 
-	require.NotNil(t, consumer.LastDelivery)
-	assert.Equal(t, "del1", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack())
+	require.NotNil(t, consumer.Last())
+	assert.Equal(t, "del1", consumer.Last().Payload())
+	assert.NoError(t, consumer.Last().Ack())
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 3)
 
@@ -85,7 +85,7 @@ func TestCleaner(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 3)
-	assert.Equal(t, "del2", consumer.LastDelivery.Payload())
+	assert.Equal(t, "del2", consumer.Last().Payload())
 
 	queue.StopConsuming()
 	assert.NoError(t, conn.stopHeartbeat())
@@ -121,15 +121,15 @@ func TestCleaner(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 6)
-	assert.Equal(t, "del4", consumer.LastDelivery.Payload())
+	assert.Equal(t, "del4", consumer.Last().Payload())
 
 	consumer.Finish() // unacked
 	time.Sleep(10 * time.Millisecond)
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 6)
 
-	assert.Equal(t, "del5", consumer.LastDelivery.Payload())
-	assert.NoError(t, consumer.LastDelivery.Ack())
+	assert.Equal(t, "del5", consumer.Last().Payload())
+	assert.NoError(t, consumer.Last().Ack())
 	time.Sleep(10 * time.Millisecond)
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 5)
@@ -160,7 +160,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 	assert.Eventually(t, func() bool {
-		return len(consumer.LastDeliveries) == 9
+		return len(consumer.Deliveries()) == 9
 	}, 10*time.Second, 2*time.Millisecond)
 
 	queue.StopConsuming()
