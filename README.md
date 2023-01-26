@@ -476,13 +476,13 @@ See [`example/cleaner`][cleaner.go].
 ### Headers
 
 Redis protocol does not define a specific way to pass additional data like headers.
-However, there is often need to pass then (for example for traces propagation).
+However, there is often need to pass them (for example for traces propagation).
 
 This implementation injects optional header values marked with a signature into 
 payload body during publishing. When message is consumed, if signature is present, 
 headers and original payload are extracted from augmented payload.
 
-Header is defined as http.Header for better interoperability with existing libraries,
+Header is defined as `http.Header` for better interoperability with existing libraries,
 for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemetry.io/otel/propagation#HeaderCarrier).
 
 ```go
