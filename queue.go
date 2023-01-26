@@ -216,13 +216,18 @@ func (queue *redisQueue) consumeBatch() error {
 			return err
 		}
 
-		queue.deliveryChan <- queue.newDelivery(payload)
+		d, err := queue.newDelivery(payload)
+		if err != nil {
+			return err
+		}
+
+		queue.deliveryChan <- d
 	}
 
 	return nil
 }
 
-func (queue *redisQueue) newDelivery(payload string) Delivery {
+func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
 	return newDelivery(
 		queue.ackCtx,
 		payload,
