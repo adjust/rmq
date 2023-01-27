@@ -504,6 +504,15 @@ for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemet
  })
 ```
 
+Adding a header is an explicit opt-in operation and so it does not affect library's
+backwards compatibility by default (when not used). 
+
+Please note that adding header may lead to compatibility issues if:
+* consumer is built with older version of `rmq` when publisher has already 
+   started using header, this can be avoided by upgrading consumers before publishers;
+* consumer is not using `rmq` (other libs, low level tools like `redis-cli`) and is 
+   not aware of payload format extension.
+
 ## Testing Included
 
 To simplify testing of queue producers and consumers we include test mocks.

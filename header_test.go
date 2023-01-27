@@ -78,6 +78,14 @@ func TestExtractHeaderAndPayload(t *testing.T) {
 		assert.Equal(t, http.Header{"foo": []string{"bar"}}, h)
 		assert.Equal(t, "foo", p)
 	})
+
+	t.Run("ok_line_breaks", func(t *testing.T) {
+		ph := rmq.PayloadWithHeader("foo", http.Header{"foo": []string{"bar1\nbar2\nbar3"}})
+		h, p, err := rmq.ExtractHeaderAndPayload(ph)
+		require.NoError(t, err)
+		assert.Equal(t, http.Header{"foo": []string{"bar1\nbar2\nbar3"}}, h)
+		assert.Equal(t, "foo", p)
+	})
 }
 
 func ExamplePayloadWithHeader() {
