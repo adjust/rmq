@@ -877,7 +877,7 @@ func TestQueueHeader(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, queue.Publish("queue-d1"))
-	assert.NoError(t, queue.Publish(PayloadWithHeaders("queue-d2", http.Header{"X-Foo": []string{"d2"}})))
+	assert.NoError(t, queue.Publish(PayloadWithHeader("queue-d2", http.Header{"X-Foo": []string{"d2"}})))
 
 	assert.Eventually(t, func() bool {
 		return atomic.LoadInt64(&consumed) == 2

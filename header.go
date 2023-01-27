@@ -8,18 +8,18 @@ import (
 	"strings"
 )
 
-// Redis protocol does not define a specific way to pass additional data like headers.
+// Redis protocol does not define a specific way to pass additional data like header.
 // However, there is often need to pass them (for example for traces propagation).
 //
 // This implementation injects optional header values marked with a signature into payload body
-// during publishing. When message is consumed, if signature is present, headers and original payload
+// during publishing. When message is consumed, if signature is present, header and original payload
 // are extracted from augmented payload.
 //
 // Header is defined as http.Header for better interoperability with existing libraries,
 // for example with go.opentelemetry.io/otel/propagation.HeaderCarrier.
 
-// PayloadWithHeaders creates a payload string with header.
-func PayloadWithHeaders(payload string, header http.Header) string {
+// PayloadWithHeader creates a payload string with header.
+func PayloadWithHeader(payload string, header http.Header) string {
 	if len(header) == 0 {
 		return payload
 	}
@@ -29,8 +29,8 @@ func PayloadWithHeaders(payload string, header http.Header) string {
 	return jsonHeaderSignature + string(hd) + "\n" + payload
 }
 
-// PayloadBytesWithHeaders creates payload bytes slice with header.
-func PayloadBytesWithHeaders(payload []byte, header http.Header) []byte {
+// PayloadBytesWithHeader creates payload bytes slice with header.
+func PayloadBytesWithHeader(payload []byte, header http.Header) []byte {
 	if len(header) == 0 {
 		return payload
 	}
@@ -60,13 +60,13 @@ func ExtractHeaderAndPayload(payload string) (http.Header, string, error) {
 	first := payload[len(jsonHeaderSignature):lineEnd]
 	rest := payload[lineEnd+1:]
 
-	headers := make(http.Header)
+	header := make(http.Header)
 
-	if err := json.Unmarshal([]byte(first), &headers); err != nil {
+	if err := json.Unmarshal([]byte(first), &header); err != nil {
 		return nil, "", fmt.Errorf("parsing header: %w", err)
 	}
 
-	return headers, rest, nil
+	return header, rest, nil
 }
 
 // WithHeader is a Delivery with Header.
