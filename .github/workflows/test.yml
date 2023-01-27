@@ -89,7 +89,7 @@ jobs:
       - name: Test
         id: test
         run: |
-          go test -coverprofile=unit.coverprofile -covermode=atomic ./...
+          go test -race -coverprofile=unit.coverprofile -covermode=atomic ./...
           go tool cover -func=./unit.coverprofile > unit.txt
           TOTAL=$(grep 'total:' unit.txt)
           echo "${TOTAL}"

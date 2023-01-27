@@ -1,7 +1,12 @@
 package rmq
 
+import "sync"
+
 type TestBatchConsumer struct {
-	LastBatch     Deliveries
+	mu sync.Mutex
+	// Deprecated: use Last() to avoid data races.
+	LastBatch Deliveries
+	// Deprecated use Consumed() to avoid data races.
 	ConsumedCount int64
 	AutoFinish    bool
 
@@ -14,9 +19,26 @@ func NewTestBatchConsumer() *TestBatchConsumer {
 	}
 }
 
+func (consumer *TestBatchConsumer) Last() Deliveries {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
+	return consumer.LastBatch
+}
+
+func (consumer *TestBatchConsumer) Consumed() int64 {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
+	return consumer.ConsumedCount
+}
+
 func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
+	consumer.mu.Lock()
 	consumer.LastBatch = batch
 	consumer.ConsumedCount += int64(len(batch))
+	consumer.mu.Unlock()
+
 	if consumer.AutoFinish {
 		batch.Ack()
 	} else {
@@ -27,6 +49,9 @@ func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
 
 func (consumer *TestBatchConsumer) Finish() {
 	// log.Printf("TestBatchConsumer.Finish()")
+	consumer.mu.Lock()
 	consumer.LastBatch = nil
+	consumer.mu.Unlock()
+
 	consumer.finish <- 1
 }
