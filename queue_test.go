@@ -3,7 +3,9 @@ package rmq
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -832,4 +834,55 @@ func TestQueueDrain(t *testing.T) {
 		assert.Equal(t, 10, len(values))
 		eventuallyReady(t, queue, int64(100-x*10))
 	}
+}
+
+func TestQueueHeader(t *testing.T) {
+	redisAddr, closer := testRedis(t)
+	defer closer()
+
+	connection, err := OpenConnection("queue-h-conn", "tcp", redisAddr, 1, nil)
+	assert.NoError(t, err)
+	require.NotNil(t, connection)
+
+	queue, err := connection.OpenQueue("queue-h")
+	assert.NoError(t, err)
+	require.NotNil(t, queue)
+	_, err = queue.PurgeReady()
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.StartConsuming(2, time.Millisecond))
+	time.Sleep(time.Millisecond)
+	assert.NoError(t, err)
+
+	consumed := int64(0)
+	cons := ConsumerFunc(func(delivery Delivery) {
+		atomic.AddInt64(&consumed, 1)
+
+		h, ok := delivery.(WithHeader)
+		assert.True(t, ok)
+
+		switch delivery.Payload() {
+		case "queue-d1":
+			assert.Empty(t, h.Header())
+		case "queue-d2":
+			require.NotNil(t, h.Header())
+			assert.Equal(t, "d2", h.Header().Get("X-Foo"))
+		default:
+			assert.Failf(t, "unexpected payload: %q", delivery.Payload())
+		}
+
+	})
+
+	_, err = queue.AddConsumer("queue-cons1", cons)
+	assert.NoError(t, err)
+
+	assert.NoError(t, queue.Publish("queue-d1"))
+	assert.NoError(t, queue.Publish(PayloadWithHeader("queue-d2", http.Header{"X-Foo": []string{"d2"}})))
+
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt64(&consumed) == 2
+	}, 10*time.Second, time.Millisecond)
+
+	<-queue.StopConsuming()
+	assert.NoError(t, connection.stopHeartbeat())
 }

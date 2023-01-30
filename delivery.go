@@ -3,6 +3,7 @@ package rmq
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 )
 
@@ -14,14 +15,24 @@ type Delivery interface {
 	Push() error
 }
 
+var (
+	_ Delivery   = &redisDelivery{}
+	_ WithHeader = &redisDelivery{}
+)
+
 type redisDelivery struct {
 	ctx         context.Context
 	payload     string
+	header      http.Header
 	unackedKey  string
 	rejectedKey string
 	pushKey     string
 	redisClient RedisClient
 	errChan     chan<- error
+}
+
+func (delivery *redisDelivery) Header() http.Header {
+	return delivery.header
 }
 
 func newDelivery(
@@ -32,8 +43,8 @@ func newDelivery(
 	pushKey string,
 	redisClient RedisClient,
 	errChan chan<- error,
-) *redisDelivery {
-	return &redisDelivery{
+) (*redisDelivery, error) {
+	rd := redisDelivery{
 		ctx:         ctx,
 		payload:     payload,
 		unackedKey:  unackedKey,
@@ -42,6 +53,14 @@ func newDelivery(
 		redisClient: redisClient,
 		errChan:     errChan,
 	}
+
+	var err error
+
+	if rd.header, rd.payload, err = ExtractHeaderAndPayload(payload); err != nil {
+		return nil, err
+	}
+
+	return &rd, nil
 }
 
 func (delivery *redisDelivery) String() string {

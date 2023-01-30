@@ -473,6 +473,45 @@ See [`example/cleaner`][cleaner.go].
 
 [cleaner.go]: example/cleaner/main.go
 
+### Header
+
+Redis protocol does not define a specific way to pass additional data like header.
+However, there is often need to pass them (for example for traces propagation).
+
+This implementation injects optional header values marked with a signature into 
+payload body during publishing. When message is consumed, if signature is present, 
+header and original payload are extracted from augmented payload.
+
+Header is defined as `http.Header` for better interoperability with existing libraries,
+for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemetry.io/otel/propagation#HeaderCarrier).
+
+```go
+ // ....
+ 
+ h := make(http.Header)
+ h.Set("X-Baz", "quux")
+
+ // You can add header to your payload during publish.
+ _ = pub.Publish(rmq.PayloadWithHeader(`{"foo":"bar"}`, h))
+
+ // ....
+
+ _, _ = con.AddConsumerFunc("tag", func(delivery rmq.Delivery) {
+     // And receive header back in consumer.
+     delivery.(rmq.WithHeader).Header().Get("X-Baz") // "quux"
+     
+     // ....
+ })
+```
+
+Adding a header is an explicit opt-in operation and so it does not affect library's
+backwards compatibility by default (when not used). 
+
+Please note that adding header may lead to compatibility issues if:
+* consumer is built with older version of `rmq` when publisher has already 
+   started using header, this can be avoided by upgrading consumers before publishers;
+* consumer is not using `rmq` (other libs, low level tools like `redis-cli`) and is 
+   not aware of payload format extension.
 
 ## Testing Included
 
