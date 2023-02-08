@@ -208,16 +208,18 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, consumer.Last())
 
-	assert.NoError(t, queue1.Publish("cons-d1"))
+	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d1", http.Header{"foo": []string{"bar1"}})))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 1)
 	require.NotNil(t, consumer.Last())
 	assert.Equal(t, "cons-d1", consumer.Last().Payload())
+	assert.Equal(t, http.Header{"foo": []string{"bar1"}}, consumer.Last().(WithHeader).Header())
 
-	assert.NoError(t, queue1.Publish("cons-d2"))
+	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d2", http.Header{"foo": []string{"bar2"}})))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 2)
 	assert.Equal(t, "cons-d2", consumer.Last().Payload())
+	assert.Equal(t, http.Header{"foo": []string{"bar2"}}, consumer.Last().(WithHeader).Header())
 
 	assert.NoError(t, consumer.Deliveries()[0].Ack())
 	eventuallyReady(t, queue1, 0)
@@ -229,11 +231,12 @@ func TestConsumerCommon(t *testing.T) {
 
 	assert.Equal(t, ErrorNotFound, consumer.Deliveries()[0].Ack())
 
-	assert.NoError(t, queue1.Publish("cons-d3"))
+	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d3", http.Header{"foo": []string{"bar3"}})))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 1)
 	eventuallyRejected(t, queue1, 0)
 	assert.Equal(t, "cons-d3", consumer.Last().Payload())
+	assert.Equal(t, http.Header{"foo": []string{"bar3"}}, consumer.Last().(WithHeader).Header())
 	assert.NoError(t, consumer.Last().Reject())
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 0)
