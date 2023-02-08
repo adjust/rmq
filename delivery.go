@@ -21,14 +21,15 @@ var (
 )
 
 type redisDelivery struct {
-	ctx         context.Context
-	payload     string
-	header      http.Header
-	unackedKey  string
-	rejectedKey string
-	pushKey     string
-	redisClient RedisClient
-	errChan     chan<- error
+	ctx          context.Context
+	payload      string
+	clearPayload string
+	header       http.Header
+	unackedKey   string
+	rejectedKey  string
+	pushKey      string
+	redisClient  RedisClient
+	errChan      chan<- error
 }
 
 func (delivery *redisDelivery) Header() http.Header {
@@ -56,7 +57,7 @@ func newDelivery(
 
 	var err error
 
-	if rd.header, rd.payload, err = ExtractHeaderAndPayload(payload); err != nil {
+	if rd.header, rd.clearPayload, err = ExtractHeaderAndPayload(payload); err != nil {
 		return nil, err
 	}
 
@@ -64,11 +65,11 @@ func newDelivery(
 }
 
 func (delivery *redisDelivery) String() string {
-	return fmt.Sprintf("[%s %s]", delivery.payload, delivery.unackedKey)
+	return fmt.Sprintf("[%s %s]", delivery.clearPayload, delivery.unackedKey)
 }
 
 func (delivery *redisDelivery) Payload() string {
-	return delivery.payload
+	return delivery.clearPayload
 }
 
 // blocking versions of the functions below with the following behavior:
