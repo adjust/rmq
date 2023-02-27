@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -72,7 +73,7 @@ func (consumer *BatchConsumer) Consume(batch rmq.Deliveries) {
 	time.Sleep(consumeDuration)
 
 	log.Printf("%s consumed %d: %s", consumer.tag, len(batch), batch[0])
-	errors := batch.Ack()
+	errors := batch.Ack(context.Background())
 	if len(errors) == 0 {
 		debugf("acked %q", payloads)
 		return

@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 )
@@ -33,7 +34,7 @@ func (delivery *TestDelivery) Payload() string {
 	return delivery.payload
 }
 
-func (delivery *TestDelivery) Ack() error {
+func (delivery *TestDelivery) Ack(_ context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}
@@ -41,7 +42,7 @@ func (delivery *TestDelivery) Ack() error {
 	return nil
 }
 
-func (delivery *TestDelivery) Reject() error {
+func (delivery *TestDelivery) Reject(_ context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}
@@ -49,7 +50,7 @@ func (delivery *TestDelivery) Reject() error {
 	return nil
 }
 
-func (delivery *TestDelivery) Push() error {
+func (delivery *TestDelivery) Push(_ context.Context) error {
 	if delivery.State != Unacked {
 		return ErrorNotFound
 	}

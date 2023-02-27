@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -25,7 +26,7 @@ func NewTestRedisClient() *TestRedisClient {
 // Set sets key to hold the string value.
 // If key already holds a value, it is overwritten, regardless of its type.
 // Any previous time to live associated with the key is discarded on successful SET operation.
-func (client *TestRedisClient) Set(key string, value string, expiration time.Duration) error {
+func (client *TestRedisClient) Set(_ context.Context, key string, value string, expiration time.Duration) error {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -46,7 +47,7 @@ func (client *TestRedisClient) Set(key string, value string, expiration time.Dur
 // Get the value of key.
 // If the key does not exist or isn't a string
 // the special value nil is returned.
-func (client *TestRedisClient) Get(key string) (string, error) {
+func (client *TestRedisClient) Get(_ context.Context, key string) (string, error) {
 
 	value, found := client.store.Load(key)
 
@@ -60,7 +61,7 @@ func (client *TestRedisClient) Get(key string) (string, error) {
 }
 
 // Del removes the specified key. A key is ignored if it does not exist.
-func (client *TestRedisClient) Del(key string) (affected int64, err error) {
+func (client *TestRedisClient) Del(_ context.Context, key string) (affected int64, err error) {
 
 	_, found := client.store.Load(key)
 	client.store.Delete(key)
@@ -79,7 +80,7 @@ func (client *TestRedisClient) Del(key string) (affected int64, err error) {
 // Starting with Redis 2.8 the return value in case of error changed:
 // The command returns -2 if the key does not exist.
 // The command returns -1 if the key exists but has no associated expire.
-func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
+func (client *TestRedisClient) TTL(_ context.Context, key string) (ttl time.Duration, err error) {
 
 	// Lookup the expiration map
 	expiration, found := client.ttl.Load(key)
@@ -116,7 +117,7 @@ func (client *TestRedisClient) TTL(key string) (ttl time.Duration, err error) {
 // It is possible to push multiple elements using a single command call just specifying multiple arguments
 // at the end of the command. Elements are inserted one after the other to the head of the list,
 // from the leftmost element to the rightmost element.
-func (client *TestRedisClient) LPush(key string, values ...string) (total int64, err error) {
+func (client *TestRedisClient) LPush(_ context.Context, key string, values ...string) (total int64, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -134,7 +135,7 @@ func (client *TestRedisClient) LPush(key string, values ...string) (total int64,
 
 // RPop removes and returns one value from the tail of the list stored at key.
 // When key holds a value that is not a list, an error is returned.
-func (client *TestRedisClient) RPop(key string) (value string, err error) {
+func (client *TestRedisClient) RPop(_ context.Context, key string) (value string, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -158,7 +159,7 @@ func (client *TestRedisClient) RPop(key string) (value string, err error) {
 // LLen returns the length of the list stored at key.
 // If key does not exist, it is interpreted as an empty list and 0 is returned.
 // An error is returned when the value stored at key is not a list.
-func (client *TestRedisClient) LLen(key string) (affected int64, err error) {
+func (client *TestRedisClient) LLen(_ context.Context, key string) (affected int64, err error) {
 	list, err := client.findList(key)
 
 	if err != nil {
@@ -176,7 +177,7 @@ func (client *TestRedisClient) LLen(key string) (affected int64, err error) {
 // LREM list -2 "hello" will remove the last two occurrences of "hello" in
 // the list stored at list. Note that non-existing keys are treated like empty
 // lists, so when key does not exist, the command will always return 0.
-func (client *TestRedisClient) LRem(key string, count int64, value string) (affected int64, err error) {
+func (client *TestRedisClient) LRem(_ context.Context, key string, count int64, value string) (affected int64, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -247,7 +248,7 @@ func (client *TestRedisClient) LRem(key string, count int64, value string) (affe
 // Out of range indexes will not produce an error: if start is larger than the end of the list,
 // or start > end, the result will be an empty list (which causes key to be removed).
 // If end is larger than the end of the list, Redis will treat it like the last element of the list
-func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
+func (client *TestRedisClient) LTrim(_ context.Context, key string, start, stop int64) error {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -284,7 +285,7 @@ func (client *TestRedisClient) LTrim(key string, start, stop int64) error {
 // If source and destination are the same, the operation is equivalent to removing the
 // last element from the list and pushing it as first element of the list,
 // so it can be considered as a list rotation command.
-func (client *TestRedisClient) RPopLPush(source, destination string) (value string, err error) {
+func (client *TestRedisClient) RPopLPush(_ context.Context, source, destination string) (value string, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -313,7 +314,7 @@ func (client *TestRedisClient) RPopLPush(source, destination string) (value stri
 // Specified members that are already a member of this set are ignored.
 // If key does not exist, a new set is created before adding the specified members.
 // An error is returned when the value stored at key is not a set.
-func (client *TestRedisClient) SAdd(key, value string) (total int64, err error) {
+func (client *TestRedisClient) SAdd(_ context.Context, key, value string) (total int64, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -330,7 +331,7 @@ func (client *TestRedisClient) SAdd(key, value string) (total int64, err error) 
 
 // SMembers returns all the members of the set value stored at key.
 // This has the same effect as running SINTER with one argument key.
-func (client *TestRedisClient) SMembers(key string) (members []string, err error) {
+func (client *TestRedisClient) SMembers(_ context.Context, key string) (members []string, err error) {
 	set, err := client.findSet(key)
 	if err != nil {
 		return members, nil
@@ -348,7 +349,7 @@ func (client *TestRedisClient) SMembers(key string) (members []string, err error
 // Specified members that are not a member of this set are ignored.
 // If key does not exist, it is treated as an empty set and this command returns 0.
 // An error is returned when the value stored at key is not a set.
-func (client *TestRedisClient) SRem(key, value string) (affected int64, err error) {
+func (client *TestRedisClient) SRem(_ context.Context, key, value string) (affected int64, err error) {
 
 	client.mx.Lock()
 	defer client.mx.Unlock()
@@ -367,7 +368,7 @@ func (client *TestRedisClient) SRem(key, value string) (affected int64, err erro
 }
 
 // FlushDb delete all the keys of the currently selected DB. This command never fails.
-func (client *TestRedisClient) FlushDb() error {
+func (client *TestRedisClient) FlushDb(_ context.Context) error {
 	client.store = *new(sync.Map)
 	client.ttl = *new(sync.Map)
 	return nil

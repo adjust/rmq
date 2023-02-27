@@ -106,7 +106,7 @@ func (queue *redisQueue) String() string {
 // Publish adds a delivery with the given payload to the queue
 // returns how many deliveries are in the queue afterwards
 func (queue *redisQueue) Publish(payload ...string) error {
-	_, err := queue.redisClient.LPush(queue.readyKey, payload...)
+	_, err := queue.redisClient.LPush(context.Background(), queue.readyKey, payload...)
 	return err
 }
 
@@ -147,7 +147,7 @@ func (queue *redisQueue) StartConsuming(prefetchLimit int64, pollDuration time.D
 	}
 
 	// add queue to list of queues consumed on this connection
-	if _, err := queue.redisClient.SAdd(queue.queuesKey, queue.name); err != nil {
+	if _, err := queue.redisClient.SAdd(context.Background(), queue.queuesKey, queue.name); err != nil {
 		return err
 	}
 
@@ -207,7 +207,7 @@ func (queue *redisQueue) consumeBatch() error {
 		default:
 		}
 
-		payload, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
+		payload, err := queue.redisClient.RPopLPush(context.Background(), queue.readyKey, queue.unackedKey)
 		if err == ErrorNotFound {
 			return nil
 		}
@@ -394,7 +394,7 @@ func (queue *redisQueue) addConsumer(tag string) (name string, err error) {
 	name = fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	// add consumer to list of consumers of this queue
-	if _, err := queue.redisClient.SAdd(queue.consumersKey, name); err != nil {
+	if _, err := queue.redisClient.SAdd(context.Background(), queue.consumersKey, name); err != nil {
 		return "", err
 	}
 
@@ -416,7 +416,8 @@ func (queue *redisQueue) PurgeRejected() (int64, error) {
 // return number of deleted list items
 // https://www.redisgreen.net/blog/deleting-large-lists
 func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
-	total, err := queue.redisClient.LLen(key)
+	ctx := context.Background()
+	total, err := queue.redisClient.LLen(ctx, key)
 	if total == 0 {
 		return 0, err // nothing to do
 	}
@@ -430,7 +431,7 @@ func (queue *redisQueue) deleteRedisList(key string) (int64, error) {
 		}
 
 		// remove one batch
-		err := queue.redisClient.LTrim(key, 0, -1-batchSize)
+		err := queue.redisClient.LTrim(ctx, key, 0, -1-batchSize)
 		if err != nil {
 			return 0, err
 		}
@@ -453,7 +454,7 @@ func (queue *redisQueue) ReturnRejected(max int64) (count int64, err error) {
 
 func (queue *redisQueue) move(from, to string, max int64) (n int64, error error) {
 	for n = 0; n < max; n++ {
-		switch _, err := queue.redisClient.RPopLPush(from, to); err {
+		switch _, err := queue.redisClient.RPopLPush(context.Background(), from, to); err {
 		case nil: // moved one
 			continue
 		case ErrorNotFound: // nothing left
@@ -475,7 +476,7 @@ func (queue *redisQueue) Drain(count int64) ([]string, error) {
 	out := make([]string, 0, count)
 
 	for n = 0; n < count; n++ {
-		val, err := queue.redisClient.RPop(queue.readyKey)
+		val, err := queue.redisClient.RPop(context.Background(), queue.readyKey)
 		if err != nil {
 			return out, err
 		}
@@ -496,7 +497,7 @@ func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) 
 		return 0, 0, err
 	}
 
-	count, err := queue.redisClient.SRem(queuesKey, queue.name)
+	count, err := queue.redisClient.SRem(context.Background(), queuesKey, queue.name)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -510,14 +511,15 @@ func (queue *redisQueue) Destroy() (readyCount, rejectedCount int64, err error) 
 // closeInStaleConnection closes the queue in the associated connection by removing all related keys
 // not supposed to be called on queues in active sessions
 func (queue *redisQueue) closeInStaleConnection() error {
-	if _, err := queue.redisClient.Del(queue.unackedKey); err != nil {
+	ctx := context.Background()
+	if _, err := queue.redisClient.Del(ctx, queue.unackedKey); err != nil {
 		return err
 	}
-	if _, err := queue.redisClient.Del(queue.consumersKey); err != nil {
+	if _, err := queue.redisClient.Del(ctx, queue.consumersKey); err != nil {
 		return err
 	}
 
-	count, err := queue.redisClient.SRem(queue.queuesKey, queue.name)
+	count, err := queue.redisClient.SRem(ctx, queue.queuesKey, queue.name)
 	if err != nil {
 		return err
 	}
@@ -529,19 +531,19 @@ func (queue *redisQueue) closeInStaleConnection() error {
 }
 
 func (queue *redisQueue) readyCount() (int64, error) {
-	return queue.redisClient.LLen(queue.readyKey)
+	return queue.redisClient.LLen(context.Background(), queue.readyKey)
 }
 
 func (queue *redisQueue) unackedCount() (int64, error) {
-	return queue.redisClient.LLen(queue.unackedKey)
+	return queue.redisClient.LLen(context.Background(), queue.unackedKey)
 }
 
 func (queue *redisQueue) rejectedCount() (int64, error) {
-	return queue.redisClient.LLen(queue.rejectedKey)
+	return queue.redisClient.LLen(context.Background(), queue.rejectedKey)
 }
 
 func (queue *redisQueue) getConsumers() ([]string, error) {
-	return queue.redisClient.SMembers(queue.consumersKey)
+	return queue.redisClient.SMembers(context.Background(), queue.consumersKey)
 }
 
 // The caller of this method should be holding the queue.lock mutex

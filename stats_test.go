@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func TestStats(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -39,8 +41,8 @@ func TestStats(t *testing.T) {
 	assert.NoError(t, q2.Publish("stats-d3"))
 	assert.NoError(t, q2.Publish("stats-d4"))
 	time.Sleep(2 * time.Millisecond)
-	assert.NoError(t, consumer.Deliveries()[0].Ack())
-	assert.NoError(t, consumer.Deliveries()[1].Reject())
+	assert.NoError(t, consumer.Deliveries()[0].Ack(ctx))
+	assert.NoError(t, consumer.Deliveries()[1].Reject(ctx))
 	_, err = q2.AddConsumer("stats-cons2", NewTestConsumer("hand-B"))
 	assert.NoError(t, err)
 

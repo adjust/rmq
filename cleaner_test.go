@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ func testRedis(t testing.TB) (addr string, closer func()) {
 }
 
 func TestCleaner(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -77,7 +79,7 @@ func TestCleaner(t *testing.T) {
 
 	require.NotNil(t, consumer.Last())
 	assert.Equal(t, "del1", consumer.Last().Payload())
-	assert.NoError(t, consumer.Last().Ack())
+	assert.NoError(t, consumer.Last().Ack(ctx))
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 3)
 
@@ -129,7 +131,7 @@ func TestCleaner(t *testing.T) {
 	eventuallyReady(t, queue, 6)
 
 	assert.Equal(t, "del5", consumer.Last().Payload())
-	assert.NoError(t, consumer.Last().Ack())
+	assert.NoError(t, consumer.Last().Ack(ctx))
 	time.Sleep(10 * time.Millisecond)
 	eventuallyUnacked(t, queue, 2)
 	eventuallyReady(t, queue, 5)

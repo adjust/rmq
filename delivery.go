@@ -10,9 +10,9 @@ import (
 type Delivery interface {
 	Payload() string
 
-	Ack() error
-	Reject() error
-	Push() error
+	Ack(ctx context.Context) error
+	Reject(ctx context.Context) error
+	Push(ctx context.Context) error
 }
 
 var (
@@ -77,10 +77,10 @@ func (delivery *redisDelivery) Payload() string {
 // 2. in case of other redis errors, send them to the errors chan and retry after a sleep
 // 3. if redis errors occur after StopConsuming() has been called, ErrorConsumingStopped will be returned
 
-func (delivery *redisDelivery) Ack() error {
+func (delivery *redisDelivery) Ack(ctx context.Context) error {
 	errorCount := 0
 	for {
-		count, err := delivery.redisClient.LRem(delivery.unackedKey, 1, delivery.payload)
+		count, err := delivery.redisClient.LRem(ctx, delivery.unackedKey, 1, delivery.payload)
 		if err == nil { // no redis error
 			if count == 0 {
 				return ErrorNotFound
@@ -105,22 +105,22 @@ func (delivery *redisDelivery) Ack() error {
 	}
 }
 
-func (delivery *redisDelivery) Reject() error {
-	return delivery.move(delivery.rejectedKey)
+func (delivery *redisDelivery) Reject(ctx context.Context) error {
+	return delivery.move(ctx, delivery.rejectedKey)
 }
 
-func (delivery *redisDelivery) Push() error {
+func (delivery *redisDelivery) Push(ctx context.Context) error {
 	if delivery.pushKey == "" {
-		return delivery.Reject() // fall back to rejecting
+		return delivery.Reject(ctx) // fall back to rejecting
 	}
 
-	return delivery.move(delivery.pushKey)
+	return delivery.move(ctx, delivery.pushKey)
 }
 
-func (delivery *redisDelivery) move(key string) error {
+func (delivery *redisDelivery) move(ctx context.Context, key string) error {
 	errorCount := 0
 	for {
-		_, err := delivery.redisClient.LPush(key, delivery.payload)
+		_, err := delivery.redisClient.LPush(ctx, key, delivery.payload)
 		if err == nil { // success
 			break
 		}
@@ -140,7 +140,7 @@ func (delivery *redisDelivery) move(key string) error {
 		time.Sleep(time.Second)
 	}
 
-	return delivery.Ack()
+	return delivery.Ack(ctx)
 }
 
 // lower level functions which don't retry but just return the first error

@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -57,7 +58,7 @@ func (consumer *TestConsumer) Consume(delivery Delivery) {
 		time.Sleep(consumer.SleepDuration)
 	}
 	if consumer.AutoAck {
-		if err := delivery.Ack(); err != nil {
+		if err := delivery.Ack(context.Background()); err != nil {
 			panic(err)
 		}
 	}

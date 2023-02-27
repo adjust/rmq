@@ -1,6 +1,9 @@
 package rmq
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type TestBatchConsumer struct {
 	mu sync.Mutex
@@ -40,7 +43,7 @@ func (consumer *TestBatchConsumer) Consume(batch Deliveries) {
 	consumer.mu.Unlock()
 
 	if consumer.AutoFinish {
-		batch.Ack()
+		batch.Ack(context.Background())
 	} else {
 		<-consumer.finish
 		// log.Printf("TestBatchConsumer.Consume() finished")

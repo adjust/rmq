@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -188,6 +189,7 @@ func TestQueueCommon(t *testing.T) {
 }
 
 func TestConsumerCommon(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -224,15 +226,15 @@ func TestConsumerCommon(t *testing.T) {
 	assert.Regexp(t, `\[cons-d2 rmq::connection::cons-conn-\w{6}::queue::\[cons-q\]::unacked\]`,
 		fmt.Sprintf("%s", consumer.Last()))
 
-	assert.NoError(t, consumer.Deliveries()[0].Ack())
+	assert.NoError(t, consumer.Deliveries()[0].Ack(ctx))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 1)
 
-	assert.NoError(t, consumer.Deliveries()[1].Ack())
+	assert.NoError(t, consumer.Deliveries()[1].Ack(ctx))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 0)
 
-	assert.Equal(t, ErrorNotFound, consumer.Deliveries()[0].Ack())
+	assert.Equal(t, ErrorNotFound, consumer.Deliveries()[0].Ack(ctx))
 
 	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d3", http.Header{"foo": []string{"bar3"}})))
 	eventuallyReady(t, queue1, 0)
@@ -240,7 +242,7 @@ func TestConsumerCommon(t *testing.T) {
 	eventuallyRejected(t, queue1, 0)
 	assert.Equal(t, "cons-d3", consumer.Last().Payload())
 	assert.Equal(t, http.Header{"foo": []string{"bar3"}}, consumer.Last().(WithHeader).Header())
-	assert.NoError(t, consumer.Last().Reject())
+	assert.NoError(t, consumer.Last().Reject(ctx))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 0)
 	eventuallyRejected(t, queue1, 1)
@@ -250,7 +252,7 @@ func TestConsumerCommon(t *testing.T) {
 	eventuallyUnacked(t, queue1, 1)
 	eventuallyRejected(t, queue1, 1)
 	assert.Equal(t, "cons-d4", consumer.Last().Payload())
-	assert.NoError(t, consumer.Last().Reject())
+	assert.NoError(t, consumer.Last().Reject(ctx))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 0)
 	eventuallyRejected(t, queue1, 2)
@@ -270,7 +272,7 @@ func TestConsumerCommon(t *testing.T) {
 	payload := "cons-func-payload"
 
 	_, err = queue2.AddConsumerFunc("cons-func", func(delivery Delivery) {
-		err = delivery.Ack()
+		err = delivery.Ack(ctx)
 		assert.NoError(t, err)
 		payloadChan <- delivery.Payload()
 	})
@@ -287,6 +289,7 @@ func TestConsumerCommon(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -332,7 +335,7 @@ func TestMulti(t *testing.T) {
 	eventuallyUnacked(t, queue, 10)
 
 	require.NotNil(t, consumer.Last())
-	assert.NoError(t, consumer.Last().Ack())
+	assert.NoError(t, consumer.Last().Ack(ctx))
 	// Assert that after the consumer acks a message the ready count drops to 9 and unacked remains at 10
 	// TODO use util funcs instead
 	assert.Eventually(t, func() bool {
@@ -352,7 +355,7 @@ func TestMulti(t *testing.T) {
 	eventuallyReady(t, queue, 9)
 	eventuallyUnacked(t, queue, 10)
 
-	assert.NoError(t, consumer.Last().Ack())
+	assert.NoError(t, consumer.Last().Ack(ctx))
 	// Assert that after the consumer acks a message the ready count drops to 8 and unacked remains at 10
 	// TODO use the util funcs instead
 	assert.Eventually(t, func() bool {
@@ -381,6 +384,7 @@ func TestMulti(t *testing.T) {
 }
 
 func TestBatch(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -409,8 +413,8 @@ func TestBatch(t *testing.T) {
 	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d0", consumer.Last()[0].Payload())
 	assert.Equal(t, "batch-d1", consumer.Last()[1].Payload())
-	assert.NoError(t, consumer.Last()[0].Reject())
-	assert.NoError(t, consumer.Last()[1].Ack())
+	assert.NoError(t, consumer.Last()[0].Reject(ctx))
+	assert.NoError(t, consumer.Last()[1].Ack(ctx))
 	eventuallyUnacked(t, queue, 3)
 	eventuallyRejected(t, queue, 1)
 
@@ -420,8 +424,8 @@ func TestBatch(t *testing.T) {
 	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d2", consumer.Last()[0].Payload())
 	assert.Equal(t, "batch-d3", consumer.Last()[1].Payload())
-	assert.NoError(t, consumer.Last()[0].Reject())
-	assert.NoError(t, consumer.Last()[1].Ack())
+	assert.NoError(t, consumer.Last()[0].Reject(ctx))
+	assert.NoError(t, consumer.Last()[1].Ack(ctx))
 	eventuallyUnacked(t, queue, 1)
 	eventuallyRejected(t, queue, 2)
 
@@ -436,12 +440,13 @@ func TestBatch(t *testing.T) {
 		return len(consumer.Last()) == 1
 	}, 10*time.Second, 2*time.Millisecond)
 	assert.Equal(t, "batch-d4", consumer.Last()[0].Payload())
-	assert.NoError(t, consumer.Last()[0].Reject())
+	assert.NoError(t, consumer.Last()[0].Reject(ctx))
 	eventuallyUnacked(t, queue, 0)
 	eventuallyRejected(t, queue, 3)
 }
 
 func TestReturnRejected(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -475,12 +480,12 @@ func TestReturnRejected(t *testing.T) {
 	eventuallyRejected(t, queue, 0)
 
 	assert.Len(t, consumer.Deliveries(), 6)
-	assert.NoError(t, consumer.Deliveries()[0].Reject())
-	assert.NoError(t, consumer.Deliveries()[1].Ack())
-	assert.NoError(t, consumer.Deliveries()[2].Reject())
-	assert.NoError(t, consumer.Deliveries()[3].Reject())
+	assert.NoError(t, consumer.Deliveries()[0].Reject(ctx))
+	assert.NoError(t, consumer.Deliveries()[1].Ack(ctx))
+	assert.NoError(t, consumer.Deliveries()[2].Reject(ctx))
+	assert.NoError(t, consumer.Deliveries()[3].Reject(ctx))
 	// delivery 4 still open
-	assert.NoError(t, consumer.Deliveries()[5].Reject())
+	assert.NoError(t, consumer.Deliveries()[5].Reject(ctx))
 
 	eventuallyReady(t, queue, 0)
 	eventuallyUnacked(t, queue, 1)  // delivery 4
@@ -504,6 +509,7 @@ func TestReturnRejected(t *testing.T) {
 }
 
 func TestPushQueue(t *testing.T) {
+	ctx := context.Background()
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -534,12 +540,12 @@ func TestPushQueue(t *testing.T) {
 	eventuallyUnacked(t, queue1, 1)
 	require.Len(t, consumer1.Deliveries(), 1)
 
-	assert.NoError(t, consumer1.Last().Push())
+	assert.NoError(t, consumer1.Last().Push(ctx))
 	eventuallyUnacked(t, queue1, 0)
 	eventuallyUnacked(t, queue2, 1)
 	require.Len(t, consumer2.Deliveries(), 1)
 
-	assert.NoError(t, consumer2.Last().Push())
+	assert.NoError(t, consumer2.Last().Push(ctx))
 	eventuallyRejected(t, queue2, 1)
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -74,6 +75,7 @@ func NewConsumer(tag int) *Consumer {
 }
 
 func (consumer *Consumer) Consume(delivery rmq.Delivery) {
+	ctx := context.Background()
 	payload := delivery.Payload()
 	debugf("start consume %s", payload)
 	time.Sleep(consumeDuration)
@@ -87,13 +89,13 @@ func (consumer *Consumer) Consume(delivery rmq.Delivery) {
 	}
 
 	if consumer.count%reportBatchSize > 0 {
-		if err := delivery.Ack(); err != nil {
+		if err := delivery.Ack(ctx); err != nil {
 			debugf("failed to ack %s: %s", payload, err)
 		} else {
 			debugf("acked %s", payload)
 		}
 	} else { // reject one per batch
-		if err := delivery.Reject(); err != nil {
+		if err := delivery.Reject(ctx); err != nil {
 			debugf("failed to reject %s: %s", payload, err)
 		} else {
 			debugf("rejected %s", payload)

@@ -1,5 +1,7 @@
 package rmq
 
+import "context"
+
 type Deliveries []Delivery
 
 func (deliveries Deliveries) Payloads() []string {
@@ -17,25 +19,25 @@ func (deliveries Deliveries) Payloads() []string {
 
 // functions with retry, see comments in delivery.go (recommended)
 
-func (deliveries Deliveries) Ack() (errMap map[int]error) {
-	return deliveries.each(Delivery.Ack)
+func (deliveries Deliveries) Ack(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Ack)
 }
 
-func (deliveries Deliveries) Reject() (errMap map[int]error) {
-	return deliveries.each(Delivery.Reject)
+func (deliveries Deliveries) Reject(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Reject)
 }
 
-func (deliveries Deliveries) Push() (errMap map[int]error) {
-	return deliveries.each(Delivery.Push)
+func (deliveries Deliveries) Push(ctx context.Context) (errMap map[int]error) {
+	return deliveries.each(ctx, Delivery.Push)
 }
 
 // helper functions
 
 func (deliveries Deliveries) each(
-	f func(Delivery) error,
+	ctx context.Context, f func(Delivery, context.Context) error,
 ) (errMap map[int]error) {
 	for i, delivery := range deliveries {
-		if err := f(delivery); err != nil {
+		if err := f(delivery, ctx); err != nil {
 			if errMap == nil { // create error map lazily on demand
 				errMap = map[int]error{}
 			}

@@ -1,6 +1,7 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -96,7 +97,7 @@ func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errCh
 	}
 
 	// add to connection set after setting heartbeat to avoid race with cleaner
-	if _, err := redisClient.SAdd(connectionsKey, name); err != nil {
+	if _, err := redisClient.SAdd(context.Background(), connectionsKey, name); err != nil {
 		return nil, err
 	}
 
@@ -106,7 +107,7 @@ func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errCh
 }
 
 func (connection *redisConnection) updateHeartbeat() error {
-	return connection.redisClient.Set(connection.heartbeatKey, "1", heartbeatDuration)
+	return connection.redisClient.Set(context.Background(), connection.heartbeatKey, "1", heartbeatDuration)
 }
 
 // heartbeat keeps the heartbeat key alive
@@ -165,7 +166,7 @@ func (connection *redisConnection) OpenQueue(name string) (Queue, error) {
 		return nil, ErrorConsumingStopped
 	}
 
-	if _, err := connection.redisClient.SAdd(queuesKey, name); err != nil {
+	if _, err := connection.redisClient.SAdd(context.Background(), queuesKey, name); err != nil {
 		return nil, err
 	}
 
@@ -182,7 +183,7 @@ func (connection *redisConnection) CollectStats(queueList []string) (Stats, erro
 
 // GetOpenQueues returns a list of all open queues
 func (connection *redisConnection) GetOpenQueues() ([]string, error) {
-	return connection.redisClient.SMembers(queuesKey)
+	return connection.redisClient.SMembers(context.Background(), queuesKey)
 }
 
 // StopAllConsuming stops consuming on all queues opened in this connection.
@@ -225,7 +226,7 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 // checkHeartbeat retuns true if the connection is currently active in terms of heartbeat
 func (connection *redisConnection) checkHeartbeat() error {
 	heartbeatKey := strings.Replace(connectionHeartbeatTemplate, phConnection, connection.Name, 1)
-	ttl, err := connection.redisClient.TTL(heartbeatKey)
+	ttl, err := connection.redisClient.TTL(context.Background(), heartbeatKey)
 	if err != nil {
 		return err
 	}
@@ -237,7 +238,7 @@ func (connection *redisConnection) checkHeartbeat() error {
 
 // getConnections returns a list of all open connections
 func (connection *redisConnection) getConnections() ([]string, error) {
-	return connection.redisClient.SMembers(connectionsKey)
+	return connection.redisClient.SMembers(context.Background(), connectionsKey)
 }
 
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
@@ -252,7 +253,7 @@ func (connection *redisConnection) hijackConnection(name string) Connection {
 
 // closes a stale connection. not to be called on an active connection
 func (connection *redisConnection) closeStaleConnection() error {
-	count, err := connection.redisClient.SRem(connectionsKey, connection.Name)
+	count, err := connection.redisClient.SRem(context.Background(), connectionsKey, connection.Name)
 	if err != nil {
 		return err
 	}
@@ -262,7 +263,7 @@ func (connection *redisConnection) closeStaleConnection() error {
 
 	// NOTE: we're not checking count here because stale connection might not
 	// have been consuming from any queue, in which case this key doesn't exist
-	if _, err = connection.redisClient.Del(connection.queuesKey); err != nil {
+	if _, err = connection.redisClient.Del(context.Background(), connection.queuesKey); err != nil {
 		return err
 	}
 
@@ -271,7 +272,7 @@ func (connection *redisConnection) closeStaleConnection() error {
 
 // getConsumingQueues returns a list of all queues consumed by this connection
 func (connection *redisConnection) getConsumingQueues() ([]string, error) {
-	return connection.redisClient.SMembers(connection.queuesKey)
+	return connection.redisClient.SMembers(context.Background(), connection.queuesKey)
 }
 
 // openQueue opens a queue without adding it to the set of queues
@@ -297,7 +298,7 @@ func (connection *redisConnection) stopHeartbeat() error {
 	<-heartbeatStopped
 	connection.heartbeatStop = nil // avoid stopping twice
 
-	count, err := connection.redisClient.Del(connection.heartbeatKey)
+	count, err := connection.redisClient.Del(context.Background(), connection.heartbeatKey)
 	if err != nil {
 		return err
 	}
@@ -309,11 +310,11 @@ func (connection *redisConnection) stopHeartbeat() error {
 
 // flushDb flushes the redis database to reset everything, used in tests
 func (connection *redisConnection) flushDb() error {
-	return connection.redisClient.FlushDb()
+	return connection.redisClient.FlushDb(context.Background())
 }
 
 // unlistAllQueues closes all queues by removing them from the global list
 func (connection *redisConnection) unlistAllQueues() error {
-	_, err := connection.redisClient.Del(queuesKey)
+	_, err := connection.redisClient.Del(context.Background(), queuesKey)
 	return err
 }
