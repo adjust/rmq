@@ -38,6 +38,9 @@ func (*TestQueue) AddConsumerFunc(string, ConsumerFunc) (string, error) { panic(
 func (*TestQueue) AddBatchConsumer(string, int64, time.Duration, BatchConsumer) (string, error) {
 	panic(errorNotSupported)
 }
+func (*TestQueue) AddBatchConsumerFunc(string, int64, time.Duration, BatchConsumerFunc) (string, error) {
+	panic(errorNotSupported)
+}
 func (*TestQueue) ReturnUnacked(int64) (int64, error)  { panic(errorNotSupported) }
 func (*TestQueue) ReturnRejected(int64) (int64, error) { panic(errorNotSupported) }
 func (*TestQueue) PurgeReady() (int64, error)          { panic(errorNotSupported) }

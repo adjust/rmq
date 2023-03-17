@@ -23,6 +23,7 @@ type Queue interface {
 	AddConsumer(tag string, consumer Consumer) (string, error)
 	AddConsumerFunc(tag string, consumerFunc ConsumerFunc) (string, error)
 	AddBatchConsumer(tag string, batchSize int64, timeout time.Duration, consumer BatchConsumer) (string, error)
+	AddBatchConsumerFunc(tag string, batchSize int64, timeout time.Duration, batchConsumerFunc BatchConsumerFunc) (string, error)
 	PurgeReady() (int64, error)
 	PurgeRejected() (int64, error)
 	ReturnUnacked(max int64) (int64, error)
@@ -317,6 +318,18 @@ func (queue *redisQueue) AddBatchConsumer(tag string, batchSize int64, timeout t
 		return "", err
 	}
 	go queue.consumerBatchConsume(batchSize, timeout, consumer)
+	return name, nil
+}
+
+// AddBatchConsumerFunc is similar to AddConsumerFunc, but for batches of deliveries
+// timeout limits the amount of time waiting to fill an entire batch
+// The timer is only started when the first message in a batch is received
+func (queue *redisQueue) AddBatchConsumerFunc(tag string, batchSize int64, timeout time.Duration, batchConsumerFunc BatchConsumerFunc) (string, error) {
+	name, err := queue.addConsumer(tag)
+	if err != nil {
+		return "", err
+	}
+	go queue.consumerBatchConsume(batchSize, timeout, batchConsumerFunc)
 	return name, nil
 }
 
