@@ -219,6 +219,7 @@ func (queue *redisQueue) consumeBatch() error {
 
 		d, err := queue.newDelivery(payload)
 		if err != nil {
+			d.Reject() // move from unacked to rejected list
 			return err
 		}
 

@@ -36,6 +36,7 @@ func (delivery *redisDelivery) Header() http.Header {
 	return delivery.header
 }
 
+// TODO: returns delivery even in case of error so it can be removed from the unacked list
 func newDelivery(
 	ctx context.Context,
 	payload string,
@@ -58,7 +59,7 @@ func newDelivery(
 	var err error
 
 	if rd.header, rd.clearPayload, err = ExtractHeaderAndPayload(payload); err != nil {
-		return nil, err
+		return &rd, err
 	}
 
 	return &rd, nil
