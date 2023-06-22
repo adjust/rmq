@@ -36,34 +36,6 @@ func (delivery *redisDelivery) Header() http.Header {
 	return delivery.header
 }
 
-func newDelivery(
-	ctx context.Context,
-	payload string,
-	unackedKey string,
-	rejectedKey string,
-	pushKey string,
-	redisClient RedisClient,
-	errChan chan<- error,
-) (*redisDelivery, error) {
-	rd := redisDelivery{
-		ctx:         ctx,
-		payload:     payload,
-		unackedKey:  unackedKey,
-		rejectedKey: rejectedKey,
-		pushKey:     pushKey,
-		redisClient: redisClient,
-		errChan:     errChan,
-	}
-
-	var err error
-
-	if rd.header, rd.clearPayload, err = ExtractHeaderAndPayload(payload); err != nil {
-		return nil, err
-	}
-
-	return &rd, nil
-}
-
 func (delivery *redisDelivery) String() string {
 	return fmt.Sprintf("[%s %s]", delivery.clearPayload, delivery.unackedKey)
 }
