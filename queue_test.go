@@ -513,6 +513,46 @@ func TestReturnRejected(t *testing.T) {
 	eventuallyRejected(t, queue, 0)
 }
 
+func TestRejectFaultyMessages(t *testing.T) {
+	redisAddr, closer := testRedis(t)
+	defer closer()
+
+	connection, err := OpenConnection("faulty-conn", "tcp", redisAddr, 1, nil)
+	require.NoError(t, err)
+	queue, err := connection.OpenQueue("faulty-q")
+	require.NoError(t, err)
+	_, err = queue.PurgeReady()
+	require.NoError(t, err)
+
+	for i := 0; i < 6; i++ {
+		// if there is no line separator after the header in the message,
+		// it will lead to an error and the message will be rejected
+		err := queue.Publish(fmt.Sprintf("%sreturn-d%d", jsonHeaderSignature, i))
+		require.NoError(t, err)
+	}
+
+	eventuallyReady(t, queue, 6)
+	eventuallyUnacked(t, queue, 0)
+	eventuallyRejected(t, queue, 0)
+
+	require.NoError(t, queue.StartConsuming(10, time.Millisecond))
+	eventuallyReady(t, queue, 0)
+	eventuallyUnacked(t, queue, 0)
+	eventuallyRejected(t, queue, 6)
+
+	consumer := NewTestConsumer("faulty-cons")
+	consumer.AutoAck = false
+	_, err = queue.AddConsumer("cons", consumer)
+	require.NoError(t, err)
+	eventuallyReady(t, queue, 0)
+	eventuallyUnacked(t, queue, 0)
+	eventuallyRejected(t, queue, 6)
+
+	require.Len(t, consumer.Deliveries(), 0)
+
+	<-queue.StopConsuming()
+}
+
 func TestPushQueue(t *testing.T) {
 	redisAddr, closer := testRedis(t)
 	defer closer()

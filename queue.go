@@ -212,14 +212,13 @@ func (queue *redisQueue) consumeBatch() error {
 		if err == ErrorNotFound {
 			return nil
 		}
-
 		if err != nil {
 			return err
 		}
 
 		d, err := queue.newDelivery(payload)
 		if err != nil {
-			return err
+			return fmt.Errorf("create new delivery: %w", err)
 		}
 
 		queue.deliveryChan <- d
@@ -229,15 +228,29 @@ func (queue *redisQueue) consumeBatch() error {
 }
 
 func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
-	return newDelivery(
-		queue.ackCtx,
-		payload,
-		queue.unackedKey,
-		queue.rejectedKey,
-		queue.pushKey,
-		queue.redisClient,
-		queue.errChan,
-	)
+	rd := &redisDelivery{
+		ctx:         queue.ackCtx,
+		payload:     payload,
+		unackedKey:  queue.unackedKey,
+		rejectedKey: queue.rejectedKey,
+		pushKey:     queue.pushKey,
+		redisClient: queue.redisClient,
+		errChan:     queue.errChan,
+	}
+
+	var err error
+	rd.header, rd.clearPayload, err = ExtractHeaderAndPayload(payload)
+	if err == nil {
+		return rd, nil
+	}
+
+	// we need to reject a delivery here to move the delivery from the unacked to the rejected list.
+	rejectErr := rd.Reject()
+	if rejectErr != nil {
+		return nil, fmt.Errorf("%s, reject faulty delivery: %w", err, rejectErr)
+	}
+
+	return nil, err
 }
 
 // StopConsuming can be used to stop all consumers on this queue. It returns a
