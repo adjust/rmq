@@ -212,7 +212,6 @@ func (queue *redisQueue) consumeBatch() error {
 		if err == ErrorNotFound {
 			return nil
 		}
-
 		if err != nil {
 			return err
 		}
@@ -245,6 +244,7 @@ func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
 		return rd, nil
 	}
 
+	// we need to reject a delivery here to move the delivery from the unacked to the rejected list.
 	rejectErr := rd.Reject()
 	if err != nil {
 		return nil, fmt.Errorf("%s, reject faulty delivery: %w", err, rejectErr)
