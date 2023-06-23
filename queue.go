@@ -246,7 +246,7 @@ func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
 
 	// we need to reject a delivery here to move the delivery from the unacked to the rejected list.
 	rejectErr := rd.Reject()
-	if err != nil {
+	if rejectErr != nil {
 		return nil, fmt.Errorf("%s, reject faulty delivery: %w", err, rejectErr)
 	}
 
