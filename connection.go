@@ -68,12 +68,12 @@ func OpenConnection(tag string, network string, address string, db int, errChan 
 // OpenConnectionWithOptions allows you to pass more flexible options
 func OpenConnectionWithOptions(tag string, redisOption *redis.Options, errChan chan<- error) (Connection, error) {
 	redisClient := redis.NewClient(redisOption)
-	return OpenConnectionWithRmqRedisClient(tag, RedisSingleWrapper{redisClient}, errChan)
+	return OpenConnectionWithRmqRedisClient(tag, RedisWrapper{redisClient}, errChan)
 }
 
 // OpenConnectionWithRedisClusterClient opens and returns a new connection for a cluster redis
 func OpenConnectionWithRedisClusterClient(tag string, clusterClient *redis.ClusterClient, errChan chan<- error) (Connection, error) {
-	return OpenConnectionWithRmqRedisClient(tag, RedisClusterWrapper{clusterClient}, errChan)
+	return OpenConnectionWithRmqRedisClient(tag, RedisWrapper{clusterClient}, errChan)
 }
 
 // OpenConnectionWithTestRedisClient opens and returns a new connection which
