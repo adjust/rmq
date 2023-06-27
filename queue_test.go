@@ -221,8 +221,10 @@ func TestConsumerCommon(t *testing.T) {
 	assert.Equal(t, "cons-d2", consumer.Last().Payload())
 	assert.Equal(t, http.Header{"foo": []string{"bar2"}}, consumer.Last().(WithHeader).Header())
 
-	assert.Regexp(t, `\[cons-d2 rmq::connection::cons-conn-\w{6}::queue::\[cons-q\]::unacked\]`,
-		fmt.Sprintf("%s", consumer.Last()))
+	assert.Regexp(t,
+		`\[cons-d2 rmq::connection::cons-conn-\w{6}::queue::\{cons-q\}::unacked\]`,
+		fmt.Sprintf("%s", consumer.Last()),
+	)
 
 	assert.NoError(t, consumer.Deliveries()[0].Ack())
 	eventuallyReady(t, queue1, 0)

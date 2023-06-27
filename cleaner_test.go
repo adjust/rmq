@@ -1,26 +1,12 @@
 package rmq
 
 import (
-	"os"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func testRedis(t testing.TB) (options *redis.Options, closer func()) {
-	t.Helper()
-
-	if redisAddr, ok := os.LookupEnv("REDIS_ADDR"); ok {
-		return &redis.Options{Addr: redisAddr}, func() {}
-	}
-
-	mr := miniredis.RunT(t)
-	return &redis.Options{Addr: mr.Addr()}, mr.Close
-}
 
 func TestCleaner(t *testing.T) {
 	redisOptions, closer := testRedis(t)
