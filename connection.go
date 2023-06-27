@@ -61,8 +61,12 @@ type redisConnection struct {
 }
 
 // OpenConnection opens and returns a new connection
-func OpenConnection(tag string, redisOption *redis.Options, errChan chan<- error) (Connection, error) {
-	// redisClient := redis.NewClient(&redis.Options{Network: network, Addr: address, DB: db})
+func OpenConnection(tag string, network string, address string, db int, errChan chan<- error) (Connection, error) {
+	return OpenConnectionWithOptions(tag, &redis.Options{Network: network, Addr: address, DB: db}, errChan)
+}
+
+// OpenConnectionWithOptions allows you to pass more flexible options
+func OpenConnectionWithOptions(tag string, redisOption *redis.Options, errChan chan<- error) (Connection, error) {
 	redisClient := redis.NewClient(redisOption)
 	return OpenConnectionWithRmqRedisClient(tag, RedisSingleWrapper{redisClient}, errChan)
 }
@@ -78,8 +82,8 @@ func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (Connec
 	return OpenConnectionWithRmqRedisClient(tag, NewTestRedisClient(), errChan)
 }
 
-// OpenConnectionWithRmqRedisClient If you would like to use a redis client other than the ones supported in the constructors above, you can implement
-// the RedisClient interface yourself
+// OpenConnectionWithRmqRedisClient: If you would like to use a redis client other than the ones
+// supported in the constructors above, you can implement the RedisClient interface yourself
 func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
 	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 

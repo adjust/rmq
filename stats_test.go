@@ -12,14 +12,14 @@ func TestStats(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnection("stats-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithOptions("stats-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	_, err = NewCleaner(connection).Clean()
 	require.NoError(t, err)
 
-	conn1, err := OpenConnection("stats-conn1", redisOptions, nil)
+	conn1, err := OpenConnectionWithOptions("stats-conn1", redisOptions, nil)
 	assert.NoError(t, err)
-	conn2, err := OpenConnection("stats-conn2", redisOptions, nil)
+	conn2, err := OpenConnectionWithOptions("stats-conn2", redisOptions, nil)
 	assert.NoError(t, err)
 	q1, err := conn2.OpenQueue("stats-q1")
 	assert.NoError(t, err)
