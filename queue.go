@@ -46,9 +46,9 @@ type redisQueue struct {
 	connectionName string
 	queuesKey      string // key to list of queues consumed by this connection
 	consumersKey   string // key to set of consumers using this connection
+	unackedKey     string // key to list of currently consuming deliveries
 	readyKey       string // key to list of ready deliveries
 	rejectedKey    string // key to list of rejected deliveries
-	unackedKey     string // key to list of currently consuming deliveries
 	pushKey        string // key to list of pushed deliveries
 	redisClient    RedisClient
 	errChan        chan<- error
@@ -64,21 +64,20 @@ type redisQueue struct {
 }
 
 func newQueue(
-	name string,
-	connectionName string,
-	queuesKey string,
+	name, connectionName, queuesKey string,
+	consumersTemplate, unackedTemplate, readyTemplate, rejectedTemplate string,
 	redisClient RedisClient,
 	errChan chan<- error,
 ) *redisQueue {
 
-	consumersKey := strings.Replace(connectionQueueConsumersTemplate, phConnection, connectionName, 1)
+	consumersKey := strings.Replace(consumersTemplate, phConnection, connectionName, 1)
 	consumersKey = strings.Replace(consumersKey, phQueue, name, 1)
 
-	readyKey := strings.Replace(queueReadyTemplate, phQueue, name, 1)
-	rejectedKey := strings.Replace(queueRejectedTemplate, phQueue, name, 1)
-
-	unackedKey := strings.Replace(connectionQueueUnackedTemplate, phConnection, connectionName, 1)
+	unackedKey := strings.Replace(unackedTemplate, phConnection, connectionName, 1)
 	unackedKey = strings.Replace(unackedKey, phQueue, name, 1)
+
+	readyKey := strings.Replace(readyTemplate, phQueue, name, 1)
+	rejectedKey := strings.Replace(rejectedTemplate, phQueue, name, 1)
 
 	consumingStopped := make(chan struct{})
 	ackCtx, ackCancel := context.WithCancel(context.Background())
@@ -88,9 +87,9 @@ func newQueue(
 		connectionName:   connectionName,
 		queuesKey:        queuesKey,
 		consumersKey:     consumersKey,
+		unackedKey:       unackedKey,
 		readyKey:         readyKey,
 		rejectedKey:      rejectedKey,
-		unackedKey:       unackedKey,
 		redisClient:      redisClient,
 		errChan:          errChan,
 		consumingStopped: consumingStopped,

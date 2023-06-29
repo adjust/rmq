@@ -63,7 +63,7 @@ func eventuallyReady(t *testing.T, queue Queue, expectedReady int64) {
 			return false
 		}
 		return count == expectedReady
-	}, 10*time.Second, 2*time.Millisecond)
+	}, 1*time.Second, 2*time.Millisecond)
 }
 
 func eventuallyUnacked(t *testing.T, queue Queue, expectedUnacked int64) {
@@ -74,7 +74,7 @@ func eventuallyUnacked(t *testing.T, queue Queue, expectedUnacked int64) {
 			return false
 		}
 		return count == expectedUnacked
-	}, 10*time.Second, 2*time.Millisecond)
+	}, 1*time.Second, 2*time.Millisecond)
 }
 
 func eventuallyRejected(t *testing.T, queue Queue, expectedRejected int64) {
@@ -85,5 +85,5 @@ func eventuallyRejected(t *testing.T, queue Queue, expectedRejected int64) {
 			return false
 		}
 		return count == expectedRejected
-	}, 10*time.Second, 2*time.Millisecond)
+	}, 1*time.Second, 2*time.Millisecond)
 }

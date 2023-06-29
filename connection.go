@@ -46,9 +46,15 @@ type Connection interface {
 // Connection is the entry point. Use a connection to access queues, consumers and deliveries
 // Each connection has a single heartbeat shared among all consumers
 type redisConnection struct {
-	Name          string
-	heartbeatKey  string // key to keep alive
-	queuesKey     string // key to list of queues consumed by this connection
+	Name         string
+	heartbeatKey string // key to keep alive
+	queuesKey    string // key to list of queues consumed by this connection
+
+	consumersTemplate string
+	unackedTemplate   string
+	readyTemplate     string
+	rejectedTemplate  string
+
 	redisClient   RedisClient
 	errChan       chan<- error
 	heartbeatStop chan chan struct{}
@@ -62,11 +68,11 @@ type redisConnection struct {
 
 // OpenConnection opens and returns a new connection
 func OpenConnection(tag string, network string, address string, db int, errChan chan<- error) (Connection, error) {
-	return OpenConnectionWithOptions(tag, &redis.Options{Network: network, Addr: address, DB: db}, errChan)
+	return OpenConnectionWithRedisOptions(tag, &redis.Options{Network: network, Addr: address, DB: db}, errChan)
 }
 
-// OpenConnectionWithOptions allows you to pass more flexible options
-func OpenConnectionWithOptions(tag string, redisOption *redis.Options, errChan chan<- error) (Connection, error) {
+// OpenConnectionWithRedisOptions allows you to pass more flexible options
+func OpenConnectionWithRedisOptions(tag string, redisOption *redis.Options, errChan chan<- error) (Connection, error) {
 	return OpenConnectionWithRedisClient(tag, redis.NewClient(redisOption), errChan)
 }
 
@@ -85,15 +91,28 @@ func OpenConnectionWithTestRedisClient(tag string, errChan chan<- error) (Connec
 // OpenConnectionWithRmqRedisClient: If you would like to use a redis client other than the ones
 // supported in the constructors above, you can implement the RedisClient interface yourself
 func OpenConnectionWithRmqRedisClient(tag string, redisClient RedisClient, errChan chan<- error) (Connection, error) {
+	return openConnection(tag, redisClient, false, errChan)
+}
+
+// OpenClusterConnection: Same as OpenConnectionWithRedisClient, but using Redis hash tags {} instead of [].
+func OpenClusterConnection(tag string, redisClient redis.Cmdable, errChan chan<- error) (Connection, error) {
+	return openConnection(tag, RedisWrapper{redisClient}, true, errChan)
+}
+
+func openConnection(tag string, redisClient RedisClient, useRedisHashTags bool, errChan chan<- error) (Connection, error) {
 	name := fmt.Sprintf("%s-%s", tag, RandomString(6))
 
 	connection := &redisConnection{
-		Name:          name,
-		heartbeatKey:  strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
-		queuesKey:     strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
-		redisClient:   redisClient,
-		errChan:       errChan,
-		heartbeatStop: make(chan chan struct{}, 1),
+		Name:              name,
+		heartbeatKey:      strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
+		queuesKey:         strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
+		consumersTemplate: getTemplate(connectionQueueConsumersBaseTemplate, useRedisHashTags),
+		unackedTemplate:   getTemplate(connectionQueueUnackedBaseTemplate, useRedisHashTags),
+		readyTemplate:     getTemplate(queueReadyBaseTemplate, useRedisHashTags),
+		rejectedTemplate:  getTemplate(queueRejectedBaseTemplate, useRedisHashTags),
+		redisClient:       redisClient,
+		errChan:           errChan,
+		heartbeatStop:     make(chan chan struct{}, 1),
 	}
 
 	if err := connection.updateHeartbeat(); err != nil { // checks the connection
@@ -248,10 +267,14 @@ func (connection *redisConnection) getConnections() ([]string, error) {
 // hijackConnection reopens an existing connection for inspection purposes without starting a heartbeat
 func (connection *redisConnection) hijackConnection(name string) Connection {
 	return &redisConnection{
-		Name:         name,
-		heartbeatKey: strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
-		queuesKey:    strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
-		redisClient:  connection.redisClient,
+		Name:              name,
+		heartbeatKey:      strings.Replace(connectionHeartbeatTemplate, phConnection, name, 1),
+		queuesKey:         strings.Replace(connectionQueuesTemplate, phConnection, name, 1),
+		consumersTemplate: connection.consumersTemplate,
+		unackedTemplate:   connection.unackedTemplate,
+		readyTemplate:     connection.readyTemplate,
+		rejectedTemplate:  connection.rejectedTemplate,
+		redisClient:       connection.redisClient,
 	}
 }
 
@@ -285,6 +308,10 @@ func (connection *redisConnection) openQueue(name string) Queue {
 		name,
 		connection.Name,
 		connection.queuesKey,
+		connection.consumersTemplate,
+		connection.unackedTemplate,
+		connection.readyTemplate,
+		connection.rejectedTemplate,
 		connection.redisClient,
 		connection.errChan,
 	)

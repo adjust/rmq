@@ -12,12 +12,12 @@ func TestCleaner(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	flushConn, err := OpenConnectionWithOptions("cleaner-flush", redisOptions, nil)
+	flushConn, err := OpenConnectionWithRedisOptions("cleaner-flush", redisOptions, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	conn, err := OpenConnectionWithOptions("cleaner-conn1", redisOptions, nil)
+	conn, err := OpenConnectionWithRedisOptions("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queues, err := conn.GetOpenQueues()
 	assert.NoError(t, err)
@@ -78,7 +78,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	conn, err = OpenConnectionWithOptions("cleaner-conn1", redisOptions, nil)
+	conn, err = OpenConnectionWithRedisOptions("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)
@@ -125,7 +125,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, conn.stopHeartbeat())
 	time.Sleep(time.Millisecond)
 
-	cleanerConn, err := OpenConnectionWithOptions("cleaner-conn", redisOptions, nil)
+	cleanerConn, err := OpenConnectionWithRedisOptions("cleaner-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	cleaner := NewCleaner(cleanerConn)
 	returned, err := cleaner.Clean()
@@ -136,7 +136,7 @@ func TestCleaner(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 2)
 
-	conn, err = OpenConnectionWithOptions("cleaner-conn1", redisOptions, nil)
+	conn, err = OpenConnectionWithRedisOptions("cleaner-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err = conn.OpenQueue("q1")
 	assert.NoError(t, err)

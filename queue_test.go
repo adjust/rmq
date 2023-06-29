@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,13 +18,13 @@ func TestConnections(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	flushConn, err := OpenConnectionWithOptions("conns-flush", redisOptions, nil)
+	flushConn, err := OpenConnectionWithRedisOptions("conns-flush", redisOptions, nil)
 	assert.NoError(t, err)
 	assert.NoError(t, flushConn.stopHeartbeat())
 	assert.Equal(t, ErrorNotFound, flushConn.stopHeartbeat())
 	assert.NoError(t, flushConn.flushDb())
 
-	connection, err := OpenConnectionWithOptions("conns-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("conns-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 	_, err = NewCleaner(connection).Clean()
@@ -33,14 +34,14 @@ func TestConnections(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, connections, 1) // cleaner connection remains
 
-	conn1, err := OpenConnectionWithOptions("conns-conn1", redisOptions, nil)
+	conn1, err := OpenConnectionWithRedisOptions("conns-conn1", redisOptions, nil)
 	assert.NoError(t, err)
 	connections, err = connection.getConnections()
 	assert.NoError(t, err)
 	assert.Len(t, connections, 2)
 	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").checkHeartbeat())
 	assert.NoError(t, conn1.checkHeartbeat())
-	conn2, err := OpenConnectionWithOptions("conns-conn2", redisOptions, nil)
+	conn2, err := OpenConnectionWithRedisOptions("conns-conn2", redisOptions, nil)
 	assert.NoError(t, err)
 	connections, err = connection.getConnections()
 	assert.NoError(t, err)
@@ -70,7 +71,7 @@ func TestConnectionQueues(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("conn-q-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("conn-q-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -143,7 +144,7 @@ func TestQueueCommon(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("queue-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("queue-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -191,7 +192,10 @@ func TestConsumerCommon(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("cons-conn", redisOptions, nil)
+	// Note that we're using OpenClusterConnection with redis.NewClient (not redis.NewClusterClient).
+	// This is just like using OpenConnection, but just using the Redis hash tags {} instead of [].
+	// This is possible, but not really an expected use case.
+	connection, err := OpenClusterConnection("cons-conn", redis.NewClient(redisOptions), nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -221,7 +225,7 @@ func TestConsumerCommon(t *testing.T) {
 	assert.Equal(t, "cons-d2", consumer.Last().Payload())
 	assert.Equal(t, http.Header{"foo": []string{"bar2"}}, consumer.Last().(WithHeader).Header())
 
-	assert.Regexp(t,
+	assert.Regexp(t, // using {queue}
 		`\[cons-d2 rmq::connection::cons-conn-\w{6}::queue::\{cons-q\}::unacked\]`,
 		fmt.Sprintf("%s", consumer.Last()),
 	)
@@ -292,7 +296,7 @@ func TestMulti(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("multi-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("multi-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("multi-q")
 	assert.NoError(t, err)
@@ -386,7 +390,7 @@ func TestBatch(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("batch-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("batch-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batch-q")
 	assert.NoError(t, err)
@@ -457,7 +461,7 @@ func TestReturnRejected(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("return-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("return-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("return-q")
 	assert.NoError(t, err)
@@ -519,7 +523,7 @@ func TestRejectFaultyMessages(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("faulty-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("faulty-conn", redisOptions, nil)
 	require.NoError(t, err)
 	queue, err := connection.OpenQueue("faulty-q")
 	require.NoError(t, err)
@@ -559,7 +563,7 @@ func TestPushQueue(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("push", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("push", redisOptions, nil)
 	assert.NoError(t, err)
 	queue1, err := connection.OpenQueue("queue1")
 	assert.NoError(t, err)
@@ -599,7 +603,7 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -652,7 +656,7 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("batchConsume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("batchConsume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batchConsume-q")
 	assert.NoError(t, err)
@@ -706,7 +710,7 @@ func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 
 	finishedChan := connection.StopAllConsuming()
@@ -722,7 +726,7 @@ func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -741,7 +745,7 @@ func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -760,7 +764,7 @@ func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -781,7 +785,7 @@ func TestQueue_StopConsuming_CantAddConsumer(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("consume", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -803,7 +807,7 @@ func BenchmarkQueue(b *testing.B) {
 	defer closer()
 
 	// open queue
-	connection, err := OpenConnectionWithOptions("bench-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("bench-conn", redisOptions, nil)
 	assert.NoError(b, err)
 	queueName := fmt.Sprintf("bench-q%d", b.N)
 	queue, err := connection.OpenQueue(queueName)
@@ -873,7 +877,7 @@ func TestQueueDrain(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("drain-connection", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("drain-connection", redisOptions, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -898,7 +902,7 @@ func TestQueueHeader(t *testing.T) {
 	redisOptions, closer := testRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithOptions("queue-h-conn", redisOptions, nil)
+	connection, err := OpenConnectionWithRedisOptions("queue-h-conn", redisOptions, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
