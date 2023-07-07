@@ -152,7 +152,7 @@ func TestCleaner(t *testing.T) {
 	consumer1A.FinishAll()
 	consumer2A.FinishAll()
 
-	<-conn.StopAllConsuming()
+	<-conn.Close()
 	time.Sleep(time.Millisecond)
 
 	conn, err = OpenConnection("cleaner-conn1", "tcp", redisAddr, 1, nil)
@@ -176,7 +176,7 @@ func TestCleaner(t *testing.T) {
 	ready1, unAcked1B = consumerAck(t, queue1, consumer1B, ready1, unAcked1B, genDeliveries(5, 5)...) // ack 5 -> take 6
 
 	consumer1B.FinishAll()
-	<-conn.StopAllConsuming()
+	<-conn.Close()
 	time.Sleep(time.Millisecond)
 
 	cleanerConn, err := OpenConnection("cleaner-conn", "tcp", redisAddr, 1, nil)
@@ -210,7 +210,7 @@ func TestCleaner(t *testing.T) {
 		return len(consumerC.Deliveries()) == int(ready1)
 	}, 10*time.Second, 2*time.Millisecond)
 
-	<-conn.StopAllConsuming()
+	<-conn.Close()
 	time.Sleep(time.Millisecond)
 
 	returned, err = cleaner.Clean()

@@ -25,7 +25,7 @@ func (connection TestConnection) OpenQueue(name string) (Queue, error) {
 
 func (TestConnection) CollectStats([]string) (Stats, error)  { panic(errorNotSupported) }
 func (TestConnection) GetOpenQueues() ([]string, error)      { panic(errorNotSupported) }
-func (TestConnection) StopAllConsuming() <-chan struct{}     { panic(errorNotSupported) }
+func (TestConnection) Close() <-chan struct{}                { panic(errorNotSupported) }
 func (TestConnection) checkHeartbeat() error                 { panic(errorNotSupported) }
 func (TestConnection) getConnections() ([]string, error)     { panic(errorNotSupported) }
 func (TestConnection) hijackConnection(string) Connection    { panic(errorNotSupported) }

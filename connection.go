@@ -26,7 +26,7 @@ type Connection interface {
 	OpenQueue(name string) (Queue, error)
 	CollectStats(queueList []string) (Stats, error)
 	GetOpenQueues() ([]string, error)
-	StopAllConsuming() <-chan struct{}
+	Close() <-chan struct{}
 
 	// internals
 	// used in cleaner
@@ -138,7 +138,7 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 		if errorCount >= HeartbeatErrorLimit {
 			// reached error limit
 			connection.heartbeatStop = nil
-			connection.StopAllConsuming()
+			connection.Close()
 			// Clients reading from errChan need to see this error
 			// This allows them to shut themselves down
 			// Therefore we block adding it to errChan to ensure delivery
@@ -187,11 +187,11 @@ func (connection *redisConnection) GetOpenQueues() ([]string, error) {
 	return connection.redisClient.SMembers(queuesKey)
 }
 
-// StopAllConsuming stops consuming on all queues opened in this connection.
+// Close stops consuming on all queues opened in this connection.
 // It returns a channel which can be used to wait for all active consumers to
 // finish their current Consume() call. This is useful to implement graceful
 // shutdown.
-func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
+func (connection *redisConnection) Close() <-chan struct{} {
 	connection.lock.Lock()
 	defer func() {
 		// regardless of how we exit this method, the connection is always stopped when we return

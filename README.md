@@ -391,7 +391,7 @@ immediately, you can wait on the returned channel until all consumers are done:
 You can also stop consuming on all queues in your connection:
 
 ```go
-finishedChan := connection.StopAllConsuming()
+finishedChan := connection.Close()
 ```
 
 Wait on the `finishedChan` to wait for all consumers on all queues to finish.

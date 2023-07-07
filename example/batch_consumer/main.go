@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	<-connection.StopAllConsuming() // wait for all Consume() calls to finish
+	<-connection.Close() // wait for all Consume() calls to finish
 }
 
 type BatchConsumer struct {

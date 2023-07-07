@@ -700,14 +700,14 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
+func TestConnection_Close_CantOpenQueue(t *testing.T) {
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
 	connection, err := OpenConnection("consume", "tcp", redisAddr, 1, nil)
 	assert.NoError(t, err)
 
-	finishedChan := connection.StopAllConsuming()
+	finishedChan := connection.Close()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
 
@@ -716,7 +716,7 @@ func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
+func TestConnection_Close_CantStartConsuming(t *testing.T) {
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -727,7 +727,7 @@ func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
 	_, err = queue.PurgeReady()
 	assert.NoError(t, err)
 
-	finishedChan := connection.StopAllConsuming()
+	finishedChan := connection.Close()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
 
@@ -754,7 +754,7 @@ func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
+func TestConnection_Close_CantAddConsumer(t *testing.T) {
 	redisAddr, closer := testRedis(t)
 	defer closer()
 
@@ -767,7 +767,7 @@ func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
 
 	assert.NoError(t, queue.StartConsuming(20, time.Millisecond))
 
-	finishedChan := connection.StopAllConsuming()
+	finishedChan := connection.Close()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
 
