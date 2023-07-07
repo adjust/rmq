@@ -202,7 +202,7 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 	finishedChan := make(chan struct{})
 
 	// If we are already stopped or there are no open queues, then there is nothing to do
-	if connection.stopped || len(connection.openQueues) == 0 {
+	if connection.stopped {
 		close(finishedChan)
 		return finishedChan
 	}
