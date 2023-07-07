@@ -215,6 +215,7 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 		for _, c := range chans {
 			<-c
 		}
+		connection.stopHeartbeat()
 		close(finishedChan)
 		// log.Printf("rmq connection stopped consuming %s", queue)
 	}()
