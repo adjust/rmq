@@ -122,6 +122,7 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 			// continue below
 		case c := <-connection.heartbeatStop:
 			close(c)
+			connection.heartbeatStop = nil
 			return
 		}
 
@@ -136,6 +137,7 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 
 		if errorCount >= HeartbeatErrorLimit {
 			// reached error limit
+			connection.heartbeatStop = nil
 			connection.StopAllConsuming()
 			// Clients reading from errChan need to see this error
 			// This allows them to shut themselves down
@@ -296,7 +298,6 @@ func (connection *redisConnection) stopHeartbeat() error {
 	heartbeatStopped := make(chan struct{})
 	connection.heartbeatStop <- heartbeatStopped
 	<-heartbeatStopped
-	connection.heartbeatStop = nil // avoid stopping twice
 
 	count, err := connection.redisClient.Del(connection.heartbeatKey)
 	if err != nil {
