@@ -33,6 +33,7 @@ func publishDeliveries(t *testing.T, queue Queue, ready, unAcked int64, deliveri
 	return ready, unAcked
 }
 
+// consume cnt deliveries into chan buffer
 func preConsume(t *testing.T, queue Queue, ready, unAcked, cnt int64) (int64, int64) {
 	t.Helper()
 	eventuallyUnacked(t, queue, unAcked)
@@ -43,6 +44,7 @@ func preConsume(t *testing.T, queue Queue, ready, unAcked, cnt int64) (int64, in
 	return ready, unAcked
 }
 
+// ack finished deliveries
 func consumerAck(t *testing.T, queue Queue, consumer *TestConsumer, ready, unAcked int64, expected ...string) (int64, int64) {
 	t.Helper()
 	for _, exp := range expected {
@@ -55,6 +57,7 @@ func consumerAck(t *testing.T, queue Queue, consumer *TestConsumer, ready, unAck
 	return ready, unAcked
 }
 
+// receive deliveries from chan buffer and finish them
 func consumeWithoutAck(t *testing.T, queue Queue, consumer *TestConsumer, ready, unAcked int64, expected ...string) {
 	t.Helper()
 	for _, exp := range expected {
@@ -64,6 +67,7 @@ func consumeWithoutAck(t *testing.T, queue Queue, consumer *TestConsumer, ready,
 	}
 }
 
+// check last received deivery
 func checkLast(t *testing.T, queue Queue, consumer *TestConsumer, ready, unAcked int64, expected string) {
 	t.Helper()
 	checkReadyAndUnAcked(t, queue, ready, unAcked)
