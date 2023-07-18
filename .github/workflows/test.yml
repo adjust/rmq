@@ -17,6 +17,7 @@ env:
   COV_GO_VERSION: 1.19.x   # Version of Go to collect coverage
   TARGET_DELTA_COV: 90     # Target coverage of changed lines, in percents
   REDIS_ADDR: "localhost:6379"
+  REDIS_CLUSTER_ADDR: "localhost:30001,localhost:30002,localhost:30003,localhost:30004,localhost:30005,localhost:30006"
 jobs:
   test:
     strategy:
@@ -24,32 +25,12 @@ jobs:
         go-version: [ 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x ]
     runs-on: ubuntu-latest
 
-    services:
-      redis:
-        image: redis
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
     steps:
-      - name: Install Go stable
+      - name: Install Go
         if: matrix.go-version != 'tip'
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Install Go tip
-        if: matrix.go-version == 'tip'
-        run: |
-          curl -sL https://storage.googleapis.com/go-build-snap/go/linux-amd64/$(git ls-remote https://github.com/golang/go.git HEAD | awk '{print $1;}').tar.gz -o gotip.tar.gz
-          ls -lah gotip.tar.gz
-          mkdir -p ~/sdk/gotip
-          tar -C ~/sdk/gotip -xzf gotip.tar.gz
-          ~/sdk/gotip/bin/go version
-          echo "PATH=$HOME/go/bin:$HOME/sdk/gotip/bin/:$PATH" >> $GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@v2
@@ -76,6 +57,16 @@ jobs:
             unit-base.txt
           # Use base sha for PR or new commit hash for master/main push in test result key.
           key: ${{ runner.os }}-unit-test-coverage-${{ (github.event.pull_request.base.sha != github.event.after) && github.event.pull_request.base.sha || github.event.after }}
+
+      - name: Prepare Redis
+        run: |
+          sudo apt-get update && sudo apt-get install -y lsb-release curl gpg
+          curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+          sudo apt-get update && sudo apt-get install -y redis
+          ./testdata/create-cluster.sh start
+          yes yes | ./testdata/create-cluster.sh create
+          sleep 5
 
       - name: Run test for base code
         if: matrix.go-version == env.COV_GO_VERSION && env.RUN_BASE_COVERAGE == 'on' && steps.base-coverage.outputs.cache-hit != 'true' && github.event.pull_request.base.sha != ''
