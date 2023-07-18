@@ -65,7 +65,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
           sudo apt-get update && sudo apt-get install -y redis
           ./testdata/create-cluster.sh start
-          ./testdata/create-cluster.sh create        
+          yes yes | ./testdata/create-cluster.sh create        
 
       - name: Run test for base code
         if: matrix.go-version == env.COV_GO_VERSION && env.RUN_BASE_COVERAGE == 'on' && steps.base-coverage.outputs.cache-hit != 'true' && github.event.pull_request.base.sha != ''
