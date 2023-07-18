@@ -3,7 +3,7 @@
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # Settings
-BIN_PATH ?= "/usr/bin/"
+BIN_PATH="/usr/bin/"
 CLUSTER_HOST=127.0.0.1
 PORT=30000
 TIMEOUT=2000
