@@ -3,9 +3,7 @@ package rmq
 import (
 	"fmt"
 	"math"
-	"net/http"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,64 +12,64 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConnections(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConnections(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	flushConn, err := OpenConnectionWithRedisOptions("conns-flush", redisOptions, nil)
+	connFlush, err := OpenClusterConnection("flush", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
-	assert.NoError(t, flushConn.stopHeartbeat())
-	assert.Equal(t, ErrorNotFound, flushConn.stopHeartbeat())
-	assert.NoError(t, flushConn.flushDb())
+	assert.NoError(t, connFlush.stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, connFlush.stopHeartbeat())
+	assert.NoError(t, connFlush.flushDb())
 
-	connection, err := OpenConnectionWithRedisOptions("conns-conn", redisOptions, nil)
+	connClean, err := OpenClusterConnection("clean", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
-	require.NotNil(t, connection)
-	_, err = NewCleaner(connection).Clean()
+	require.NotNil(t, connClean)
+	_, err = NewCleaner(connClean).Clean()
 	require.NoError(t, err)
+	connections, err := connClean.getConnections()
+	connCount := len(connections)
+	assert.NoError(t, err)
 
-	connections, err := connection.getConnections()
+	conn1, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
-	assert.Len(t, connections, 1) // cleaner connection remains
-
-	conn1, err := OpenConnectionWithRedisOptions("conns-conn1", redisOptions, nil)
+	connections, err = connClean.getConnections()
 	assert.NoError(t, err)
-	connections, err = connection.getConnections()
-	assert.NoError(t, err)
-	assert.Len(t, connections, 2)
-	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").checkHeartbeat())
+	assert.Len(t, connections, connCount+1) // connection q1 was added
+	assert.Equal(t, ErrorNotFound, connClean.hijackConnection("nope").checkHeartbeat())
 	assert.NoError(t, conn1.checkHeartbeat())
-	conn2, err := OpenConnectionWithRedisOptions("conns-conn2", redisOptions, nil)
+
+	conn2, err := OpenClusterConnection("conn2", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
-	connections, err = connection.getConnections()
+	connections, err = connClean.getConnections()
 	assert.NoError(t, err)
-	assert.Len(t, connections, 3)
+	assert.Len(t, connections, connCount+2) // connection q2 was added
 	assert.NoError(t, conn1.checkHeartbeat())
 	assert.NoError(t, conn2.checkHeartbeat())
 
-	assert.Equal(t, ErrorNotFound, connection.hijackConnection("nope").stopHeartbeat())
+	assert.Equal(t, ErrorNotFound, connClean.hijackConnection("nope").stopHeartbeat())
 	assert.NoError(t, conn1.stopHeartbeat())
 	assert.Equal(t, ErrorNotFound, conn1.checkHeartbeat())
 	assert.NoError(t, conn2.checkHeartbeat())
-	connections, err = connection.getConnections()
+	connections, err = connClean.getConnections()
 	assert.NoError(t, err)
-	assert.Len(t, connections, 3)
+	assert.Len(t, connections, connCount+2)
 
 	assert.NoError(t, conn2.stopHeartbeat())
 	assert.Equal(t, ErrorNotFound, conn1.checkHeartbeat())
 	assert.Equal(t, ErrorNotFound, conn2.checkHeartbeat())
-	connections, err = connection.getConnections()
+	connections, err = connClean.getConnections()
 	assert.NoError(t, err)
-	assert.Len(t, connections, 3)
+	assert.Len(t, connections, connCount+2)
 
-	assert.NoError(t, connection.stopHeartbeat())
+	assert.NoError(t, connClean.stopHeartbeat())
 }
 
-func TestConnectionQueues(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConnectionQueues(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("conn-q-conn", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -80,21 +78,21 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, queues, 0)
 
-	queue1, err := connection.OpenQueue("conn-q-q1")
+	queue1, err := connection.OpenQueue("conn1-q1")
 	assert.NoError(t, err)
 	require.NotNil(t, queue1)
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"conn-q-q1"}, queues)
+	assert.Equal(t, []string{"conn1-q1"}, queues)
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 0)
 	assert.NoError(t, queue1.StartConsuming(1, time.Millisecond))
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"conn-q-q1"}, queues)
+	assert.Equal(t, []string{"conn1-q1"}, queues)
 
-	queue2, err := connection.OpenQueue("conn-q-q2")
+	queue2, err := connection.OpenQueue("conn1-q2")
 	assert.NoError(t, err)
 	require.NotNil(t, queue2)
 	queues, err = connection.GetOpenQueues()
@@ -115,7 +113,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.Len(t, queues, 2)
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"conn-q-q1"}, queues)
+	assert.Equal(t, []string{"conn1-q1"}, queues)
 
 	<-queue1.StopConsuming()
 	assert.NoError(t, queue1.closeInStaleConnection())
@@ -132,7 +130,7 @@ func TestConnectionQueues(t *testing.T) {
 	assert.Equal(t, int64(0), rejectedCount)
 	queues, err = connection.GetOpenQueues()
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"conn-q-q2"}, queues)
+	assert.Equal(t, []string{"conn1-q2"}, queues)
 	queues, err = connection.getConsumingQueues()
 	assert.NoError(t, err)
 	assert.Len(t, queues, 0)
@@ -140,11 +138,11 @@ func TestConnectionQueues(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestQueueCommon(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterQueueCommon(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("queue-conn", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -188,14 +186,11 @@ func TestQueueCommon(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestConsumerCommon(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConsumerCommon(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	// Note that we're using OpenClusterConnection with redis.NewClient (not redis.NewClusterClient).
-	// This is just like using OpenConnection, but just using the Redis hash tags {} instead of [].
-	// This is possible, but not really an expected use case.
-	connection, err := OpenClusterConnection("cons-conn", redis.NewClient(redisOptions), nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -212,23 +207,16 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, consumer.Last())
 
-	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d1", http.Header{"foo": []string{"bar1"}})))
+	assert.NoError(t, queue1.Publish("cons-d1"))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 1)
 	require.NotNil(t, consumer.Last())
 	assert.Equal(t, "cons-d1", consumer.Last().Payload())
-	assert.Equal(t, http.Header{"foo": []string{"bar1"}}, consumer.Last().(WithHeader).Header())
 
-	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d2", http.Header{"foo": []string{"bar2"}})))
+	assert.NoError(t, queue1.Publish("cons-d2"))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 2)
 	assert.Equal(t, "cons-d2", consumer.Last().Payload())
-	assert.Equal(t, http.Header{"foo": []string{"bar2"}}, consumer.Last().(WithHeader).Header())
-
-	assert.Regexp(t, // using {queue}
-		`\[cons-d2 rmq::connection::cons-conn-\w{6}::queue::\{cons-q\}::unacked\]`,
-		fmt.Sprintf("%s", consumer.Last()),
-	)
 
 	assert.NoError(t, consumer.Deliveries()[0].Ack())
 	eventuallyReady(t, queue1, 0)
@@ -240,12 +228,11 @@ func TestConsumerCommon(t *testing.T) {
 
 	assert.Equal(t, ErrorNotFound, consumer.Deliveries()[0].Ack())
 
-	assert.NoError(t, queue1.Publish(PayloadWithHeader("cons-d3", http.Header{"foo": []string{"bar3"}})))
+	assert.NoError(t, queue1.Publish("cons-d3"))
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 1)
 	eventuallyRejected(t, queue1, 0)
 	assert.Equal(t, "cons-d3", consumer.Last().Payload())
-	assert.Equal(t, http.Header{"foo": []string{"bar3"}}, consumer.Last().(WithHeader).Header())
 	assert.NoError(t, consumer.Last().Reject())
 	eventuallyReady(t, queue1, 0)
 	eventuallyUnacked(t, queue1, 0)
@@ -292,11 +279,11 @@ func TestConsumerCommon(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestMulti(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterMulti(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("multi-conn", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("multi-q")
 	assert.NoError(t, err)
@@ -337,7 +324,6 @@ func TestMulti(t *testing.T) {
 	eventuallyReady(t, queue, 10)
 	eventuallyUnacked(t, queue, 10)
 
-	require.NotNil(t, consumer.Last())
 	assert.NoError(t, consumer.Last().Ack())
 	// Assert that after the consumer acks a message the ready count drops to 9 and unacked remains at 10
 	// TODO use util funcs instead
@@ -386,11 +372,11 @@ func TestMulti(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestBatch(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterBatch(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("batch-conn", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batch-q")
 	assert.NoError(t, err)
@@ -445,23 +431,13 @@ func TestBatch(t *testing.T) {
 	assert.NoError(t, consumer.Last()[0].Reject())
 	eventuallyUnacked(t, queue, 0)
 	eventuallyRejected(t, queue, 3)
-
-	for i := 0; i < 5; i++ {
-		err := queue.Publish(fmt.Sprintf("batch-d%d", i))
-		assert.NoError(t, err)
-	}
-	_, err = queue.AddBatchConsumerFunc("batch-cons-func", 2, 50*time.Millisecond, func(batch Deliveries) {
-		errMap := batch.Ack()
-		assert.Empty(t, errMap)
-	})
-	assert.NoError(t, err)
 }
 
-func TestReturnRejected(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterReturnRejected(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("return-conn", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("return-q")
 	assert.NoError(t, err)
@@ -519,55 +495,19 @@ func TestReturnRejected(t *testing.T) {
 	eventuallyRejected(t, queue, 0)
 }
 
-func TestRejectFaultyMessages(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterPushQueue(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("faulty-conn", redisOptions, nil)
-	require.NoError(t, err)
-	queue, err := connection.OpenQueue("faulty-q")
-	require.NoError(t, err)
-	_, err = queue.PurgeReady()
-	require.NoError(t, err)
+	// using random queue names here to make test more robust
+	queueName1 := RandomString(6)
+	queueName2 := RandomString(6)
 
-	for i := 0; i < 6; i++ {
-		// if there is no line separator after the header in the message,
-		// it will lead to an error and the message will be rejected
-		err := queue.Publish(fmt.Sprintf("%sreturn-d%d", jsonHeaderSignature, i))
-		require.NoError(t, err)
-	}
-
-	eventuallyReady(t, queue, 6)
-	eventuallyUnacked(t, queue, 0)
-	eventuallyRejected(t, queue, 0)
-
-	require.NoError(t, queue.StartConsuming(10, time.Millisecond))
-	eventuallyReady(t, queue, 0)
-	eventuallyUnacked(t, queue, 0)
-	eventuallyRejected(t, queue, 6)
-
-	consumer := NewTestConsumer("faulty-cons")
-	consumer.AutoAck = false
-	_, err = queue.AddConsumer("cons", consumer)
-	require.NoError(t, err)
-	eventuallyReady(t, queue, 0)
-	eventuallyUnacked(t, queue, 0)
-	eventuallyRejected(t, queue, 6)
-
-	require.Len(t, consumer.Deliveries(), 0)
-
-	<-queue.StopConsuming()
-}
-
-func TestPushQueue(t *testing.T) {
-	redisOptions, closer := testRedis(t)
-	defer closer()
-
-	connection, err := OpenConnectionWithRedisOptions("push", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
-	queue1, err := connection.OpenQueue("queue1")
+	queue1, err := connection.OpenQueue(queueName1)
 	assert.NoError(t, err)
-	queue2, err := connection.OpenQueue("queue2")
+	queue2, err := connection.OpenQueue(queueName2)
 	assert.NoError(t, err)
 	queue1.SetPushQueue(queue2)
 	assert.Equal(t, queue2.(*redisQueue).readyKey, queue1.(*redisQueue).pushKey)
@@ -599,11 +539,11 @@ func TestPushQueue(t *testing.T) {
 	eventuallyRejected(t, queue2, 1)
 }
 
-func TestStopConsuming_Consumer(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterStopConsuming_Consumer(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -652,11 +592,11 @@ func TestStopConsuming_Consumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestStopConsuming_BatchConsumer(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterStopConsuming_BatchConsumer(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("batchConsume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("batchConsume-q")
 	assert.NoError(t, err)
@@ -706,11 +646,11 @@ func TestStopConsuming_BatchConsumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
-func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 
 	finishedChan := connection.StopAllConsuming()
@@ -722,11 +662,11 @@ func TestConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -741,11 +681,11 @@ func TestConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterQueue_StopConsuming_CantStartConsuming(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -760,11 +700,11 @@ func TestQueue_StopConsuming_CantStartConsuming(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -781,11 +721,11 @@ func TestConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func TestQueue_StopConsuming_CantAddConsumer(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterQueue_StopConsuming_CantAddConsumer(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("consume", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	queue, err := connection.OpenQueue("consume-q")
 	assert.NoError(t, err)
@@ -802,12 +742,12 @@ func TestQueue_StopConsuming_CantAddConsumer(t *testing.T) {
 	require.Equal(t, ErrorConsumingStopped, err)
 }
 
-func BenchmarkQueue(b *testing.B) {
-	redisOptions, closer := testRedis(b)
-	defer closer()
-
+func BenchmarkClusterQueue(b *testing.B) {
 	// open queue
-	connection, err := OpenConnectionWithRedisOptions("bench-conn", redisOptions, nil)
+	redisOptions, closer := testClusterRedis(b)
+	defer closer()
+
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(b, err)
 	queueName := fmt.Sprintf("bench-q%d", b.N)
 	queue, err := connection.OpenQueue(queueName)
@@ -825,31 +765,22 @@ func BenchmarkQueue(b *testing.B) {
 		assert.NoError(b, err)
 	}
 
-	b.ResetTimer()
-
 	// publish deliveries
 	for i := 0; i < b.N; i++ {
 		err := queue.Publish("bench-d")
 		assert.NoError(b, err)
 	}
 
-	maxWaits := 10000
 	// wait until all are consumed
 	for {
 		ready, err := queue.readyCount()
 		assert.NoError(b, err)
 		unacked, err := queue.unackedCount()
 		assert.NoError(b, err)
+		fmt.Printf("%d unacked %d %d\n", b.N, ready, unacked)
 		if ready == 0 && unacked == 0 {
 			break
 		}
-		maxWaits--
-
-		if maxWaits == 0 {
-			b.Fatalf("timeout waiting for all messages to be consumed: %d messages %d ready %d unacked\n",
-				b.N, ready, unacked)
-		}
-
 		time.Sleep(time.Millisecond)
 	}
 
@@ -859,12 +790,12 @@ func BenchmarkQueue(b *testing.B) {
 	for _, consumer := range consumers {
 		sum += len(consumer.Deliveries())
 	}
+	fmt.Printf("consumed %d\n", sum)
 
-	assert.Equal(b, b.N, sum)
 	assert.NoError(b, connection.stopHeartbeat())
 }
 
-func Test_jitteredDuration(t *testing.T) {
+func TestCluster_jitteredDuration(t *testing.T) {
 	dur := 100 * time.Millisecond
 	for i := 0; i < 5000; i++ {
 		d := jitteredDuration(dur)
@@ -873,11 +804,11 @@ func Test_jitteredDuration(t *testing.T) {
 	}
 }
 
-func TestQueueDrain(t *testing.T) {
-	redisOptions, closer := testRedis(t)
+func TestClusterQueueDrain(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
 	defer closer()
 
-	connection, err := OpenConnectionWithRedisOptions("drain-connection", redisOptions, nil)
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
 	assert.NoError(t, err)
 	require.NotNil(t, connection)
 
@@ -898,53 +829,69 @@ func TestQueueDrain(t *testing.T) {
 	}
 }
 
-func TestQueueHeader(t *testing.T) {
-	redisOptions, closer := testRedis(t)
-	defer closer()
-
-	connection, err := OpenConnectionWithRedisOptions("queue-h-conn", redisOptions, nil)
+// TestClusterMix tests that you could use both OpenConnection() functions and
+// OpenClusterConnection() functions at the same time. Note that these connections should use
+// independent redis instances: A single redis and a redis cluster respectively. Don't try to use
+// a normal rmq connection and an rmq cluster connection on the same Redis database. This will lead
+// to a messed up rmq state.
+func TestClusterMix(t *testing.T) {
+	// a normal rmq connection to a single redis instance
+	redisOptions1, closer1 := testRedis(t)
+	defer closer1()
+	connection1, err := OpenConnectionWithRedisOptions("conn1", redisOptions1, nil)
 	assert.NoError(t, err)
-	require.NotNil(t, connection)
+	require.NotNil(t, connection1)
 
-	queue, err := connection.OpenQueue("queue-h")
+	// an rmq cluster connection to a redis cluster
+	redisOptions2, closer2 := testClusterRedis(t)
+	defer closer2()
+	connection2, err := OpenClusterConnection("conn2", redis.NewClusterClient(redisOptions2), nil)
 	assert.NoError(t, err)
-	require.NotNil(t, queue)
-	_, err = queue.PurgeReady()
+	require.NotNil(t, connection2)
+
+	// publish and consume on the single instance rmq connection
+	queue1, err := connection1.OpenQueue("cons-q")
 	assert.NoError(t, err)
-
-	assert.NoError(t, queue.StartConsuming(2, time.Millisecond))
-	time.Sleep(time.Millisecond)
-	assert.NoError(t, err)
-
-	consumed := int64(0)
-	cons := ConsumerFunc(func(delivery Delivery) {
-		atomic.AddInt64(&consumed, 1)
-
-		h, ok := delivery.(WithHeader)
-		assert.True(t, ok)
-
-		switch delivery.Payload() {
-		case "queue-d1":
-			assert.Empty(t, h.Header())
-		case "queue-d2":
-			require.NotNil(t, h.Header())
-			assert.Equal(t, "d2", h.Header().Get("X-Foo"))
-		default:
-			assert.Failf(t, "unexpected payload: %q", delivery.Payload())
-		}
-
-	})
-
-	_, err = queue.AddConsumer("queue-cons1", cons)
+	require.NotNil(t, queue1)
+	_, err = queue1.PurgeReady()
 	assert.NoError(t, err)
 
-	assert.NoError(t, queue.Publish("queue-d1"))
-	assert.NoError(t, queue.Publish(PayloadWithHeader("queue-d2", http.Header{"X-Foo": []string{"d2"}})))
+	consumer1 := NewTestConsumer("cons-A")
+	consumer1.AutoAck = false
+	assert.NoError(t, queue1.StartConsuming(10, time.Millisecond))
+	_, err = queue1.AddConsumer("cons-cons", consumer1)
+	assert.NoError(t, err)
+	assert.Nil(t, consumer1.Last())
 
-	assert.Eventually(t, func() bool {
-		return atomic.LoadInt64(&consumed) == 2
-	}, 10*time.Second, time.Millisecond)
+	assert.NoError(t, queue1.Publish("cons-d1"))
+	eventuallyReady(t, queue1, 0)
+	eventuallyUnacked(t, queue1, 1)
+	require.NotNil(t, consumer1.Last())
+	assert.Regexp(t, // using [queue]
+		`\[cons-d1 rmq::connection::conn1-\w{6}::queue::\[cons-q\]::unacked\]`,
+		fmt.Sprintf("%s", consumer1.Last()),
+	)
 
-	<-queue.StopConsuming()
-	assert.NoError(t, connection.stopHeartbeat())
+	// produce and consume on the rmq cluster connection
+	queue2, err := connection2.OpenQueue("cons-q")
+	assert.NoError(t, err)
+	require.NotNil(t, queue2)
+	_, err = queue2.PurgeReady()
+	assert.NoError(t, err)
+
+	consumer2 := NewTestConsumer("cons-A")
+	consumer2.AutoAck = false
+	assert.NoError(t, queue2.StartConsuming(20, time.Millisecond))
+	_, err = queue2.AddConsumer("cons-cons", consumer2)
+	assert.NoError(t, err)
+	assert.Nil(t, consumer2.Last())
+
+	assert.NoError(t, queue2.Publish("cons-d2"))
+	eventuallyReady(t, queue2, 0)
+	eventuallyUnacked(t, queue2, 1)
+	require.NotNil(t, consumer2.Last())
+	assert.Regexp(t, // using {queue}
+		`\[cons-d2 rmq::connection::conn2-\w{6}::queue::\{cons-q\}::unacked\]`,
+		fmt.Sprintf("%s", consumer2.Last()),
+	)
 }

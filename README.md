@@ -1,24 +1,10 @@
 [![Build Status](https://github.com/adjust/rmq/workflows/test/badge.svg)](https://github.com/adjust/rmq/actions?query=branch%3Amaster+workflow%3Atest)
 [![GoDoc](https://pkg.go.dev/badge/github.com/adjust/rmq)](https://pkg.go.dev/github.com/adjust/rmq)
 
----
-
-**Note**: We recently updated rmq to expose Redis errors instead of panicking.
-This is a major change as almost all functions now return errors. It's
-recommended to switch to the latest version `rmq/v4` so rmq won't crash your
-services anymore on Redis errors.
-
-If you don't want to upgrade yet, you can continue using `rmq/v2`.
-
----
-
 ## Overview
 
 rmq is short for Redis message queue. It's a message queue system written in Go
-and backed by Redis. It's similar to [redismq][redismq], but implemented
-independently with a different interface in mind.
-
-[redismq]: https://github.com/adjust/redismq
+and backed by Redis.
 
 ## Basic Usage
 
@@ -49,7 +35,11 @@ It's also possible to access a Redis listening on a Unix socket:
 connection, err := rmq.OpenConnection("my service", "unix", "/tmp/redis.sock", 1, errChan)
 ```
 
-For more flexible setup you can also create your own Redis client:
+For more flexible setup you can pass Redis options or create your own Redis client:
+
+```go
+connection, err := OpenConnectionWithRedisOptions("my service", redisOptions, errChan)
+```
 
 ```go
 connection, err := OpenConnectionWithRedisClient("my service", redisClient, errChan)
@@ -62,6 +52,25 @@ the background which can run into Redis errors. If you pass an error channel to
 the `OpenConnection()` functions rmq will send those background errors to this
 channel so you can handle them asynchronously. For more details about this and
 handling suggestions see the section about handling background errors below.
+
+#### Connecting to a Redis cluster
+
+In order to connect to a Redis cluster please use `OpenClusterConnection()`:
+
+```go
+redisClusterOptions := &redis.ClusterOptions{ /* ... */ }
+redisClusterClient := redis.NewClusterClient(redisClusterOptions)
+connection, err := OpenClusterConnection("my service", redisClusterClient, errChan)
+```
+
+Note that such an rmq cluster connection uses different Redis than rmq connections
+opened by `OpenConnection()` or similar. If you have used a Redis instance
+with `OpenConnection()` then it is NOT SAFE to reuse that rmq system by connecting
+to it via `OpenClusterConnection()`. The cluster state won't be compatible and
+this will likely lead to data loss.
+
+If you've previously used `OpenConnection()` or similar you should only consider
+using `OpenClusterConnection()` with a fresh Redis cluster.
 
 ### Queues
 
