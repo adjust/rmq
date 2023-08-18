@@ -30,6 +30,14 @@ func (queue *TestQueue) PublishBytes(payload ...[]byte) error {
 	return queue.Publish(stringifiedBytes...)
 }
 
+func (queue *TestQueue) Remove(payload string, count int64, removeFromRejected bool) error {
+	panic(errorNotSupported)
+}
+
+func (queue *TestQueue) RemoveBytes(payload []byte, count int64, removeFromRejected bool) error {
+	return queue.Remove(string(payload), count, removeFromRejected)
+}
+
 func (*TestQueue) SetPushQueue(Queue)                                   { panic(errorNotSupported) }
 func (*TestQueue) StartConsuming(int64, time.Duration) error            { panic(errorNotSupported) }
 func (*TestQueue) StopConsuming() <-chan struct{}                       { panic(errorNotSupported) }
