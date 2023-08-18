@@ -18,6 +18,8 @@ type Queue interface {
 	Publish(payload ...string) error
 	PublishBytes(payload ...[]byte) error
 	SetPushQueue(pushQueue Queue)
+	Remove(payload string, count int64, removeFromRejected bool) error
+	RemoveBytes(payload []byte, count int64, removeFromRejected bool) error
 	StartConsuming(prefetchLimit int64, pollDuration time.Duration) error
 	StopConsuming() <-chan struct{}
 	AddConsumer(tag string, consumer Consumer) (string, error)
@@ -117,6 +119,20 @@ func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
 		stringifiedBytes[i] = string(b)
 	}
 	return queue.Publish(stringifiedBytes...)
+}
+
+// Remove elements with specific value from the queue
+func (queue *redisQueue) Remove(payload string, count int64, removeFromRejected bool) error {
+	_, err := queue.redisClient.LRem(queue.readyKey, count, payload)
+	if removeFromRejected {
+		queue.redisClient.LRem(queue.rejectedKey, count, payload)
+	}
+	return err
+}
+
+// RemoveBytes casts bytes to string and calls Remove
+func (queue *redisQueue) RemoveBytes(payload []byte, count int64, removeFromRejected bool) error {
+	return queue.Remove(string(payload), count, removeFromRejected)
 }
 
 // SetPushQueue sets a push queue. In the consumer function you can call
