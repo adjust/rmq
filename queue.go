@@ -121,7 +121,7 @@ func (queue *redisQueue) PublishBytes(payload ...[]byte) error {
 	return queue.Publish(stringifiedBytes...)
 }
 
-// Remove elements with specific value from the queue
+// Remove elements with specific value from the queue (WARN: this operation is pretty slow with O(N+M) complexity where N is length of the queue and M is number of removed elements)
 func (queue *redisQueue) Remove(payload string, count int64, removeFromRejected bool) error {
 	_, err := queue.redisClient.LRem(queue.readyKey, count, payload)
 	if removeFromRejected {
@@ -130,7 +130,7 @@ func (queue *redisQueue) Remove(payload string, count int64, removeFromRejected 
 	return err
 }
 
-// RemoveBytes casts bytes to string and calls Remove
+// RemoveBytes casts bytes to string and calls Remove (WARN: this operation is pretty slow with O(N+M) complexity where N is length of the queue and M is number of removed elements)
 func (queue *redisQueue) RemoveBytes(payload []byte, count int64, removeFromRejected bool) error {
 	return queue.Remove(string(payload), count, removeFromRejected)
 }
