@@ -19,7 +19,7 @@ func TestTestRedisClient_Set(t *testing.T) {
 		args   args
 	}{
 		{
-			"successfull add",
+			"successful add",
 			NewTestRedisClient(),
 			args{
 				"somekey",
