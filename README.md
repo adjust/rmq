@@ -178,7 +178,7 @@ name, err := taskQueue.AddConsumerFunc(func(delivery rmq.Delivery) {
 
 Please note that `delivery.Ack()` and similar functions have a built-in retry
 mechanism which will block your consumers in some cases. This is because
-because failing to acknowledge a delivery is potentially dangerous. For details
+failing to acknowledge a delivery is potentially dangerous. For details
 see the section about background errors below.
 
 For a full example see [`example/consumer`][consumer.go].
