@@ -57,7 +57,7 @@ type redisConnection struct {
 
 	redisClient   RedisClient
 	errChan       chan<- error
-	heartbeatStop chan chan struct{}
+	heartbeatStop chan chan struct{} // used to stop heartbeat() in stopHeartbeat(), nil once stopped
 
 	lock    sync.Mutex
 	stopped bool
@@ -112,7 +112,7 @@ func openConnection(tag string, redisClient RedisClient, useRedisHashTags bool, 
 		rejectedTemplate:  getTemplate(queueRejectedBaseTemplate, useRedisHashTags),
 		redisClient:       redisClient,
 		errChan:           errChan,
-		heartbeatStop:     make(chan chan struct{}, 1),
+		heartbeatStop:     make(chan chan struct{}, 1), // mark heartbeat as active, can be stopped
 	}
 
 	if err := connection.updateHeartbeat(); err != nil { // checks the connection
@@ -144,9 +144,9 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 		select {
 		case <-ticker.C:
 			// continue below
-		case c := <-connection.heartbeatStop:
-			close(c)
-			return
+		case c := <-connection.heartbeatStop: // stopHeartbeat() has been called
+			close(c) // confirm to stopHeartbeat() that the heartbeat is stopped
+			return   // stop updating the heartbeat
 		}
 
 		err := connection.updateHeartbeat()
@@ -160,7 +160,13 @@ func (connection *redisConnection) heartbeat(errChan chan<- error) {
 
 		if errorCount >= HeartbeatErrorLimit {
 			// reached error limit
+
+			// To avoid using this connection while we're not able to maintain its heartbeat we stop all
+			// consumers. This in turn will call stopHeartbeat() and the responsibility of heartbeat() to
+			// confirm that the heartbeat is stopped, so we do that here too.
 			connection.StopAllConsuming()
+			close(<-connection.heartbeatStop) // wait for stopHeartbeat() and confirm heartbeat is stopped
+
 			// Clients reading from errChan need to see this error
 			// This allows them to shut themselves down
 			// Therefore we block adding it to errChan to ensure delivery
@@ -223,8 +229,15 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 
 	finishedChan := make(chan struct{})
 
-	// If we are already stopped or there are no open queues, then there is nothing to do
-	if connection.stopped || len(connection.openQueues) == 0 {
+	// If we are already stopped then there is nothing to do
+	if connection.stopped {
+		close(finishedChan)
+		return finishedChan
+	}
+
+	// If there are no open queues we still want to stop the heartbeat
+	if len(connection.openQueues) == 0 {
+		connection.stopHeartbeat()
 		close(finishedChan)
 		return finishedChan
 	}
@@ -239,8 +252,11 @@ func (connection *redisConnection) StopAllConsuming() <-chan struct{} {
 		for _, c := range chans {
 			<-c
 		}
-		close(finishedChan)
-		// log.Printf("rmq connection stopped consuming %s", queue)
+
+		// All consuming has been stopped. Now we can stop the heartbeat to avoid a goroutine leak.
+		connection.stopHeartbeat()
+
+		close(finishedChan) // signal all done
 	}()
 
 	return finishedChan
@@ -317,23 +333,29 @@ func (connection *redisConnection) openQueue(name string) Queue {
 	)
 }
 
-// stopHeartbeat stops the heartbeat of the connection
-// it does not remove it from the list of connections so it can later be found by the cleaner
+// stopHeartbeat stops the heartbeat of the connection.
+// It does not remove it from the list of connections so it can later be found by the cleaner.
+// Returns ErrorNotFound if the heartbeat was already stopped.
+// Note that this function itself is not threadsafe, it's important to not call it multiple times
+// at the same time. Currently it's only called in StopAllConsuming() where it's linearized by
+// connection.lock.
 func (connection *redisConnection) stopHeartbeat() error {
-	if connection.heartbeatStop == nil {
+	if connection.heartbeatStop == nil { // already stopped
 		return ErrorNotFound
 	}
 
 	heartbeatStopped := make(chan struct{})
 	connection.heartbeatStop <- heartbeatStopped
-	<-heartbeatStopped
-	connection.heartbeatStop = nil // avoid stopping twice
+	<-heartbeatStopped             // wait for heartbeat() to confirm it's stopped
+	connection.heartbeatStop = nil // mark heartbeat as stopped
 
+	// Delete heartbeat key to immediately make the connection appear inactive to the cleaner,
+	// instead of waiting for the heartbeat key to run into its TTL.
 	count, err := connection.redisClient.Del(connection.heartbeatKey)
-	if err != nil {
+	if err != nil { // redis error
 		return err
 	}
-	if count == 0 {
+	if count == 0 { // heartbeat key didn't exist
 		return ErrorNotFound
 	}
 	return nil
