@@ -412,6 +412,9 @@ use case where you actually need that sort of flexibility, please let us know.
 Currently for each queue you are only supposed to call `StartConsuming()` and
 `StopConsuming()` at most once.
 
+Also note that `StopAllConsuming()` will stop the heartbeat for this connection.
+It's advised to also not publish to any queue opened by this connection anymore.
+
 ### Return Rejected Deliveries
 
 Even if you don't have a push queue setup there are cases where you need to

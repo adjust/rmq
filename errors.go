@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ErrorNotFound         = errors.New("entity not found") // entitify being connection/queue/delivery
+	ErrorNotFound         = errors.New("entity not found") // entity being connection/queue/delivery/heartbeat
 	ErrorAlreadyConsuming = errors.New("must not call StartConsuming() multiple times")
 	ErrorNotConsuming     = errors.New("must call StartConsuming() before adding consumers")
 	ErrorConsumingStopped = errors.New("consuming stopped")

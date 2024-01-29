@@ -646,6 +646,29 @@ func TestClusterStopConsuming_BatchConsumer(t *testing.T) {
 	assert.NoError(t, connection.stopHeartbeat())
 }
 
+func TestClusterConnection_StopAllConsuming_CalledTwice(t *testing.T) {
+	redisOptions, closer := testClusterRedis(t)
+	defer closer()
+
+	connection, err := OpenClusterConnection("conn1", redis.NewClusterClient(redisOptions), nil)
+	assert.NoError(t, err)
+
+	finishedChan := connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	// check that heartbeat has been stopped
+	assert.Equal(t, connection.checkHeartbeat(), ErrorNotFound)
+
+	// it's safe to call StopAllConsuming again
+	finishedChan = connection.StopAllConsuming()
+	require.NotNil(t, finishedChan)
+	<-finishedChan // wait for stopping to finish
+
+	// heartbeat is still stopped of course
+	assert.Equal(t, connection.checkHeartbeat(), ErrorNotFound)
+}
+
 func TestClusterConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	redisOptions, closer := testClusterRedis(t)
 	defer closer()
@@ -656,6 +679,9 @@ func TestClusterConnection_StopAllConsuming_CantOpenQueue(t *testing.T) {
 	finishedChan := connection.StopAllConsuming()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
+
+	// check that heartbeat has been stopped
+	assert.Equal(t, connection.checkHeartbeat(), ErrorNotFound)
 
 	queue, err := connection.OpenQueue("consume-q")
 	require.Nil(t, queue)
@@ -676,6 +702,9 @@ func TestClusterConnection_StopAllConsuming_CantStartConsuming(t *testing.T) {
 	finishedChan := connection.StopAllConsuming()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
+
+	// check that heartbeat has been stopped
+	assert.Equal(t, connection.checkHeartbeat(), ErrorNotFound)
 
 	err = queue.StartConsuming(20, time.Millisecond)
 	require.Equal(t, ErrorConsumingStopped, err)
@@ -716,6 +745,9 @@ func TestClusterConnection_StopAllConsuming_CantAddConsumer(t *testing.T) {
 	finishedChan := connection.StopAllConsuming()
 	require.NotNil(t, finishedChan)
 	<-finishedChan // wait for stopping to finish
+
+	// check that heartbeat has been stopped
+	assert.Equal(t, connection.checkHeartbeat(), ErrorNotFound)
 
 	_, err = queue.AddConsumer("late-consume", NewTestConsumer("late-consumer"))
 	require.Equal(t, ErrorConsumingStopped, err)
