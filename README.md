@@ -93,7 +93,7 @@ payload to a queue:
 
 ```go
 delivery := "task payload"
-err := TaskQueue.Publish(delivery)
+err := taskQueue.Publish(delivery)
 ```
 
 In practice, however, it's more common to have instances of some struct that we
