@@ -34,3 +34,15 @@ func TestDeliveryReject(t *testing.T) {
 	assert.Equal(t, ErrorNotFound, delivery.Ack())
 	assert.Equal(t, Rejected, delivery.State)
 }
+
+func TestDeliveryPush(t *testing.T) {
+	delivery := NewTestDelivery("p")
+	assert.Equal(t, Unacked, delivery.State)
+	assert.NoError(t, delivery.Push())
+	assert.Equal(t, Pushed, delivery.State)
+
+	assert.Equal(t, ErrorNotFound, delivery.Push())
+	assert.Equal(t, ErrorNotFound, delivery.Reject())
+	assert.Equal(t, ErrorNotFound, delivery.Ack())
+	assert.Equal(t, Pushed, delivery.State)
+}
