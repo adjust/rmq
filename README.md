@@ -642,8 +642,8 @@ Given a connection, you can call `connection.CollectStats()` to receive
 
 <img width="610" src="https://user-images.githubusercontent.com/474504/82765106-1c53a600-9e14-11ea-8c30-e96821afa0d8.png">
 
-In this example you see 5 connections consuming `task_kind1`, each wich 5
-consumers each. They have a total of 1007 packages unacked. Below the marker you see
+In this example you see 5 connections consuming `task_kind1`, each with 5
+consumers. They have a total of 1007 packages unacked. Below the marker you see
 connections which are not consuming. One of the handler connections died
 because I stopped the handler. Running the cleaner would clean that up (see
 below).
