@@ -23,7 +23,7 @@ import "github.com/adjust/rmq/v5"
 Before we get to queues, we first need to establish a connection. Each rmq
 connection has a name (used in statistics) and Redis connection details
 including which Redis database to use. The most basic Redis connection uses a
-TCP connection to a given host and a port:
+TCP connection to a given host and port:
 
 ```go
 connection, err := rmq.OpenConnection("my service", "tcp", "localhost:6379", 1, errChan)
@@ -35,7 +35,7 @@ It's also possible to access a Redis listening on a Unix socket:
 connection, err := rmq.OpenConnection("my service", "unix", "/tmp/redis.sock", 1, errChan)
 ```
 
-For more flexible setup you can pass Redis options or create your own Redis client:
+For a more flexible setup, you can pass Redis options or create your own Redis client:
 
 ```go
 connection, err := OpenConnectionWithRedisOptions("my service", redisOptions, errChan)
@@ -45,17 +45,17 @@ connection, err := OpenConnectionWithRedisOptions("my service", redisOptions, er
 connection, err := OpenConnectionWithRedisClient("my service", redisClient, errChan)
 ```
 
-If the Redis instance can't be reached you will receive an error indicating this.
+If the Redis instance can't be reached, you will receive an error indicating this.
 
 Please also note the `errChan` parameter. There is some rmq logic running in
-the background which can run into Redis errors. If you pass an error channel to
-the `OpenConnection()` functions rmq will send those background errors to this
+the background, which can run into Redis errors. If you pass an error channel to
+the `OpenConnection()` functions, rmq will send those background errors to this
 channel so you can handle them asynchronously. For more details about this and
-handling suggestions see the section about handling background errors below.
+handling suggestions, see the section about handling background errors below.
 
 #### Connecting to a Redis cluster
 
-In order to connect to a Redis cluster please use `OpenClusterConnection()`:
+In order to connect to a Redis cluster, please use `OpenClusterConnection()`:
 
 ```go
 redisClusterOptions := &redis.ClusterOptions{ /* ... */ }
@@ -63,20 +63,20 @@ redisClusterClient := redis.NewClusterClient(redisClusterOptions)
 connection, err := OpenClusterConnection("my service", redisClusterClient, errChan)
 ```
 
-Note that such an rmq cluster connection uses different Redis than rmq connections
+Note that such an rmq cluster connection uses a different Redis than rmq connections
 opened by `OpenConnection()` or similar. If you have used a Redis instance
 with `OpenConnection()` then it is NOT SAFE to reuse that rmq system by connecting
-to it via `OpenClusterConnection()`. The cluster state won't be compatible and
+to it via `OpenClusterConnection()`. The cluster state won't be compatible, and
 this will likely lead to data loss.
 
-If you've previously used `OpenConnection()` or similar you should only consider
+If you've previously used `OpenConnection()` or similar, you should only consider
 using `OpenClusterConnection()` with a fresh Redis cluster.
 
 ### Queues
 
 Once we have a connection we can use it to finally access queues. Each queue
 must have a unique name by which we address it. Queues are created once they
-are accessed. There is no need to declare them in advance. Here we open a queue
+are accessed. There is no need to declare them in advance. Here, we open a queue
 named "tasks":
 
 ```go
@@ -110,7 +110,7 @@ if err != nil {
 err = taskQueue.PublishBytes(taskBytes)
 ```
 
-For a full example see [`example/producer`][producer.go].
+For a full example, see [`example/producer`][producer.go].
 
 [producer.go]: example/producer/main.go
 
@@ -137,11 +137,11 @@ taskConsumer := &TaskConsumer{}
 name, err := taskQueue.AddConsumer("task-consumer", taskConsumer)
 ```
 
-To uniquely identify each consumer internally rmq creates a random name with
-the given prefix. For example in this case `name` might be
+To uniquely identify each consumer internally, rmq creates a random name with
+the given prefix. For example, in this case, `name` might be
 `task-consumer-WB1zaq`. This name is only used in statistics. 
 
-In our example above the injected `taskConsumer` (of type `*TaskConsumer`) must
+In our example above, the injected `taskConsumer` (of type `*TaskConsumer`) must
 implement the `rmq.Consumer` interface. For example:
 
 ```go
@@ -164,7 +164,7 @@ func (consumer *TaskConsumer) Consume(delivery rmq.Delivery) {
 ```
 
 First we unmarshal the JSON package found in the delivery payload. If this
-fails we reject the delivery. Otherwise we perform the task and ack the
+fails, we reject the delivery. Otherwise we perform the task and ack the
 delivery.
 
 If you don't actually need a consumer struct you can use `AddConsumerFunc`
@@ -181,19 +181,19 @@ mechanism which will block your consumers in some cases. This is because
 failing to acknowledge a delivery is potentially dangerous. For details
 see the section about background errors below.
 
-For a full example see [`example/consumer`][consumer.go].
+For a full example, see [`example/consumer`][consumer.go].
 
 #### Consumer Lifecycle
 
-As described above you can add consumers to a queue. For each consumer rmq
+As described above, you can add consumers to a queue. For each consumer, rmq
 takes one of the prefetched unacked deliveries from the delivery channel and
 passes it to the consumer's `Consume()` function. The next delivery will only
 be passed to the same consumer once the prior `Consume()` call returns. So each
-consumer will only be consuming a single delivery at any given time.
+consumer will only consume a single delivery at any given time.
 
-Furthermore each `Consume()` call is expected to call either `delivery.Ack()`,
-`delivery.Reject()` or `delivery.Push()` (see below). If that's not the case
-these deliveries will remain unacked and the prefetch goroutine won't make
+Furthermore, each `Consume()` call is expected to call either `delivery.Ack()`,
+`delivery.Reject()` or `delivery.Push()` (see below). If that's not the case,
+these deliveries will remain unacked, and the prefetch goroutine won't make
 progress after a while. So make sure you always call exactly one of those
 functions in your `Consume()` implementations.
 
@@ -202,90 +202,89 @@ functions in your `Consume()` implementations.
 ## Background Errors
 
 It's recommended to inject an error channel into the `OpenConnection()`
-functions. This section describes it's purpose and how you might use it to
+functions. This section describes its purpose and how you might use it to
 monitor rmq background Redis errors.
 
-There are three sources of background errors which rmq detects (and handles
+There are three sources of background errors that rmq detects (and handles
 internally):
 
-1. The `OpenConnection()` functions spawn a goroutine which keeps a heartbeat
+1. The `OpenConnection()` functions spawn a goroutine, which keeps a heartbeat
    Redis key alive. This is important so that the cleaner (see below) can tell
    which connections are still alive and must not be cleaned yet. If the
-   heartbeat goroutine fails to update the heartbeat Redis key repeatedly foo
-   too long the cleaner might clean up the connection prematurely. To avoid
-   this the connection will automatically stop all consumers after 45
+   heartbeat goroutine fails to update the heartbeat Redis key repeatedly for
+   too long, the cleaner might clean up the connection prematurely. To avoid
+   this, the connection will automatically stop all consumers after 45
    consecutive heartbeat errors. This magic number is based on the details of
    the heartbeat key: The heartbeat tries to update the key every second with a
-   TTL of one minute. So only after 60 failed attempts the heartbeat key would
+   TTL of one minute. So only after 60 failed attempts, the heartbeat key would
    be dead.
 
-   Every time this goroutine runs into a Redis error it gets send to the error
+   Every time this goroutine runs into a Redis error, it gets sent to the error
    channel as `HeartbeatError`.
 
-2. The `StartConsuming()` function spawns a goroutine which is responsible for
+2. The `StartConsuming()` function spawns a goroutine, which is responsible for
    prefetching deliveries from the Redis `ready` list and moving them into a
-   delivery channel. This delivery channels feeds into your consumers
-   `Consume()` functions. If the prefetch goroutine runs into Redis errors this
+   delivery channel. This delivery channel feeds into your consumers
+   `Consume()` functions. If the prefetch goroutine runs into Redis errors, this
    basically means that there won't be new deliveries being sent to your
    consumers until it can fetch new ones. So these Redis errors are not
-   dangerous, it just means that your consumers will start idling until the
+   dangerous, they just mean that your consumers will start idling until the
    Redis connection recovers.
 
-   Every time this goroutine runs into a Redis error it gets send to the error
+   Every time this goroutine runs into a Redis error, it gets sent to the error
    channel as `ConsumeError`.
 
 3. The delivery functions `Ack()`, `Reject()` and `Push()` have a built-in
    retry mechanism. This is because failing to acknowledge a delivery
    is potentially dangerous. The consumer has already handled the delivery, so
-   if it can't ack it the cleaner might end up moving it back to the ready list
+   if it can't ack it, the cleaner might end up moving it back to the ready list
    so another consumer might end up consuming it again in the future, leading
    to double delivery.
 
-   So if a delivery failed to be acked because of a Redis error the `Ack()`
+   So if a delivery failed to be acked because of a Redis error, the `Ack()`
    call will block and retry once a second until it either succeeds or until
-   consuming gets stopped (see below). In the latter case the `Ack()` call will
+   consuming gets stopped (see below). In the latter case, the `Ack()` call will
    return `rmq.ErrorConsumingStopped` which you should handle in your consume
-   function.  For example you might want to log about the delivery so you can
+   function. For example, you might want to log about the delivery so you can
    manually remove it from the unacked or ready list before you start new
    consumers. Or at least you can know which deliveries might end up being
    consumed twice.
 
-   Every time these functions runs into a Redis error it gets send to the error
+   Every time these functions run into a Redis error, it gets sent to the error
    channel as `DeliveryError`.
 
 Each of those error types has a field `Count` which tells you how often the
 operation failed consecutively. This indicates for how long the affected Redis
 instance has been unavailable. One general way of using this information might
-be to have metrics about the error types including the error count so you can
+be to have metrics about the error types, including the error count, so you can
 keep track of how stable your Redis instances and connections are. By
-monitoring this you might learn about instabilities before they affect your
+monitoring this, you might learn about instabilities before they affect your
 services in significant ways.
 
 Below is some more specific advice on handling the different error cases
-outlined above. Keep in mind though that all of those errors are likely to
-happen at the same time, as Redis tends to be up or down completely. But if
-you're using multi Redis instance setup like [nutcracker][nutcracker] you might
-see some of them in isolation from the others.
+outlined above. Keep in mind though, that all of those errors are likely to
+happen simultaneously, as Redis tends to be up or down completely. But if
+you're using a multi Redis instance setup like [nutcracker][nutcracker], you might
+see some of them in isolation.
 
 1. `HeartbeatErrors`: Once `err.Count` equals `HeartbeatErrorLimit` you should
    know that the consumers of this connection will stop consuming. And they
    won't restart consuming on their own. This is a condition you should closely
    monitor because this means you will have to restart your service in order to
-   resume consuming. Before restarting you should check your Redis instance.
+   resume consuming. Before restarting, you should check your Redis instance.
 
 2. `ConsumeError`: These are mostly informational. As long as those errors keep
-   happening the consumers will effectively be paused. But once these
-   operations start succeeding again the consumers will resume consumers on
-   their own.
+   happening, the consumers will effectively be paused. But once these
+   operations start succeeding again, the consumers will resume on their own.
 
-3. `DeliveryError`: When you see deliveries failing to ack repeatedly this also
+3. `DeliveryError`: When you see deliveries failing to ack repeatedly, this also
    means your consumers won't make progress as they will keep retrying to ack
    pending deliveries before starting to consume new ones. As long as this
-   keeps happening you should avoid stopping the service if you can. That is
+   keeps happening, you should avoid stopping the service if you can. That is
    because the already consumed by not yet unacked deliveries will be returned
    to `ready` be the cleaner afterwards, which leads to double delivery. So
-   ideally you try to get Redis connection up again as long as the deliveries
-   are still trying to ack. Once acking works again it's safe to restart again.
+   ideally, you try to get the Redis connection up again as long as the deliveries
+   are still trying to ack. Once acking works again, it's safe to restart.
 
    More realistically, if you still need to stop the service when Redis is
    down, keep in mind that calling `StopConsuming()` will make the blocking
@@ -299,8 +298,8 @@ see some of them in isolation from the others.
 
 ### Batch Consumers
 
-Sometimes it's useful to have consumers work on batches of deliveries instead
-of individual ones. For example for bulk database inserts. In those cases you
+Sometimes, it's useful to have consumers work on batches of deliveries instead
+of individual ones. For example, for bulk database inserts. In those cases you
 can use `AddBatchConsumer()`:
 
 ```go
@@ -308,9 +307,9 @@ batchConsumer := &MyBatchConsumer{}
 name, err := taskQueue.AddBatchConsumer("my-consumer", 100, time.Second, batchConsumer)
 ```
 
-In this example we create a batch consumer which will receive batches of up to
+In this example, we create a batch consumer that will receive batches of up to
 100 deliveries. We set the `batchTimeout` to one second, so if there are less
-than 100 deliveries per second we will still consume at least one batch per
+than 100 deliveries per second, we will still consume at least one batch per
 second (which would contain less than 100 deliveries).
 
 The `rmq.BatchConsumer` interface is very similar to `rmq.Consumer`.
@@ -371,7 +370,7 @@ delivery would be moved to `pushQ1` and so on. If you have the consumers wait
 until the deliveries have a certain age you can use this pattern to retry after
 certain durations.
 
-Note that `delivery.Push()` has the same affect as `delivery.Reject()` if the
+Note that `delivery.Push()` has the same effect as `delivery.Reject()` if the
 queue has no push queue set up. So in our example above, if the delivery fails
 in the consumer on `pushQ2`, then the `Push()` call will reject the delivery.
 
@@ -387,7 +386,7 @@ When `StopConsuming()` is called, it will immediately stop fetching more
 deliveries from Redis and won't send any more of the already prefetched
 deliveries to consumers.
 
-In the background it will make pending `Ack()` calls return
+In the background, it will make pending `Ack()` calls return
 `rmq.ErrorConsumingStopped` if they still run into Redis errors (see above) and
 wait for all consumers to finish consuming their current delivery before
 closing the returned `finishedChan`. So while `StopConsuming()` returns
@@ -405,37 +404,37 @@ finishedChan := connection.StopAllConsuming()
 
 Wait on the `finishedChan` to wait for all consumers on all queues to finish.
 
-This is useful to implement a graceful shutdown of a consumer service. Please
+This is useful for implementing a graceful shutdown of a consumer service. Please
 note that after calling `StopConsuming()` the queue might not be in a state
 where you can add consumers and call `StartConsuming()` again. If you have a
 use case where you actually need that sort of flexibility, please let us know.
-Currently for each queue you are only supposed to call `StartConsuming()` and
+Currently, for each queue you are only supposed to call `StartConsuming()` and
 `StopConsuming()` at most once.
 
 Also note that `StopAllConsuming()` will stop the heartbeat for this connection.
-It's advised to also not publish to any queue opened by this connection anymore.
+It's also advised not to publish to any queue opened by this connection anymore.
 
-### Return Rejected Deliveries
+### Retry Rejected Deliveries
 
-Even if you don't have a push queue setup there are cases where you need to
-consume previously failed deliveries again. For example an external dependency
-might have an issue or you might have deployed a broken consumer service which
+Even if you don't have a push queue setup, there are cases where you need to
+consume previously failed deliveries again. For example, an external dependency
+might have an issue, or you might have deployed a broken consumer service that
 rejects all deliveries for some reason.
 
-In those cases you would wait for the external party to recover or fix your
+In those cases, you would wait for the external party to recover or fix your
 mistake to get ready to reprocess the deliveries again. Now you can return the
-deliveries by opening affected queue and call `ReturnRejected()`:
+deliveries by opening the affected queue and call `ReturnRejected()`:
 
 ```go
 returned, err := queue.ReturnRejected(10000)
 ```
 
-In this case we ask rmq to return up to 10k deliveries from the `rejected` list
-to the `ready` list. To return all of them you can pass `math.MaxInt64`.
+In this case, we ask rmq to return up to 10k deliveries from the `rejected` list
+to the `ready` list. To return all of them, you can pass `math.MaxInt64`.
 
-If there was no error it returns the number of deliveries that were moved.
+If there was no error, it returns the number of deliveries that were moved.
 
-If you find yourself doing this regularly on some queues consider setting up a
+If you find yourself doing this regularly on some queues, consider setting up a
 push queue to automatically retry failed deliveries regularly.
 
 See [`example/returner`][returner.go]
@@ -444,8 +443,8 @@ See [`example/returner`][returner.go]
 
 ### Purge Rejected Deliveries
 
-You might run into the case where you have rejected deliveries which you don't
-intend to retry again for one reason or another. In those cases you can clear
+You might run into the case where you have rejected deliveries that you don't
+intend to retry again for one reason or another. In those cases, you can clear
 the full `rejected` list by calling `PurgeRejected()`:
 
 ```go
@@ -473,7 +472,7 @@ with the queue connection. If the consumer dies by crashing or even by being
 gracefully shut down by calling `StopConsuming()`, the unacked deliveries will
 remain in that Redis list.
 
-If you run a queue cleaner regularly it will detect queue connections whose
+If you run a queue cleaner regularly, it will detect queue connections whose
 heartbeat expired and will clean up all their consumer queues by moving their
 unacked deliveries back to the `ready` list.
 
@@ -487,15 +486,15 @@ See [`example/cleaner`][cleaner.go].
 
 ### Header
 
-Redis protocol does not define a specific way to pass additional data like header.
-However, there is often need to pass them (for example for traces propagation).
+Redis protocol does not define a specific way to pass additional data like a header.
+However, there is often a need to pass them (for example, for traces propagation).
 
 This implementation injects optional header values marked with a signature into 
-payload body during publishing. When message is consumed, if signature is present, 
-header and original payload are extracted from augmented payload.
+the payload body during publishing. When a message is consumed, if the signature is present, 
+the header and original payload are extracted from the augmented payload.
 
-Header is defined as `http.Header` for better interoperability with existing libraries,
-for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemetry.io/otel/propagation#HeaderCarrier).
+The header is defined as `http.Header` for better interoperability with existing libraries,
+for example, with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemetry.io/otel/propagation#HeaderCarrier).
 
 ```go
  // ....
@@ -503,7 +502,7 @@ for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemet
  h := make(http.Header)
  h.Set("X-Baz", "quux")
 
- // You can add header to your payload during publish.
+ // You can add a header to your payload during publish.
  _ = pub.Publish(rmq.PayloadWithHeader(`{"foo":"bar"}`, h))
 
  // ....
@@ -516,22 +515,22 @@ for example with [`propagation.HeaderCarrier`](https://pkg.go.dev/go.opentelemet
  })
 ```
 
-Adding a header is an explicit opt-in operation and so it does not affect library's
+Adding a header is an explicit opt-in operation, so it does not affect the library's
 backwards compatibility by default (when not used). 
 
-Please note that adding header may lead to compatibility issues if:
-* consumer is built with older version of `rmq` when publisher has already 
+Please note that adding a header may lead to compatibility issues if:
+* consumer is built with an older version of `rmq` when publisher has already 
    started using header, this can be avoided by upgrading consumers before publishers;
-* consumer is not using `rmq` (other libs, low level tools like `redis-cli`) and is 
+* consumer is not using `rmq` (other libs, low-level tools like `redis-cli`) and is 
    not aware of payload format extension.
 
 ## Testing Included
 
-To simplify testing of queue producers and consumers we include test mocks.
+To simplify the testing of queue producers and consumers, we include test mocks.
 
 ### Test Connection
 
-As before, we first need a queue connection, but this time we use a
+As before, we first need a queue connection, but this time, we use a
 `rmq.TestConnection` that doesn't need any connection settings.
 
 ```go
@@ -544,7 +543,7 @@ test connection by setting it up once for the suite and resetting it with
 
 ### Producer Tests
 
-Now let's say we want to test the function `publishTask()` that creates a task
+Now, let's say we want to test the function `publishTask()` that creates a task
 and publishes it to a queue from that connection.
 
 ```go
@@ -572,7 +571,7 @@ assert.NotNil(t, task)
 assert.Equal(t, "value", task.Property)
 ```
 
-If you expect a producer to create multiple deliveries you can use different
+If you expect a producer to create multiple deliveries, you can use different
 indexes to access them all.
 
 ```go
@@ -580,8 +579,8 @@ assert.Equal(t, "task1", suite.testConn.GetDelivery("tasks", 0))
 assert.Equal(t, "task2", suite.testConn.GetDelivery("tasks", 1))
 ```
 
-For convenience there's also a function `GetDeliveries` that returns all
-published deliveries to a queue as string array.
+For convenience, there's also a function `GetDeliveries` that returns all
+published deliveries to a queue as a string array.
 
 ```go
 assert.Equal(t, []string{"task1", "task2"}, suite.testConn.GetDeliveries("tasks"))
@@ -597,7 +596,7 @@ functions. If you inject instances of `rmq.Queue` instead, you can use
 ### Consumer Tests
 
 Testing consumers is a bit easier because consumers must implement the
-`rmq.Consumer` interface. In the tests just create an `rmq.TestDelivery` and
+`rmq.Consumer` interface. In the tests, just create an `rmq.TestDelivery` and
 pass it to your `Consume()` function. This example creates a test delivery from
 a string and then checks that the delivery was acked.
 
@@ -627,24 +626,24 @@ delivery := rmq.NewTestDelivery(task)
 
 ### Integration Tests
 
-If you want to write integration tests which exercise both producers and
-consumers at the same time, you can use the
+If you want to write integration tests that exercise both producers and
+consumers simultaneously, you can use the
 `rmq.OpenConnectionWithTestRedisClient` constructor. It returns a real
-`rmq.Connection` instance which is backed by an in-memory Redis client
+`rmq.Connection` instance, which is backed by an in-memory Redis client
 implementation. That way it behaves exactly as in production, just without the
 durability of a real Redis client. Don't use this in production!
 
 ## Statistics
 
 Given a connection, you can call `connection.CollectStats()` to receive
-`rmq.Stats` about all open queues, connections and consumers. If you run
+`rmq.Stats` about all open queues, connections, and consumers. If you run
 [`example/handler`][handler.go] you can see what's available:
 
 <img width="610" src="https://user-images.githubusercontent.com/474504/82765106-1c53a600-9e14-11ea-8c30-e96821afa0d8.png">
 
-In this example you see 5 connections consuming `task_kind1`, each with 5
-consumers. They have a total of 1007 packages unacked. Below the marker you see
-connections which are not consuming. One of the handler connections died
+In this example, you see 5 connections consuming `task_kind1`, each with 5
+consumers. They have a total of 1007 packages unacked. Below the marker, you see
+connections that are not consuming. One of the handler connections died
 because I stopped the handler. Running the cleaner would clean that up (see
 below).
 
