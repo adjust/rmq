@@ -179,7 +179,8 @@ func (queue *redisQueue) consume() {
 	errorCount := 0 // number of consecutive batch errors
 
 	for {
-		switch err := queue.consumeBatch(); err {
+		count, err := queue.consumeBatch()
+		switch err {
 		case nil: // success
 			errorCount = 0
 
@@ -194,52 +195,57 @@ func (queue *redisQueue) consume() {
 			default:
 			}
 		}
-		time.Sleep(jitteredDuration(queue.pollDuration))
+
+		if count == 0 {
+			time.Sleep(jitteredDuration(queue.pollDuration))
+		}
 	}
 }
 
-func (queue *redisQueue) consumeBatch() error {
+func (queue *redisQueue) consumeBatch() (int, error) {
 	select {
 	case <-queue.consumingStopped:
-		return ErrorConsumingStopped
+		return 0, ErrorConsumingStopped
 	default:
 	}
 
 	// unackedCount == <deliveries in deliveryChan> + <deliveries in Consume()>
 	unackedCount, err := queue.unackedCount()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	batchSize := queue.prefetchLimit - unackedCount
 	if batchSize <= 0 {
-		return nil
+		return 0, nil
 	}
 
+	count := 0
 	for i := int64(0); i < batchSize; i++ {
 		select {
 		case <-queue.consumingStopped:
-			return ErrorConsumingStopped
+			return count, ErrorConsumingStopped
 		default:
 		}
 
 		payload, err := queue.redisClient.RPopLPush(queue.readyKey, queue.unackedKey)
 		if err == ErrorNotFound {
-			return nil
+			return count, nil
 		}
 		if err != nil {
-			return err
+			return count, err
 		}
 
 		d, err := queue.newDelivery(payload)
 		if err != nil {
-			return fmt.Errorf("create new delivery: %w", err)
+			return count, fmt.Errorf("create new delivery: %w", err)
 		}
 
 		queue.deliveryChan <- d
+		count++
 	}
 
-	return nil
+	return count, nil
 }
 
 func (queue *redisQueue) newDelivery(payload string) (Delivery, error) {
